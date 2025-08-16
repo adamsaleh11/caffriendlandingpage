@@ -5,15 +5,14 @@ type Props = {
   eyebrow?: string;
   title: string;
   description?: string;
-  // Use ONE of these:
-  videoSrc?: string; // e.g. "/how/video.mp4"
-  posterSrc?: string; // optional poster for local video
-  youtubeId?: string; // e.g. "dQw4w9WgXcQ"
+  videoSrc?: string;
+  posterSrc?: string;
+  youtubeId?: string;
   className?: string;
 };
 
 export default function HowItWorks({
-  eyebrow = "How It Works",
+  eyebrow = "How it works",
   title,
   description,
   videoSrc,
@@ -22,26 +21,25 @@ export default function HowItWorks({
   className,
 }: Props) {
   return (
-    <section id="how-it-works" className={clsx("py-16 lg:py-24", className)}>
-      <div className="container mx-auto grid items-center gap-10 px-6 lg:grid-cols-2 lg:gap-16 lg:px-8">
-        {/* Left: copy */}
+    <section
+      id="how-it-works"
+      className={clsx("bg-white py-16 lg:py-28", className)}
+    >
+      <div className="mx-auto grid max-w-7xl grid-cols-1 gap-y-10 px-6 lg:grid-cols-2 lg:items-center lg:gap-x-16 lg:px-8">
+        {/* Text Content */}
         <div>
-          <p className="text-sm font-semibold text-orange-600">{eyebrow}</p>
-
-          <h2 className="mt-3 text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl">
+          <p className="text-base font-semibold text-orange-600">{eyebrow}</p>
+          <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-neutral-900 sm:text-4xl">
             {title}
           </h2>
-
-          {description ? (
-            <p className="mt-5 max-w-prose text-neutral-600">{description}</p>
-          ) : null}
+          {description && (
+            <p className="mt-5 text-base text-neutral-600">{description}</p>
+          )}
         </div>
 
-        {/* Right: video */}
-        <div className="relative">
-          {/* Wrapper ensures 16:9 and rounded box */}
-          <div className="aspect-video w-full overflow-hidden rounded-2xl shadow ring-1 ring-black/10 bg-black">
-            {/* YouTube embed */}
+        {/* Video */}
+        <div className="w-full">
+          <div className="aspect-video w-full overflow-hidden rounded-xl bg-black shadow ring-1 ring-black/10">
             {youtubeId ? (
               <iframe
                 className="h-full w-full"
@@ -51,7 +49,6 @@ export default function HowItWorks({
                 allowFullScreen
               />
             ) : videoSrc ? (
-              // Local file
               <video
                 className="h-full w-full"
                 controls
@@ -59,12 +56,9 @@ export default function HowItWorks({
                 poster={posterSrc}
               >
                 <source src={videoSrc} type="video/mp4" />
-                {/* Add a webm if you have it for better compression */}
-                {/* <source src="/how/video.webm" type="video/webm" /> */}
                 Your browser does not support the video tag.
               </video>
             ) : (
-              // Fallback if neither provided
               <div className="flex h-full w-full items-center justify-center text-white/70">
                 No video source provided
               </div>

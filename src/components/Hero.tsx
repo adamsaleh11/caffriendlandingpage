@@ -1,183 +1,255 @@
 // components/Hero.tsx
+"use client";
+
+import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import FeatureCards from "./FeatureCards";
+
+async function submitEarlyAccess(email: string) {
+  const res = await fetch("/api/early-access", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  if (!res.ok) {
+    const { error } = await res
+      .json()
+      .catch(() => ({ error: "Unknown error" }));
+    throw new Error(error || "Failed to submit");
+  }
+}
 
 export default function Hero() {
-  return (
-    <section className="relative isolate bg-gradient-to-br from-orange-50/30 via-white to-orange-50/20">
-      {/* Top bar */}
-      <div className="container mx-auto flex items-center justify-between py-6 px-6 lg:px-8">
-        <div className="flex items-center gap-3">
-          <Image
-            src="/logo.png"
-            alt="Caffriend"
-            width={32}
-            height={32}
-            priority
-          />
-          <span className="text-xl font-bold tracking-tight text-gray-900">
-            Caffriend
-          </span>
-        </div>
+  const [emailMobile, setEmailMobile] = useState("");
+  const [emailDesktop, setEmailDesktop] = useState("");
+  const [loadingMobile, setLoadingMobile] = useState(false);
+  const [loadingDesktop, setLoadingDesktop] = useState(false);
 
-        <div className="hidden md:flex items-center gap-8">
-          <Link
-            href="#contact"
-            className="text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
-          >
-            Contact
-          </Link>
+  const handleSubmitMobile = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!emailMobile) return;
+    setLoadingMobile(true);
+    try {
+      await submitEarlyAccess(emailMobile.trim());
+      setEmailMobile("");
+      alert("Thanks! You're on the list.");
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        alert(err.message);
+      } else {
+        alert("Something went wrong.");
+      }
+    } finally {
+      setLoadingMobile(false);
+    }
+  };
+
+  const handleSubmitDesktop = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!emailDesktop) return;
+    setLoadingDesktop(true);
+    try {
+      await submitEarlyAccess(emailDesktop.trim());
+      setEmailDesktop("");
+      alert("Thanks! You're on the list.");
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        alert(err.message);
+      } else {
+        alert("Something went wrong.");
+      }
+    } finally {
+      setLoadingDesktop(false);
+    }
+  };
+
+  return (
+    <section className="relative overflow-x-hidden bg-gradient-to-b from-[#FFFFFF] to-[#FFECE0]">
+      {/* Top bar */}
+      <header className="mx-auto max-w-[1280px] pr-6 pl-4 lg:pr-8 lg:pl-6">
+        <div className="flex items-center justify-between py-6">
+          <div className="flex items-center gap-3">
+            <Image
+              src="/logo.png"
+              alt="Caffriend"
+              width={38}
+              height={36.19}
+              priority
+            />
+            <span className="text-[18px] font-semibold text-[#FF6A00] leading-none">
+              Caffriend
+            </span>
+          </div>
           <Link
             href="#early-access"
-            className="rounded-full bg-orange-500 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-orange-600 transition-colors"
+            className="rounded-[10px] bg-[#FF6A00] px-5 py-3 text-[14px] font-semibold text-white shadow-md"
           >
             Get Early Access
           </Link>
         </div>
-      </div>
+      </header>
 
-      {/* Hero section */}
-      <div className="container mx-auto px-6 lg:px-8">
-        <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center py-12 lg:py-20">
-          {/* Left: copy + form */}
-          <div className="max-w-2xl lg:pr-8 relative">
-            <div className="flex items-center gap-2 mb-6">
-              <p className="text-sm font-medium text-orange-600">
-                Swipe right on your next coffee chat
-              </p>
-            </div>
+      {/* Hero grid */}
+      <div className="mx-auto max-w-[1280px] pr-6 pl-4 lg:pr-8 lg:pl-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 lg:gap-x-28">
+          {/* Left: copy */}
+          <div className="pt-6 sm:pt-10 lg:col-span-6 lg:pt-40 lg:-ml-4">
+            <p className="mb-3 text-[14px] font-semibold text-[#FF6A00] text-center lg:text-left">
+              Swipe right on your next coffee chat
+            </p>
 
-            <h1 className="text-5xl lg:text-6xl font-bold leading-[1.1] tracking-tight text-gray-900 mb-6">
+            <h1 className="text-[32px] sm:text-[36px] lg:text-[56px] leading-[1.2] font-extrabold tracking-[-0.02em] text-[#1E1E1E] text-center lg:text-left">
               The smarter, faster
               <br />
               way to network.
             </h1>
 
-            <p className="text-lg text-gray-600 mb-8 leading-relaxed">
-              Connect with 20+ industry professionals every month—in under 5
-              minutes, right from our app.
-            </p>
+            {/* MOBILE ONLY: Subheading + Email + Squiggle */}
+            <div className="mt-6 flex justify-center lg:hidden">
+              <div className="relative w-full max-w-[92%] flex flex-col items-center gap-5">
+                {/* Subheading */}
+                <p className="text-[16px] leading-[24px] text-[#1E1E1E] text-center max-w-[400px]">
+                  Connect with 20+ industry professionals
+                  <br />
+                  every month—in under 5 minutes,
+                  <br />
+                  right from our app.
+                </p>
 
-            {/* Email form */}
-            <form id="early-access" className="mb-8">
-              <div className="relative flex items-center bg-white rounded-full shadow-lg border border-gray-100 p-2 max-w-lg">
-                <input
-                  type="email"
-                  name="email"
-                  placeholder="Enter your email address"
-                  className="flex-1 px-4 py-3 text-sm bg-transparent outline-none placeholder:text-gray-500"
-                  required
-                />
-                <button
-                  type="submit"
-                  className="bg-orange-500 text-white px-6 py-3 rounded-full text-sm font-semibold hover:bg-orange-600 transition-colors shadow-sm whitespace-nowrap"
-                >
-                  Get Early Access
-                </button>
+                {/* Input + CTA */}
+                <div className="relative w-full max-w-[500px]">
+                  <form onSubmit={handleSubmitMobile}>
+                    <div className="flex w-full shadow-md rounded-[12px] overflow-hidden">
+                      <input
+                        type="email"
+                        value={emailMobile}
+                        onChange={(e) => setEmailMobile(e.target.value)}
+                        placeholder="Enter your email address"
+                        className="h-[52px] flex-1 min-w-0 bg-white px-4 text-[15px] text-[#111827] placeholder:text-[#9CA3AF] outline-none"
+                        required
+                      />
+                      <button
+                        type="submit"
+                        className="h-[52px] px-5 bg-[#FF6A00] text-[15px] font-semibold text-white"
+                        disabled={loadingMobile}
+                      >
+                        {loadingMobile ? "Submitting..." : "Get Early Access"}
+                      </button>
+                    </div>
+                  </form>
 
-                {/* Squiggle */}
+                  {/* Updated squiggle: thicker and -45deg */}
+                  <Image
+                    src="/squiggle.png"
+                    alt=""
+                    width={56}
+                    height={56}
+                    className="absolute -right-[45px] -top-[60px] rotate-[-45deg] pointer-events-none select-none"
+                    priority
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* DESKTOP ONLY: Subheading + Email + Squiggle */}
+            <div className="hidden lg:block">
+              <p className="mt-4 text-[16px] leading-[24px] text-[#1E1E1E] max-w-[520px]">
+                Connect with 20+ industry professionals every month—in under 5
+                minutes, right from our app.
+              </p>
+              <div className="relative mt-6 w-full max-w-[610px]">
+                <form onSubmit={handleSubmitDesktop}>
+                  <div className="flex w-full min-w-0">
+                    <input
+                      type="email"
+                      value={emailDesktop}
+                      onChange={(e) => setEmailDesktop(e.target.value)}
+                      placeholder="Enter your email address"
+                      className="h-[56px] flex-1 min-w-0 rounded-l-[10px] border border-[#E5E7EB] bg-white px-4 text-[14px] text-[#111827] placeholder:text-[#9CA3AF] outline-none"
+                      required
+                    />
+                    <button
+                      type="submit"
+                      className="h-[56px] w-[170px] shrink-0 rounded-r-[10px] bg-[#FF6A00] text-[14px] font-semibold text-white"
+                      disabled={loadingDesktop}
+                    >
+                      {loadingDesktop ? "Submitting..." : "Get Early Access"}
+                    </button>
+                  </div>
+                </form>
                 <Image
                   src="/squiggle.png"
                   alt=""
                   width={120}
-                  height={72}
-                  sizes="120px"
-                  className="pointer-events-none hidden lg:block absolute -top-13 -right-40 w-[120px] h-auto"
+                  height={84}
+                  className="pointer-events-none absolute -right-[140px] top-1/2 -translate-y-[92%] select-none"
                   priority
                 />
               </div>
-            </form>
+            </div>
           </div>
 
-          {/* Right: phone mock with floating bubbles */}
-          <div className="relative lg:ml-auto">
-            <div className="relative w-full max-w-2xl mx-auto h-[620px] lg:h-[820px] flex items-center justify-center overflow-visible">
-              <div className="relative">
-                <Image
-                  src="/phone.png"
-                  alt="App preview on phone"
-                  width={430}
-                  height={860}
-                  sizes="(min-width:1024px) 430px, 320px"
-                  className="w-80 lg:w-[430px] h-auto drop-shadow-2xl"
-                  priority
-                  draggable={false}
-                />
+          {/* Right visuals */}
+          <div className="relative lg:col-span-6 lg:translate-x-2">
+            <div className="relative mt-8 sm:mt-10 lg:mt-0 h-[520px] sm:h-[560px] lg:h-[710px]">
+              {/* Phone */}
+              <Image
+                src="/phone.png"
+                alt="App preview on iPhone"
+                width={430}
+                height={860}
+                sizes="(min-width:1024px) 430px, 320px"
+                className="absolute left-1/2 top-[44%] -translate-x-1/2 -translate-y-1/2 w-[280px] sm:w-[320px] lg:w-[430px] lg:left-auto lg:right-[40px] lg:top-[90px] lg:translate-x-0 lg:translate-y-0 select-none drop-shadow-2xl"
+                priority
+              />
 
+              {/* Meeting bubble */}
+              <div className="absolute left-[30%] top-[15%] -translate-x-1/2 w-[240px] h-[80px] sm:w-[250px] sm:h-[72px] lg:left-[6px] lg:top-[170px] lg:translate-x-0 lg:w-[361px] lg:h-[100px] rounded-[12px] border border-[#DADADA] bg-white">
                 <Image
                   src="/bubble-meeting.png"
                   alt="Meeting with Briana"
                   width={361}
                   height={100}
-                  sizes="(min-width:1024px) 361px, 288px"
-                  className="absolute top-18 -left-28 lg:top-20 lg:-left-36 w-72 lg:w-[361px] h-auto drop-shadow-xl z-20"
+                  sizes="(min-width:1024px) 361px, 250px"
+                  className="h-full w-full rounded-[12px]"
                   priority
-                  draggable={false}
                 />
+              </div>
 
+              {/* Booked bubble */}
+              <div className="absolute left-[72%] bottom-[23%] -translate-x-1/2 w-[200px] h-[54px] sm:w-[230px] sm:h-[56px] lg:left-[350px] lg:bottom-[60px] lg:translate-x-0 lg:w-[296px] lg:h-[61px] rounded-[30px]">
                 <Image
                   src="/bubble-booked.png"
                   alt="Booked for next week"
                   width={296}
                   height={61}
-                  sizes="(min-width:1024px) 296px, 240px"
-                  className="absolute -bottom-1 -right-12 lg:-bottom-1 lg:-right-16 w-60 lg:w-[296px] h-auto drop-shadow-xl z-20"
+                  sizes="(min-width:1024px) 296px, 230px"
+                  className="h-full w-full"
                   priority
-                  draggable={false}
                 />
               </div>
             </div>
           </div>
         </div>
 
-        {/* Feature cards - redesigned */}
-        <div className="relative -mt-6 md:-mt-10 lg:-mt-16 pb-20 z-[5]">
-          <div className="max-w-6xl mx-auto bg-white/80 backdrop-blur-sm rounded-3xl shadow-sm border border-gray-100 p-6 lg:p-8">
-            <div className="grid md:grid-cols-3 gap-8">
-              <FeatureCard
-                icon="/hero/icon-skip.svg"
-                title="Skip the cold DMs"
-                copy="Swipe and match with real professionals who want to chat."
-              />
-              <FeatureCard
-                icon="/hero/icon-auto.svg"
-                title="Auto-schedule"
-                copy="We find the time. Your invite appears in your calendar."
-              />
-              <FeatureCard
-                icon="/hero/icon-monetize.svg"
-                title="Monetize Your Time"
-                copy="Premium users get paid for every coffee chat."
-              />
+        {/* FeatureCards */}
+        <div className="relative z-30 mt-8 sm:mt-10 lg:mt-0 lg:top-[10px]">
+          <div className="mx-auto max-w-[1280px] px-0">
+            <div className="rounded-[18px] bg-white/80 shadow-[0_1px_1px_rgba(0,0,0,0.04)] ring-1 ring-[#F2F2F2]">
+              <div className="px-4 py-6 md:px-6 lg:px-8">
+                <FeatureCards
+                  skipIcon="/skip.png"
+                  scheduleIcon="/schedule.png"
+                  monetizeIcon="/monetize.png"
+                />
+              </div>
             </div>
           </div>
         </div>
       </div>
+
+      <div className="pb-14" />
     </section>
-  );
-}
-
-function FeatureCard({
-  icon,
-  title,
-  copy,
-}: {
-  icon: string;
-  title: string;
-  copy: string;
-}) {
-  return (
-    <div className="bg-white text-left rounded-2xl p-8 lg:p-10 border border-gray-100 shadow-lg shadow-black/5">
-      {/* Peach icon tile */}
-      <div className="w-20 h-20 bg-orange-50 rounded-2xl border border-orange-100 flex items-center justify-center mb-8">
-        <Image src={icon} alt="" width={40} height={40} sizes="40px" />
-      </div>
-
-      {/* Heading + copy */}
-      <h3 className="text-3xl lg:text-4xl font-bold tracking-tight text-neutral-900 mb-4">
-        {title}
-      </h3>
-      <p className="text-lg text-gray-600 leading-relaxed">{copy}</p>
-    </div>
   );
 }
