@@ -43,7 +43,7 @@ export default function HowItWorks({
             {youtubeId ? (
               <iframe
                 className="h-full w-full"
-                src={`https://www.youtube.com/embed/${youtubeId}?rel=0`}
+                src={`https://www.youtube.com/watch?v=MltlpUeMtRc`}
                 title="How It Works"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 allowFullScreen
