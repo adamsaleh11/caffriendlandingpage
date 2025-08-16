@@ -7,9 +7,20 @@ type Props = {
   description?: string;
   videoSrc?: string;
   posterSrc?: string;
-  youtubeId?: string;
+  youtubeUrl?: string; // 👈 now accepts full YouTube URL
   className?: string;
 };
+
+function extractYouTubeId(url: string): string | null {
+  try {
+    // Support both long and short YouTube URLs
+    const regExp = /^.*(?:youtu\.be\/|v=|\/embed\/)([^#&?]*).*/;
+    const match = url.match(regExp);
+    return match && match[1].length === 11 ? match[1] : null;
+  } catch {
+    return null;
+  }
+}
 
 export default function HowItWorks({
   eyebrow = "How it works",
@@ -17,9 +28,11 @@ export default function HowItWorks({
   description,
   videoSrc,
   posterSrc,
-  youtubeId,
+  youtubeUrl, // 👈 use this now
   className,
 }: Props) {
+  const youtubeId = youtubeUrl ? extractYouTubeId(youtubeUrl) : null;
+
   return (
     <section
       id="how-it-works"
@@ -43,7 +56,7 @@ export default function HowItWorks({
             {youtubeId ? (
               <iframe
                 className="h-full w-full"
-                src={`https://www.youtube.com/watch?v=MltlpUeMtRc`}
+                src={`https://www.youtube.com/embed/${youtubeId}?rel=0`}
                 title="How It Works"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 allowFullScreen
