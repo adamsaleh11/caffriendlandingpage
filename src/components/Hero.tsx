@@ -257,52 +257,54 @@ export default function Hero() {
           </div>
         </div>
       </div>
-
-      <div className="pb-14" />
-
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="relative w-[90%] max-w-3/5 rounded-xl bg-white p-18 shadow-xl">
-            <h2 className="mb-4 text-[64px] font-bold text-gray-900">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 sm:p-6">
+          <div className="relative w-full max-w-md sm:max-w-lg lg:max-w-3xl rounded-xl bg-white p-6 sm:p-12 lg:p-18 shadow-xl">
+            <h2 className="lg:mb-10 mb-4 text-2xl sm:text-4xl lg:text-[64px] font-bold text-gray-900">
               You’re here early!
             </h2>
-            <p className="mb-6 text-xl text-gray-700">
+            <p className="lg:mb-14 mb-8 text-base sm:text-lg lg:text-xl text-gray-700">
               Want early access to Caffriend? Drop your email below, and you’ll be the first to know when we launch. Big things are brewing!
             </p>
-            <form onSubmit={async (e) => {
-              e.preventDefault()
-              if (!email) return
-              setLoading(true)
-              try {
-                await submitEarlyAccess(email.trim())
-                setEmail("")
-                alert("Thanks! You're on the list.")
-                setIsOpen(false)
-              } catch (err: unknown) {
-                if (err instanceof Error) alert(err.message)
-                else alert("Something went wrong.")
-              } finally {
-                setLoading(false)
-              }
-            }} className="flex w-full  mx-auto my-16 h-18">
-              <input
-                type="email"
-                placeholder="Enter your email address"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="flex-1 rounded-l-lg border border-[#DADADA] px-4 py-3 outline-none text-black placeholder-[#DADADA] text-xl"
-              />
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="rounded-r-lg bg-[#FF6A00] px-6 py-3 w-full max-w-[35%] font-semibold text-white"
-              >
-                {loading ? "Submitting..." : "Get Early Access"}
-              </button>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!email) return;
+                setLoading(true);
+                try {
+                  await submitEarlyAccess(email.trim());
+                  setEmail("");
+                  alert("Thanks! You're on the list.");
+                  setIsOpen(false);
+                } catch (err: unknown) {
+                  if (err instanceof Error) alert(err.message);
+                  else alert("Something went wrong.");
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              className="relative w-full mx-auto mt-6"
+            >
+              <div className="flex w-full shadow-md rounded-[12px] overflow-hidden">
+                <input
+                  type="email"
+                  placeholder="Enter your email address"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="flex-1 lg:h-[72px] h-[50px] px-4 text-black placeholder-[#DADADA] outline-none"
+                />
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="lg:h-[72px] h-[50px] px-6 bg-[#FF6A00] text-white font-semibold whitespace-nowrap"
+                >
+                  {loading ? "Submitting..." : "Get Early Access"}
+                </button>
+              </div>
             </form>
-            <div className="text-center">
+
+            <div className="text-center lg:mt-18 mt-10">
               <button
                 onClick={() => setIsOpen(false)}
                 className="text-gray-400 underline text-sm hover:text-gray-600"
@@ -310,10 +312,10 @@ export default function Hero() {
                 I’m okay, thanks anyway
               </button>
             </div>
-
           </div>
         </div>
       )}
+
     </section>
   );
 }
