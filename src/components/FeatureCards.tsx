@@ -50,15 +50,14 @@ export default function FeatureCards({
               key={f.title}
               className="rounded-2xl border border-gray-200/70 bg-white shadow-[0_1px_1px_rgba(0,0,0,0.04)]"
             >
-              <div className="p-8 lg:p-10">
+              <div className="p-8 lg:p-10 lg:pb-20">
                 {/* Icon pill */}
-                <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-orange-50 ring-1 ring-orange-100">
+                <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl ">
                   <Image
                     src={f.iconSrc}
                     alt={f.iconAlt}
-                    width={36}
-                    height={36}
-                    className="h-9 w-9"
+                    width={96}
+                    height={96}
                     priority
                   />
                 </div>
