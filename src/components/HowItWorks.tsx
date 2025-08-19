@@ -36,22 +36,21 @@ export default function HowItWorks({
   return (
     <section
       id="how-it-works"
-      className={clsx("bg-white pb-16 lg:pb-28", className)}
+      className={clsx("bg-white pt-10 sm:pt-8 pb-16 lg:pb-28", className)}
     >
-      <div className="mx-auto grid max-w-7xl grid-cols-1 gap-y-10 px-6 lg:grid-cols-2 lg:items-center lg:gap-x-16 lg:px-8">
-        {/* Text Content */}
-        <div>
-          <p className="text-base font-semibold text-orange-600">{eyebrow}</p>
-          <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-neutral-900 sm:text-4xl">
+      <div className="mx-auto grid max-w-[95%] grid-cols-1 gap-y-10 px-6 lg:grid-cols-5 lg:items-center lg:gap-x-16 lg:px-8">
+        <div className="lg:col-span-2">
+          <p className="text-2xl font-semibold text-orange-600">{eyebrow}</p>
+          <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-[#1F150F] lg:text-5xl sm:text-4xl">
             {title}
           </h2>
           {description && (
-            <p className="mt-5 text-base text-neutral-600">{description}</p>
+            <p className="mt-5 text-base lg:text-2xl text-[#1F150F]">{description}</p>
           )}
         </div>
 
         {/* Video */}
-        <div className="w-full">
+        <div className="lg:col-span-3">
           <div className="aspect-video w-full overflow-hidden rounded-xl bg-black shadow ring-1 ring-black/10">
             {youtubeId ? (
               <iframe

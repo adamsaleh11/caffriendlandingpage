@@ -41,15 +41,16 @@ export default function FeatureCards({
   ];
 
   return (
-    <section className="w-full">
-      <div className="mx-auto max-w-7xl px-6 lg:px-8">
+    <section className="w-full ">
+      <div className="mx-auto max-w-[99%] px-2 lg:px-8">
         {/* 3-up grid */}
         <div className="grid grid-cols-1 gap-6 md:gap-8 lg:gap-10 md:grid-cols-3">
           {features.map((f) => (
             <article
               key={f.title}
-              className="rounded-2xl border border-gray-200/70 bg-white shadow-[0_1px_1px_rgba(0,0,0,0.04)]"
+              className="rounded-2xl border border-gray-200/70 bg-white shadow-lg hover:shadow-xl transition-shadow duration-300"
             >
+
               <div className="p-8 lg:p-10 lg:pb-20">
                 {/* Icon pill */}
                 <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl ">
@@ -63,12 +64,12 @@ export default function FeatureCards({
                 </div>
 
                 {/* Title */}
-                <h3 className="text-[28px] leading-[1.1] tracking-[-0.02em] font-semibold text-gray-900">
+                <h3 className="text-[28px] leading-[1.1] tracking-[-0.02em] font-semibold text-[#1F150F]">
                   {f.title}
                 </h3>
 
                 {/* Body */}
-                <p className="mt-4 text-[17px] leading-7 text-gray-600">
+                <p className="mt-4 text-[17px] leading-7 text-[#1F150F]">
                   {f.description}
                 </p>
               </div>
