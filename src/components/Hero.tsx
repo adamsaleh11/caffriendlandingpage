@@ -85,17 +85,14 @@ export default function Hero() {
         {/* Top bar */}
         <header className="mx-auto max-w-[1280px] pr-6 pl-4 lg:pr-8 lg:pl-6">
           <div className="flex items-center justify-between py-6">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 sm:max-w-[140px] lg:max-w-[140px] max-w-[100px]">
               <Image
                 src="/logo.png"
                 alt="Caffriend"
-                width={38}
+                width={140}
                 height={36.19}
                 priority
               />
-              <span className="text-[18px] font-semibold text-[#FF6A00] leading-none">
-                Caffriend
-              </span>
             </div>
             <button
               onClick={() => setIsOpen(true)}
@@ -246,7 +243,7 @@ export default function Hero() {
       <div className="relative z-30 mt-8 sm:mt-10 lg:mt-0 lg:top-[-70px]">
         <div className="mx-auto max-w-[1280px] px-0">
           <div className="rounded-[18px] bg-white">
-            <div className="px-4 py-6 md:px-6 lg:px-8 ">
+            <div className="px-4 py-10 md:px-6 lg:px-2 ">
               <FeatureCards
                 skipIcon="/skip.png"
                 scheduleIcon="/schedule.png"

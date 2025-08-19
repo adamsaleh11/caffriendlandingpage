@@ -169,8 +169,7 @@ export default function FooterCta() {
       <div className="relative mt-16 border-t border-[#F3D5C6] pt-6 px-6 text-sm text-[#4B5563] z-20">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <Image src="/logo.png" alt="Caffriend Logo" width={20} height={20} />
-            <span className="text-[#FF6A00] font-semibold">Caffriend</span>
+            <Image src="/logo.png" alt="Caffriend Logo" width={140} height={20} />
           </div>
           <a href="mailto:caffriend@contact.com" className="text-[#FF6A00] hover:underline">
             caffriendapp@gmail.com

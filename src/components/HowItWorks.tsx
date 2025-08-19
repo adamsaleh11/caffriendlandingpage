@@ -36,7 +36,7 @@ export default function HowItWorks({
   return (
     <section
       id="how-it-works"
-      className={clsx("bg-white py-16 lg:py-28", className)}
+      className={clsx("bg-white pb-16 lg:pb-28", className)}
     >
       <div className="mx-auto grid max-w-7xl grid-cols-1 gap-y-10 px-6 lg:grid-cols-2 lg:items-center lg:gap-x-16 lg:px-8">
         {/* Text Content */}
