@@ -25,7 +25,7 @@ export default function Hero() {
   const [emailDesktop, setEmailDesktop] = useState("");
   const [loadingMobile, setLoadingMobile] = useState(false);
   const [loadingDesktop, setLoadingDesktop] = useState(false);
-  const [isOpen, setIsOpen] = useState(false)
+  const [isOpen, setIsOpen] = useState(true)
   const [email, setEmail] = useState("")
   const [loading, setLoading] = useState(false)
 
@@ -80,7 +80,7 @@ export default function Hero() {
 
   return (
     <section className="relative bg-white overflow-hidden">
-      <div className="bg-gradient-to-b from-[#FFFFFF] to-[#FFECE0] pb-20">
+      <div className="bg-gradient-to-b from-[#FFFFFF] to-[#FFECE0] lg:pb-20 pb-0">
 
         {/* Top bar */}
         <header className="mx-auto max-w-[1280px] pr-6 pl-4 lg:pr-8 lg:pl-6">
@@ -200,9 +200,8 @@ export default function Hero() {
               </div>
             </div>
 
-            {/* Right visuals */}
             <div className="relative lg:col-span-6 lg:translate-x-2">
-              <div className="relative mt-8 sm:mt-10 lg:mt-0 h-[520px] sm:h-[560px] lg:h-[710px]">
+              <div className="relative mt-30 sm:mt-10 lg:mt-0 h-[370px] sm:h-[560px] lg:h-[710px]">
                 <Image
                   src="/phone.png"
                   alt="App preview on iPhone"
