@@ -79,18 +79,18 @@ export default function Hero() {
   };
 
   return (
-    <section className="relative bg-white overflow-hidden">
-      <div className="bg-gradient-to-b from-[#FFFFFF] to-[#FFECE0] lg:pb-20 pb-0">
+    <section className="relative bg-white overflow-hidden p-6">
+      <div className="bg-gradient-to-b from-[#FFFFFF] to-[#FFECE0] lg:pb-20 pb-0 rounded-[10px]">
 
         {/* Top bar */}
         <header className="pr-6 pl-4 lg:pr-8 lg:px-14">
           <div className="flex items-center justify-between py-6">
-            <div className="flex items-center gap-3 sm:max-w-[140px] lg:max-w-[140px] max-w-[100px]">
+            <div className="flex items-center gap-3 sm:max-w-[140px] lg:max-w-[200px] max-w-[100px]">
               <Image
                 src="/logo.png"
                 alt="Caffriend"
-                width={140}
-                height={36.19}
+                width={200}
+                height={37}
                 priority
               />
             </div>
@@ -106,7 +106,7 @@ export default function Hero() {
         <div className="pr-6 pl-4 lg:pr-8 lg:pl-24">
           <div className="grid grid-cols-1 lg:grid-cols-12 lg:gap-x-28">
             <div className="pt-6 sm:pt-10 lg:col-span-6 lg:pt-40 lg:ml-4">
-              <p className="mb-3 lg:text-2xl sm:text-xl text-[16px] font-semibold text-[#FA6404] text-center lg:text-left">
+              <p className="mb-[25px] lg:text-2xl sm:text-xl text-[16px] font-semibold text-[#FA6404] text-center lg:text-left">
                 ⚡ Swipe right on your next coffee chat
               </p>
 
@@ -116,7 +116,7 @@ export default function Hero() {
                 way to network.
               </h1>
 
-              <div className="mt-6 flex justify-center lg:hidden">
+              <div className="mt-[50px] flex justify-center lg:hidden">
                 <div className="relative w-full max-w-[92%] flex flex-col items-center gap-5">
                   <p className="text-[16px] leading-[24px] text-[#1F150F] text-center max-w-[400px]">
                     Connect with 20+ industry professionals
@@ -126,7 +126,7 @@ export default function Hero() {
                     right from our app.
                   </p>
 
-                  <div className="relative w-full max-w-[500px]">
+                  <div className="relative mt-[60px] w-full max-w-[500px]">
                     <form onSubmit={handleSubmitDesktop}>
                       <div className="flex w-full shadow-md rounded-[16px] overflow-hidden">
                         <input
@@ -150,9 +150,9 @@ export default function Hero() {
                     <Image
                       src="/squiggle.png"
                       alt=""
-                      width={56}
-                      height={56}
-                      className="absolute -right-[45px] -top-[60px] rotate-[-45deg] pointer-events-none select-none"
+                      width={50}
+                      height={50}
+                      className="absolute right-[10px] -top-[120px] pointer-events-none select-none"
                       priority
                     />
                   </div>
@@ -161,11 +161,10 @@ export default function Hero() {
 
               {/* DESKTOP ONLY: Subheading + Email + Squiggle */}
               <div className="hidden lg:block">
-                <p className="mt-4 text-[20px] leading-[24px] text-[#1F150F] max-w-[600px]">
-                  Connect with 20+ industry professionals every month—in under 5
-                  minutes, right from our app.
+                <p className="mt-[50px] text-[20px] leading-[24px] text-[#1F150F] w-full max-w-[750px] hidden lg:block">
+                  Connect with 20+ industry professionals every month—in under 5 minutes, right from our app.
                 </p>
-                <div className="relative mt-6 w-full max-w-[620px]">
+                <div className="relative mt-[60px] w-full max-w-[620px]">
                   <form onSubmit={handleSubmitDesktop}>
                     <div className="flex w-full shadow-md rounded-[16px] overflow-hidden">
                       <input
@@ -188,9 +187,9 @@ export default function Hero() {
                   <Image
                     src="/squiggle.png"
                     alt=""
-                    width={120}
+                    width={70}
                     height={84}
-                    className="pointer-events-none absolute -right-[140px] top-1/2 -translate-y-[92%] select-none"
+                    className="pointer-events-none absolute -right-[150px] top-1/2 -translate-y-[94%] select-none"
                     priority
                   />
                 </div>
@@ -245,9 +244,9 @@ export default function Hero() {
         {/* FeatureCards */}
       </div>
       <div className="relative z-30 mt-8 sm:mt-10 lg:mt-0 lg:top-[-70px]">
-        <div className="mx-auto max-w-[95%] px-0">
+        <div className="mx-auto max-w-[100%] px-0">
           <div className="rounded-[18px] bg-white">
-            <div className="px-2 py-10 md:px-0 lg:px-2 ">
+            <div className="py-10 md:px-0 lg:px-2 ">
               <FeatureCards
                 skipIcon="/skip.png"
                 scheduleIcon="/schedule.png"
@@ -260,10 +259,10 @@ export default function Hero() {
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 sm:p-6">
           <div className="relative w-full max-w-full sm:max-w-lg lg:max-w-3xl rounded-xl bg-white p-6 sm:p-12 lg:p-18 shadow-xl">
-            <h2 className="lg:mb-10 mb-4 text-2xl sm:text-4xl text-center lg:text-start sm:text-start lg:text-[64px] font-bold text-gray-900">
+            <h2 className="lg:mb-10 mb-4 text-2xl sm:text-4xl text-center lg:text-start sm:text-start lg:text-[64px] font-bold text-[#1F150F]">
               You’re here early!
             </h2>
-            <p className="lg:mb-14 mb-8 text-center lg:text-start sm:text-start text-base sm:text-lg lg:text-xl text-gray-700">
+            <p className="lg:mb-14 mb-8 text-center lg:text-start sm:text-start text-base sm:text-lg lg:text-xl text-[#1F150F]">
               Want early access to Caffriend? Drop your email below, and you’ll be the first to know when we launch. Big things are brewing!
             </p>
             <form onSubmit={handleSubmitMobile}>
@@ -289,7 +288,7 @@ export default function Hero() {
             <div className="text-center lg:mt-18 mt-10">
               <button
                 onClick={() => setIsOpen(false)}
-                className="text-gray-400 underline text-xl hover:text-gray-600"
+                className="text-[#B9B9B9] underline text-x"
               >
                 I’m okay, thanks anyway
               </button>

@@ -81,19 +81,19 @@ export default function FooterCta() {
 
 
           <div className="text-left relative z-20">
-            <p className="text-2xl font-semibold text-[#FA6404] mb-2">
+            <p className="text-2xl font-semibold text-[#FA6404] mb-[25px]">
               Join the waitlist
             </p>
-            <h2 className="text-5xl font-bold text-[#111827] leading-tight mb-4">
+            <h2 className="text-5xl lg:leading-15 sm:leading-9 leading-[30px] font-bold text-[#1F150F]">
               Stop networking the hard way. Start connecting the smart way.
             </h2>
-            <p className="text-[#4B5563] text-xl mb-8 max-w-[100%]">
+            <p className="text-[#1F150F] text-xl mt-[50px] max-w-[100%]">
               Ditch the 100+ cold emails and LinkedIn messages that go
               unread—start making real connections that get results.
             </p>
 
             <form onSubmit={handleSubmitFD}>
-              <div className="flex w-[90%] shadow-md rounded-[12px] overflow-hidden">
+              <div className="flex w-[90%] mt-[55px] shadow-md rounded-[12px] overflow-hidden">
                 <input
                   type="email"
                   value={emailFooterDesktop}

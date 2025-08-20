@@ -38,14 +38,14 @@ export default function HowItWorks({
       id="how-it-works"
       className={clsx("bg-white pt-10 sm:pt-8 pb-16 lg:pb-28", className)}
     >
-      <div className="mx-auto grid max-w-[95%] grid-cols-1 gap-y-10 px-6 lg:grid-cols-5 lg:items-center lg:gap-x-16 lg:px-8">
+      <div className="mx-auto grid max-w-[95%] grid-cols-1 gap-y-10 px-6 lg:grid-cols-5 lg:gap-x-26 lg:px-8">
         <div className="lg:col-span-2">
-          <p className="text-2xl font-semibold text-orange-600">{eyebrow}</p>
-          <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-[#1F150F] lg:text-5xl sm:text-4xl">
+          <p className="text-2xl mb-[25px] font-semibold text-[#FA6404]">{eyebrow}</p>
+          <h2 className="mt-3 text-3xl lg:leading-15 sm:leading-9 leading-[30px] font-extrabold tracking-tight text-[#1F150F] lg:text-5xl sm:text-4xl">
             {title}
           </h2>
           {description && (
-            <p className="mt-5 text-base lg:text-2xl text-[#1F150F]">{description}</p>
+            <p className="mt-[50px] text-base lg:text-2xl text-[#1F150F]">{description}</p>
           )}
         </div>
 

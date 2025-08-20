@@ -64,12 +64,12 @@ export default function FeatureCards({
                 </div>
 
                 {/* Title */}
-                <h3 className="text-[28px] leading-[1.1] tracking-[-0.02em] font-semibold text-[#1F150F]">
+                <h3 className="text-[36px] leading-[1.1] tracking-[-0.02em] font-semibold text-[#1F150F]">
                   {f.title}
                 </h3>
 
                 {/* Body */}
-                <p className="mt-4 text-[17px] leading-7 text-[#1F150F]">
+                <p className="mt-4 lg:mb-10 sm:mb-0 text-[20px] leading-7 text-[#1F150F]">
                   {f.description}
                 </p>
               </div>
