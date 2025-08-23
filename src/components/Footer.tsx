@@ -3,7 +3,6 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import e from "express";
 
 async function submitEarlyAccess(email: string) {
   const res = await fetch("/api/early-access", {
@@ -78,7 +77,6 @@ export default function FooterCta() {
               priority
             />
           </div>
-
 
           <div className="text-left relative z-20">
             <p className="text-2xl font-semibold text-[#FA6404] mb-[25px]">
@@ -165,19 +163,46 @@ export default function FooterCta() {
       <div className="relative mt-16 border-t border-[#F3D5C6] pt-6 px-6 text-sm text-[#4B5563] z-20">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <Image src="/logo.png" alt="Caffriend Logo" width={140} height={20} />
+            <Image
+              src="/logo.png"
+              alt="Caffriend Logo"
+              width={140}
+              height={20}
+            />
           </div>
-          <a href="mailto:caffriend@contact.com" className="text-[#FA6404] hover:underline">
+          <a
+            href="mailto:caffriend@contact.com"
+            className="text-[#FA6404] hover:underline"
+          >
             caffriendapp@gmail.com
           </a>
           <div className="flex gap-4">
-            <a href="https://www.linkedin.com/company/caffriend/?viewAsMember=true" aria-label="LinkedIn">
-              <Image src="/linkedin.png" alt="LinkedIn" width={20} height={20} />
+            <a
+              href="https://www.linkedin.com/company/caffriend/?viewAsMember=true"
+              aria-label="LinkedIn"
+            >
+              <Image
+                src="/linkedin.png"
+                alt="LinkedIn"
+                width={20}
+                height={20}
+              />
             </a>
-            <a href="https://www.instagram.com/caf_friend?igsh=ZHRqbHprdDhhMDY%3D&utm_source=qr" aria-label="Instagram">
-              <Image src="/instagram.png" alt="Instagram" width={20} height={20} />
+            <a
+              href="https://www.instagram.com/caf_friend?igsh=ZHRqbHprdDhhMDY%3D&utm_source=qr"
+              aria-label="Instagram"
+            >
+              <Image
+                src="/instagram.png"
+                alt="Instagram"
+                width={20}
+                height={20}
+              />
             </a>
-            <a href="https://www.youtube.com/@caffriendapp" aria-label="YouTube">
+            <a
+              href="https://www.youtube.com/@caffriendapp"
+              aria-label="YouTube"
+            >
               <Image src="/youtube.png" alt="YouTube" width={20} height={20} />
             </a>
           </div>
@@ -185,5 +210,4 @@ export default function FooterCta() {
       </div>
     </footer>
   );
-
 }
