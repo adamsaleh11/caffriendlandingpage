@@ -25,9 +25,9 @@ export default function Hero() {
   const [emailDesktop, setEmailDesktop] = useState("");
   const [loadingMobile, setLoadingMobile] = useState(false);
   const [loadingDesktop, setLoadingDesktop] = useState(false);
-  const [isOpen, setIsOpen] = useState(true)
-  const [email, setEmail] = useState("")
-  const [loading, setLoading] = useState(false)
+  const [isOpen, setIsOpen] = useState(true);
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleSubmitMobile = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -49,15 +49,15 @@ export default function Hero() {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    console.log("Submitted email:", email)
+    e.preventDefault();
+    setLoading(true);
+    console.log("Submitted email:", email);
     setTimeout(() => {
-      setLoading(false)
-      setIsOpen(false)
-      setEmail("")
-    }, 1000)
-  }
+      setLoading(false);
+      setIsOpen(false);
+      setEmail("");
+    }, 1000);
+  };
 
   const handleSubmitDesktop = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -81,7 +81,6 @@ export default function Hero() {
   return (
     <section className="relative bg-white overflow-hidden p-6">
       <div className="bg-gradient-to-b from-[#FFFFFF] to-[#FFECE0] lg:pb-20 pb-0 rounded-[10px]">
-
         {/* Top bar */}
         <header className="pr-6 pl-4 lg:pr-8 lg:px-14">
           <div className="flex items-center justify-between py-6">
@@ -107,7 +106,7 @@ export default function Hero() {
           <div className="grid grid-cols-1 lg:grid-cols-12 lg:gap-x-28">
             <div className="pt-6 sm:pt-10 lg:col-span-6 lg:pt-40 lg:ml-4">
               <p className="mb-[25px] lg:text-2xl sm:text-xl text-[16px] font-semibold text-[#FA6404] text-center lg:text-left">
-                ⚡ Swipe right on your next coffee chat
+                Swipe right on your next coffee chat
               </p>
 
               <h1 className="text-[32px] sm:text-[36px] lg:text-[70px] leading-[1.2] font-extrabold tracking-[-0.02em] text-[#1F150F] text-center lg:text-left">
@@ -162,7 +161,8 @@ export default function Hero() {
               {/* DESKTOP ONLY: Subheading + Email + Squiggle */}
               <div className="hidden lg:block">
                 <p className="mt-[50px] text-[20px] leading-[24px] text-[#1F150F] w-full max-w-[750px] hidden lg:block">
-                  Connect with 20+ industry professionals every month—in under 5 minutes, right from our app.
+                  Connect with 20+ industry professionals every month—in under 5
+                  minutes, right from our app.
                 </p>
                 <div className="relative mt-[60px] w-full max-w-[620px]">
                   <form onSubmit={handleSubmitDesktop}>
@@ -235,11 +235,9 @@ export default function Hero() {
                   />
                 </div>
               </div>
-
             </div>
           </div>
         </div>
-
 
         {/* FeatureCards */}
       </div>
@@ -263,7 +261,8 @@ export default function Hero() {
               You’re here early!
             </h2>
             <p className="lg:mb-14 mb-8 text-center lg:text-start sm:text-start text-base sm:text-lg lg:text-xl text-[#1F150F]">
-              Want early access to Caffriend? Drop your email below, and you’ll be the first to know when we launch. Big things are brewing!
+              Want early access to Caffriend? Drop your email below, and you’ll
+              be the first to know when we launch. Big things are brewing!
             </p>
             <form onSubmit={handleSubmitMobile}>
               <div className="flex w-full shadow-md rounded-[12px] overflow-hidden">
@@ -296,7 +295,6 @@ export default function Hero() {
           </div>
         </div>
       )}
-
     </section>
   );
 }
