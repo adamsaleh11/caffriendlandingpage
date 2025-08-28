@@ -3,7 +3,6 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import Link from "next/link";
 
 async function submitEarlyAccess(email: string) {
   const res = await fetch("/api/early-access", {
@@ -100,7 +99,7 @@ export default function Hero() {
   const [emailMobile, setEmailMobile] = useState("");
   const [emailDesktop, setEmailDesktop] = useState("");
   const [loadingMobile, setLoadingMobile] = useState(false);
-  const [loadingDesktop, setLoadingDesktop] = useState(false);
+  const [, setLoadingDesktop] = useState(false); // value unused by design; keep setter
   const [isOpen, setIsOpen] = useState(true);
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
@@ -122,17 +121,6 @@ export default function Hero() {
     } finally {
       setLoadingMobile(false);
     }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    console.log("Submitted email:", email);
-    setTimeout(() => {
-      setLoading(false);
-      setIsOpen(false);
-      setEmail("");
-    }, 1000);
   };
 
   const handleSubmitDesktop = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -375,11 +363,12 @@ export default function Hero() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 sm:p-6">
           <div className="relative w-full max-w-full sm:max-w-lg lg:max-w-3xl rounded-xl bg-white p-6 sm:p-12 lg:p-18 shadow-xl">
             <h2 className="lg:mb-10 mb-4 text-2xl sm:text-4xl text-center lg:text-start sm:text-start lg:text-[64px] font-bold text-[#1F150F]">
-              You're here early!
+              You&apos;re here early!
             </h2>
             <p className="lg:mb-14 mb-8 text-center lg:text-start sm:text-start text-base sm:text-lg lg:text-xl text-[#1F150F]">
-              Want early access to Caffriend? Drop your email below, and you'll
-              be the first to know when we launch. Big things are brewing!
+              Want early access to Caffriend? Drop your email below, and
+              you&apos;ll be the first to know when we launch. Big things are
+              brewing!
             </p>
             <form onSubmit={handleSubmitMobile}>
               <div className="flex w-full shadow-md rounded-[12px] overflow-hidden">
@@ -406,7 +395,7 @@ export default function Hero() {
                 onClick={() => setIsOpen(false)}
                 className="text-[#B9B9B9] underline text-x"
               >
-                I'm okay, thanks anyway
+                I&apos;m okay, thanks anyway
               </button>
             </div>
           </div>
