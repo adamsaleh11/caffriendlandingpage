@@ -19,18 +19,18 @@ async function submitEarlyAccess(email: string) {
 }
 
 export default function FooterCta() {
-  const [emailFooterDesktop, setEmailFooterDesktop] = useState("");
-  const [emailFooterMobile, setEmailFooterMobile] = useState("");
-  const [loadingFD, setLoadingFD] = useState(false);
-  const [loadingFM, setLoadingFM] = useState(false);
+  const [emailMobile, setEmailMobile] = useState("");
+  const [emailDesktop, setEmailDesktop] = useState("");
+  const [loadingMobile, setLoadingMobile] = useState(false);
+  const [loadingDesktop, setLoadingDesktop] = useState(false);
 
-  const handleSubmitFD = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmitMobile = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!emailFooterDesktop) return;
-    setLoadingFD(true);
+    if (!emailMobile) return;
+    setLoadingMobile(true);
     try {
-      await submitEarlyAccess(emailFooterDesktop.trim());
-      setEmailFooterDesktop("");
+      await submitEarlyAccess(emailMobile.trim());
+      setEmailMobile("");
       alert("Thanks! You're on the list.");
     } catch (err: unknown) {
       if (err instanceof Error) {
@@ -39,17 +39,17 @@ export default function FooterCta() {
         alert("Something went wrong.");
       }
     } finally {
-      setLoadingFD(false);
+      setLoadingMobile(false);
     }
   };
 
-  const handleSubmitFM = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmitDesktop = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!emailFooterMobile) return;
-    setLoadingFM(true);
+    if (!emailDesktop) return;
+    setLoadingDesktop(true);
     try {
-      await submitEarlyAccess(emailFooterMobile.trim());
-      setEmailFooterMobile("");
+      await submitEarlyAccess(emailDesktop.trim());
+      setEmailDesktop("");
       alert("Thanks! You're on the list.");
     } catch (err: unknown) {
       if (err instanceof Error) {
@@ -58,7 +58,7 @@ export default function FooterCta() {
         alert("Something went wrong.");
       }
     } finally {
-      setLoadingFM(false);
+      setLoadingDesktop(false);
     }
   };
 
@@ -92,12 +92,12 @@ export default function FooterCta() {
               unread—start making real connections that get results.
             </p>
 
-            <form onSubmit={handleSubmitFD}>
+            <form onSubmit={handleSubmitDesktop}>
               <div className="flex w-full max-w-[500px] shadow-lg rounded-[16px] overflow-hidden">
                 <input
                   type="email"
-                  value={emailFooterDesktop}
-                  onChange={(e) => setEmailFooterDesktop(e.target.value)}
+                  value={emailDesktop}
+                  onChange={(e) => setEmailDesktop(e.target.value)}
                   placeholder="Enter your email address"
                   className="h-[64px] flex-1 min-w-0 bg-white px-6 text-[16px] text-[#111827] placeholder:text-[#9CA3AF] outline-none"
                   required
@@ -105,9 +105,9 @@ export default function FooterCta() {
                 <button
                   type="submit"
                   className="h-[64px] px-8 bg-[#FA6404] text-[16px] font-semibold text-white whitespace-nowrap"
-                  disabled={loadingFD}
+                  disabled={loadingDesktop}
                 >
-                  {loadingFD ? "Submitting..." : "Get Early Access"}
+                  {loadingDesktop ? "Submitting..." : "Get Early Access"}
                 </button>
               </div>
             </form>
@@ -128,12 +128,12 @@ export default function FooterCta() {
               unread—start making real connections that get results.
             </p>
 
-            <form onSubmit={handleSubmitFM}>
+            <form onSubmit={handleSubmitMobile}>
               <div className="flex w-full shadow-lg rounded-[16px] overflow-hidden mb-12">
                 <input
                   type="email"
-                  value={emailFooterMobile}
-                  onChange={(e) => setEmailFooterMobile(e.target.value)}
+                  value={emailMobile}
+                  onChange={(e) => setEmailMobile(e.target.value)}
                   placeholder="Enter your email address"
                   className="h-[56px] flex-1 min-w-0 bg-white px-4 text-[14px] text-[#111827] placeholder:text-[#9CA3AF] outline-none"
                   required
@@ -141,9 +141,9 @@ export default function FooterCta() {
                 <button
                   type="submit"
                   className="h-[56px] px-6 bg-[#FA6404] text-[14px] font-semibold text-white whitespace-nowrap"
-                  disabled={loadingFM}
+                  disabled={loadingMobile}
                 >
-                  {loadingFM ? "Submitting..." : "Get Early Access"}
+                  {loadingMobile ? "Submitting..." : "Get Early Access"}
                 </button>
               </div>
             </form>
