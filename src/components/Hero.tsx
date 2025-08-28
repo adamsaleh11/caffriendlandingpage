@@ -4,7 +4,6 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import FeatureCards from "./FeatureCards";
 
 async function submitEarlyAccess(email: string) {
   const res = await fetch("/api/early-access", {
@@ -18,6 +17,83 @@ async function submitEarlyAccess(email: string) {
       .catch(() => ({ error: "Unknown error" }));
     throw new Error(error || "Failed to submit");
   }
+}
+
+type Feature = {
+  iconSrc: string;
+  iconAlt: string;
+  title: string;
+  description: string;
+};
+
+function FeatureCards({
+  skipIcon,
+  scheduleIcon,
+  monetizeIcon,
+}: {
+  skipIcon: string;
+  scheduleIcon: string;
+  monetizeIcon: string;
+}) {
+  const features: Feature[] = [
+    {
+      iconSrc: skipIcon,
+      iconAlt: "Swipe icon",
+      title: "Skip the cold DMs",
+      description: "Swipe and match with real professionals who want to chat.",
+    },
+    {
+      iconSrc: scheduleIcon,
+      iconAlt: "Clock icon",
+      title: "Auto-schedule",
+      description: "We find the time. Your invite appears in your calendar.",
+    },
+    {
+      iconSrc: monetizeIcon,
+      iconAlt: "Piggy bank icon",
+      title: "Monetize your time",
+      description: "Premium users get paid for every coffee chat.",
+    },
+  ];
+
+  return (
+    <section className="w-full">
+      <div className="mx-auto max-w-[99%] px-2 lg:px-8">
+        {/* 3-up grid */}
+        <div className="grid grid-cols-1 gap-6 md:gap-8 lg:gap-10 md:grid-cols-3">
+          {features.map((f) => (
+            <article
+              key={f.title}
+              className="rounded-2xl border border-gray-200/70 bg-white shadow-lg hover:shadow-xl transition-shadow duration-300"
+            >
+              <div className="p-8 lg:p-10 lg:pb-20">
+                {/* Icon pill */}
+                <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl">
+                  <Image
+                    src={f.iconSrc}
+                    alt={f.iconAlt}
+                    width={96}
+                    height={96}
+                    priority
+                  />
+                </div>
+
+                {/* Title */}
+                <h3 className="text-[24px] leading-[1.1] tracking-[-0.02em] font-bold text-[#1F150F]">
+                  {f.title}
+                </h3>
+
+                {/* Body */}
+                <p className="mt-4 lg:mb-10 sm:mb-0 text-[16px] leading-7 text-[#1F150F]">
+                  {f.description}
+                </p>
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
 }
 
 export default function Hero() {
@@ -95,7 +171,7 @@ export default function Hero() {
             </div>
             <button
               onClick={() => setIsOpen(true)}
-              className="rounded-[10px] bg-[#FA6404] px-8 py-3 text-[20px] h-[59px] font-semibold text-white shadow-md"
+              className="rounded-[10px] bg-[#FA6404] px-6 py-2.5 text-[16px] h-[48px] font-semibold text-white shadow-md"
             >
               Get Early Access
             </button>
@@ -109,12 +185,13 @@ export default function Hero() {
                 Swipe right on your next coffee chat
               </p>
 
-              <h1 className="text-[32px] sm:text-[36px] lg:text-[70px] leading-[1.2] font-extrabold tracking-[-0.02em] text-[#1F150F] text-center lg:text-left">
+              <h1 className="text-[32px] sm:text-[36px] lg:text-[64px] leading-[1.2] font-bold tracking-[-0.02em] text-[#1F150F] text-center lg:text-left">
                 The smarter, faster
                 <br />
                 way to network.
               </h1>
 
+              {/* MOBILE: Subheading + Email (NO squiggle anymore) */}
               <div className="mt-[50px] flex justify-center lg:hidden">
                 <div className="relative w-full max-w-[92%] flex flex-col items-center gap-5">
                   <p className="text-[16px] leading-[24px] text-[#1F150F] text-center max-w-[400px]">
@@ -134,33 +211,24 @@ export default function Hero() {
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
                           required
-                          className="lg:h-[72px] h-[52px] flex-1 min-w-0 bg-white px-4 text-[13px] sm:text-[15px] lg:text-[20px] text-[#111827] placeholder:text-[#9CA3AF] outline-none"
+                          className="lg:h-[56px] h-[48px] flex-1 min-w-0 bg-white px-4 text-[13px] sm:text-[15px] lg:text-[16px] text-[#111827] placeholder:text-[#9CA3AF] outline-none"
                         />
                         <button
                           type="submit"
                           disabled={loading}
-                          className="lg:h-[72px] h-[52px] w-[35%] px-5 bg-[#FA6404] text-[13px] sm:text-[15px] lg:text-[20px] font-semibold text-white"
+                          className="lg:h-[56px] h-[48px] w-[35%] px-4 bg-[#FA6404] text-[13px] sm:text-[15px] lg:text-[16px] font-semibold text-white"
                         >
                           {loading ? "Submitting..." : "Get Early Access"}
                         </button>
                       </div>
                     </form>
-
-                    <Image
-                      src="/squiggle.png"
-                      alt=""
-                      width={50}
-                      height={50}
-                      className="absolute right-[10px] -top-[120px] pointer-events-none select-none"
-                      priority
-                    />
                   </div>
                 </div>
               </div>
 
               {/* DESKTOP ONLY: Subheading + Email + Squiggle */}
               <div className="hidden lg:block">
-                <p className="mt-[50px] text-[20px] leading-[24px] text-[#1F150F] w-full max-w-[750px] hidden lg:block">
+                <p className="mt-[30px] text-[18px] leading-[24px] text-[#1F150F] w-full max-w-[750px] hidden lg:block">
                   Connect with 20+ industry professionals every month—in under 5
                   minutes, right from our app.
                 </p>
@@ -173,31 +241,81 @@ export default function Hero() {
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         required
-                        className="lg:h-[72px] h-[52px] flex-1 min-w-0 bg-white px-4 text-[13px] sm:text-[15px] lg:text-[20px] text-[#111827] placeholder:text-[#9CA3AF] outline-none"
+                        className="lg:h-[56px] h-[48px] flex-1 min-w-0 bg-white px-4 text-[13px] sm:text-[15px] lg:text-[16px] text-[#111827] placeholder:text-[#9CA3AF] outline-none"
                       />
                       <button
                         type="submit"
                         disabled={loading}
-                        className="lg:h-[72px] h-[52px] w-[35%] px-5 bg-[#FA6404] text-[13px] sm:text-[15px] lg:text-[20px] font-semibold text-white"
+                        className="lg:h-[56px] h-[48px] w-[35%] px-4 bg-[#FA6404] text-[13px] sm:text-[15px] lg:text-[16px] font-semibold text-white"
                       >
                         {loading ? "Submitting..." : "Get Early Access"}
                       </button>
                     </div>
                   </form>
+
+                  {/* DESKTOP squiggle – stays */}
                   <Image
                     src="/squiggle.png"
                     alt=""
                     width={70}
                     height={84}
-                    className="pointer-events-none absolute -right-[150px] top-1/2 -translate-y-[94%] select-none"
+                    className="pointer-events-none absolute -right-[90px] top-1/2 -translate-y-[120%] select-none"
                     priority
                   />
                 </div>
+              </div>
+
+              {/* Download buttons - Desktop only */}
+              <div className="hidden lg:flex mt-8 gap-4">
+                <Image
+                  src="/google.png"
+                  alt="Get it on Google Play"
+                  width={203.95}
+                  height={59}
+                  className="cursor-pointer"
+                />
+                <Image
+                  src="/apple.png"
+                  alt="Download on the App Store"
+                  width={203.95}
+                  height={59}
+                  className="cursor-pointer"
+                />
               </div>
             </div>
 
             <div className="relative lg:col-span-6 lg:translate-x-2">
               <div className="relative mt-20 sm:mt-10 lg:mt-0 h-[410px] sm:h-[468px] lg:h-[710px]">
+                {/* Orange accent lines - positioned to match design */}
+                <div className="absolute -top-8 right-10 lg:absolute lg:right-8 lg:top-12 w-32 h-20">
+                  {/* First line - longest, positioned highest */}
+                  <div
+                    className="absolute left-[50px] w-4 h-[3px] bg-[#FA6404] rounded-full transform rotate-[100deg]"
+                    style={{
+                      top: "4px",
+                      right: "10px",
+                    }}
+                  ></div>
+
+                  {/* Second line - medium length, middle position */}
+                  <div
+                    className="absolute left-[60px] w-8 h-[3px] bg-[#FA6404] rounded-full transform rotate-[125deg]"
+                    style={{
+                      top: "16px",
+                      right: "16px",
+                    }}
+                  ></div>
+
+                  {/* Third line - shortest, lowest position */}
+                  <div
+                    className="absolute w-4 h-[3px] bg-[#FA6404] rounded-full transform rotate-[160deg]"
+                    style={{
+                      top: "28px",
+                      right: "24px",
+                    }}
+                  ></div>
+                </div>
+
                 {/* Phone */}
                 <Image
                   src="/phone.png"
@@ -205,19 +323,19 @@ export default function Hero() {
                   width={430}
                   height={860}
                   sizes="(min-width:1024px) 430px, 320px"
-                  className="absolute left-1/2 lg:fixed lg:left-[50%] lg:top-[90px] -translate-x-1/2 w-[280px] sm:w-[320px] lg:w-[430px] select-none"
+                  className="absolute left-1/2 lg:fixed lg:left-[50%] lg:top-[90px] -translate-x-1/2 w-[280px] sm:w-[320px] lg:w-[430px] select-none object-contain"
                   priority
                 />
 
-                {/* Bubble Meeting */}
-                <div className="absolute left-[30%] top-[15%] -translate-x-1/2 w-[240px] h-[80px] sm:w-[250px] sm:h-[72px] lg:fixed lg:left-[10%] lg:top-[170px] lg:w-[361px] lg:h-[100px] lg:translate-x-0">
+                {/* Bubble Meeting — shifted 1rem to the left */}
+                <div className="absolute left-[30%] top-[15%] -translate-x-1/2 w-[240px] h-[80px] sm:w-[250px] sm:h-[72px] lg:fixed lg:left-[calc(5%-1rem)] lg:top-[170px] lg:w-[361px] lg:h-[100px] lg:translate-x-0">
                   <Image
                     src="/bubble-meeting.png"
                     alt="Meeting with Briana"
                     width={361}
                     height={100}
                     sizes="(min-width:1024px) 361px, 250px"
-                    className="h-full w-full rounded-[12px]"
+                    className="h-full w-full rounded-[12px] object-contain"
                     priority
                   />
                 </div>
@@ -230,8 +348,7 @@ export default function Hero() {
                     width={296}
                     height={61}
                     sizes="(min-width:1024px) 296px, 230px"
-                    className="h-full w-full"
-                    priority
+                    className="h-full w-full object-contain"
                   />
                 </div>
               </div>
@@ -242,9 +359,9 @@ export default function Hero() {
         {/* FeatureCards */}
       </div>
       <div className="relative z-30 mt-8 sm:mt-10 lg:mt-0 lg:top-[-70px]">
-        <div className="mx-auto max-w-[100%] px-0">
+        <div className="mx-auto max-w-[95%] lg:max-w-[90%] px-4 lg:px-6">
           <div className="rounded-[18px] bg-white">
-            <div className="py-10 md:px-0 lg:px-2 ">
+            <div className="py-10 md:px-0 lg:px-2">
               <FeatureCards
                 skipIcon="/skip.png"
                 scheduleIcon="/schedule.png"
@@ -258,10 +375,10 @@ export default function Hero() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 sm:p-6">
           <div className="relative w-full max-w-full sm:max-w-lg lg:max-w-3xl rounded-xl bg-white p-6 sm:p-12 lg:p-18 shadow-xl">
             <h2 className="lg:mb-10 mb-4 text-2xl sm:text-4xl text-center lg:text-start sm:text-start lg:text-[64px] font-bold text-[#1F150F]">
-              You’re here early!
+              You're here early!
             </h2>
             <p className="lg:mb-14 mb-8 text-center lg:text-start sm:text-start text-base sm:text-lg lg:text-xl text-[#1F150F]">
-              Want early access to Caffriend? Drop your email below, and you’ll
+              Want early access to Caffriend? Drop your email below, and you'll
               be the first to know when we launch. Big things are brewing!
             </p>
             <form onSubmit={handleSubmitMobile}>
@@ -271,12 +388,12 @@ export default function Hero() {
                   value={emailMobile}
                   onChange={(e) => setEmailMobile(e.target.value)}
                   placeholder="Enter your email address"
-                  className="lg:h-[72px] h-[52px] flex-1 min-w-0 bg-white px-4 text-[13px] sm:text-[15px] lg:text-[20px] text-[#111827] placeholder:text-[#9CA3AF] outline-none"
+                  className="lg:h-[56px] h-[48px] flex-1 min-w-0 bg-white px-4 text-[13px] sm:text-[15px] lg:text-[16px] text-[#111827] placeholder:text-[#9CA3AF] outline-none"
                   required
                 />
                 <button
                   type="submit"
-                  className="lg:h-[72px] h-[52px] w-[35%] px-5 bg-[#FA6404] text-[13px] sm:text-[15px] lg:text-[20px] font-semibold text-white"
+                  className="lg:h-[56px] h-[48px] w-[35%] px-4 bg-[#FA6404] text-[13px] sm:text-[15px] lg:text-[16px] font-semibold text-white"
                   disabled={loadingMobile}
                 >
                   {loadingMobile ? "Submitting..." : "Get Early Access"}
@@ -289,7 +406,7 @@ export default function Hero() {
                 onClick={() => setIsOpen(false)}
                 className="text-[#B9B9B9] underline text-x"
               >
-                I’m okay, thanks anyway
+                I'm okay, thanks anyway
               </button>
             </div>
           </div>
