@@ -7,13 +7,12 @@ type Props = {
   description?: string;
   videoSrc?: string;
   posterSrc?: string;
-  youtubeUrl?: string; // 👈 now accepts full YouTube URL
+  youtubeUrl?: string; // accepts full YouTube URL
   className?: string;
 };
 
 function extractYouTubeId(url: string): string | null {
   try {
-    // Support both long and short YouTube URLs
     const regExp = /^.*(?:youtu\.be\/|v=|\/embed\/)([^#&?]*).*/;
     const match = url.match(regExp);
     return match && match[1].length === 11 ? match[1] : null;
@@ -28,7 +27,7 @@ export default function HowItWorks({
   description,
   videoSrc,
   posterSrc,
-  youtubeUrl, // 👈 use this now
+  youtubeUrl,
   className,
 }: Props) {
   const youtubeId = youtubeUrl ? extractYouTubeId(youtubeUrl) : null;
@@ -36,16 +35,35 @@ export default function HowItWorks({
   return (
     <section
       id="how-it-works"
-      className={clsx("bg-white pt-10 sm:pt-8 pb-16 lg:pb-28", className)}
+      className={clsx(
+        // tighter vertical rhythm
+        "bg-white pt-8 pb-16 lg:py-20",
+        className
+      )}
     >
-      <div className="mx-auto grid max-w-[95%] grid-cols-1 gap-y-10 px-6 lg:grid-cols-5 lg:gap-x-26 lg:px-8">
-        <div className="lg:col-span-2">
-          <p className="text-2xl mb-[25px] font-semibold text-[#FA6404]">{eyebrow}</p>
-          <h2 className="mt-3 text-3xl lg:leading-15 sm:leading-9 leading-[30px] font-extrabold tracking-tight text-[#1F150F] lg:text-5xl sm:text-4xl">
+      <div
+        className={clsx(
+          "mx-auto grid max-w-[95%] grid-cols-1 gap-y-8 px-6",
+          // slightly smaller column gap so layout feels more “crammed”
+          "lg:grid-cols-5 lg:gap-x-16 lg:px-8"
+        )}
+      >
+        <div className="lg:col-span-2 max-w-[560px]">
+          {/* smaller eyebrow */}
+          <p className="text-base mb-3 font-semibold text-[#FA6404]">
+            {eyebrow}
+          </p>
+
+          {/* smaller headline + snug line-height */}
+          <h2 className="mt-1 font-extrabold tracking-tight text-[#1F150F] leading-snug text-2xl sm:text-3xl lg:text-4xl">
             {title}
           </h2>
+
+          {/* body copy reduced one step */}
           {description && (
-            <p className="mt-[50px] text-base lg:text-2xl text-[#1F150F]">{description}</p>
+            <p className="mt-6 text-[#1F150F] text-base lg:text-lg">
+              {description}
+            </p>
           )}
         </div>
 

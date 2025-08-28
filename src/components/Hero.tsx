@@ -99,10 +99,8 @@ export default function Hero() {
   const [emailMobile, setEmailMobile] = useState("");
   const [emailDesktop, setEmailDesktop] = useState("");
   const [loadingMobile, setLoadingMobile] = useState(false);
-  const [, setLoadingDesktop] = useState(false); // value unused by design; keep setter
+  const [loadingDesktop, setLoadingDesktop] = useState(false);
   const [isOpen, setIsOpen] = useState(true);
-  const [email, setEmail] = useState("");
-  const [loading, setLoading] = useState(false);
 
   const handleSubmitMobile = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -179,44 +177,60 @@ export default function Hero() {
                 way to network.
               </h1>
 
-              {/* MOBILE: Subheading + Email (NO squiggle anymore) */}
+              {/* MOBILE: Subheading + Email */}
               <div className="mt-[50px] flex justify-center lg:hidden">
                 <div className="relative w-full max-w-[92%] flex flex-col items-center gap-5">
                   <p className="text-[16px] leading-[24px] text-[#1F150F] text-center max-w-[400px]">
-                    Connect with 20+ industry professionals
+                    Connect with 20+ industry professionals every
                     <br />
-                    every month—in under 5 minutes,
-                    <br />
-                    right from our app.
+                    month—in under 5 minutes, right from our app.
                   </p>
 
                   <div className="relative mt-[60px] w-full max-w-[500px]">
-                    <form onSubmit={handleSubmitDesktop}>
+                    <form onSubmit={handleSubmitMobile}>
                       <div className="flex w-full shadow-md rounded-[16px] overflow-hidden">
                         <input
                           type="email"
                           placeholder="Enter your email address"
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
+                          value={emailMobile}
+                          onChange={(e) => setEmailMobile(e.target.value)}
                           required
                           className="lg:h-[56px] h-[48px] flex-1 min-w-0 bg-white px-4 text-[13px] sm:text-[15px] lg:text-[16px] text-[#111827] placeholder:text-[#9CA3AF] outline-none"
                         />
                         <button
                           type="submit"
-                          disabled={loading}
+                          disabled={loadingMobile}
                           className="lg:h-[56px] h-[48px] w-[35%] px-4 bg-[#FA6404] text-[13px] sm:text-[15px] lg:text-[16px] font-semibold text-white"
                         >
-                          {loading ? "Submitting..." : "Get Early Access"}
+                          {loadingMobile ? "Submitting..." : "Get Early Access"}
                         </button>
                       </div>
                     </form>
                   </div>
+
+                  {/* Download buttons - Mobile */}
+                  <div className="flex mt-8 gap-4 lg:hidden">
+                    <Image
+                      src="/google.png"
+                      alt="Get it on Google Play"
+                      width={135}
+                      height={40}
+                      className="cursor-pointer"
+                    />
+                    <Image
+                      src="/apple.png"
+                      alt="Download on the App Store"
+                      width={135}
+                      height={40}
+                      className="cursor-pointer"
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* DESKTOP ONLY: Subheading + Email + Squiggle */}
+              {/* DESKTOP ONLY: Subheading + Email */}
               <div className="hidden lg:block">
-                <p className="mt-[30px] text-[18px] leading-[24px] text-[#1F150F] w-full max-w-[750px] hidden lg:block">
+                <p className="mt-[30px] text-[18px] leading-[24px] text-[#1F150F] w-full max-w-[750px]">
                   Connect with 20+ industry professionals every month—in under 5
                   minutes, right from our app.
                 </p>
@@ -226,49 +240,39 @@ export default function Hero() {
                       <input
                         type="email"
                         placeholder="Enter your email address"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
+                        value={emailDesktop}
+                        onChange={(e) => setEmailDesktop(e.target.value)}
                         required
                         className="lg:h-[56px] h-[48px] flex-1 min-w-0 bg-white px-4 text-[13px] sm:text-[15px] lg:text-[16px] text-[#111827] placeholder:text-[#9CA3AF] outline-none"
                       />
                       <button
                         type="submit"
-                        disabled={loading}
+                        disabled={loadingDesktop}
                         className="lg:h-[56px] h-[48px] w-[35%] px-4 bg-[#FA6404] text-[13px] sm:text-[15px] lg:text-[16px] font-semibold text-white"
                       >
-                        {loading ? "Submitting..." : "Get Early Access"}
+                        {loadingDesktop ? "Submitting..." : "Get Early Access"}
                       </button>
                     </div>
                   </form>
+                </div>
 
-                  {/* DESKTOP squiggle – stays */}
+                {/* Download buttons - Desktop only */}
+                <div className="flex mt-8 gap-4">
                   <Image
-                    src="/squiggle.png"
-                    alt=""
-                    width={70}
-                    height={84}
-                    className="pointer-events-none absolute -right-[90px] top-1/2 -translate-y-[120%] select-none"
-                    priority
+                    src="/google.png"
+                    alt="Get it on Google Play"
+                    width={203.95}
+                    height={59}
+                    className="cursor-pointer"
+                  />
+                  <Image
+                    src="/apple.png"
+                    alt="Download on the App Store"
+                    width={203.95}
+                    height={59}
+                    className="cursor-pointer"
                   />
                 </div>
-              </div>
-
-              {/* Download buttons - Desktop only */}
-              <div className="hidden lg:flex mt-8 gap-4">
-                <Image
-                  src="/google.png"
-                  alt="Get it on Google Play"
-                  width={203.95}
-                  height={59}
-                  className="cursor-pointer"
-                />
-                <Image
-                  src="/apple.png"
-                  alt="Download on the App Store"
-                  width={203.95}
-                  height={59}
-                  className="cursor-pointer"
-                />
               </div>
             </div>
 

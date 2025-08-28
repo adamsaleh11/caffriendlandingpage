@@ -63,46 +63,48 @@ export default function FooterCta() {
   };
 
   return (
-    <footer className="relative bg-[#FFF7F2] pt-16 pb-10 lg:pt-24 lg:pb-12 overflow-visible">
-      <div className="relative max-w-[95%] mx-auto px-6 z-10 max-h-[710px]">
+    <footer className="relative bg-[#FFFBF9] pt-16 pb-10 lg:pt-24 lg:pb-12 overflow-visible">
+      <div className="relative max-w-7xl mx-auto px-6 z-10">
         {/* Desktop Layout */}
-        <div className="hidden lg:grid lg:grid-cols-2 gap-16 items-center max-h-[710px]">
-          <div className="relative w-full mx-auto">
+        <div className="hidden lg:grid lg:grid-cols-2 gap-16 items-start">
+          <div className="relative w-full">
             <Image
               src="/PhoneFooter.png"
               alt="Phone"
-              width={700}
-              height={700}
-              className="relative z-20 w-full h-auto mx-auto max-h-[710px] object-contain"
+              width={600}
+              height={600}
+              className="relative z-20 w-full h-auto max-w-[500px] mx-auto object-contain"
               priority
             />
           </div>
 
-          <div className="text-left relative z-20">
-            <p className="text-2xl font-semibold text-[#FA6404] mb-[25px]">
+          <div className="text-left relative z-20 pt-8">
+            <p className="text-2xl font-semibold text-[#FA6404] mb-6">
               Join the waitlist
             </p>
-            <h2 className="text-5xl lg:leading-15 sm:leading-9 leading-[30px] font-bold text-[#1F150F]">
-              Stop networking the hard way. Start connecting the smart way.
+            <h2 className="text-[35px] leading-[1.1] font-bold text-[#1F150F] mb-8">
+              Stop networking the hard way.
+              <br />
+              Start connecting the smart way.
             </h2>
-            <p className="text-[#1F150F] text-xl mt-[50px] max-w-[100%]">
+            <p className="text-[#1F150F] text-lg mb-12 leading-relaxed">
               Ditch the 100+ cold emails and LinkedIn messages that go
               unread—start making real connections that get results.
             </p>
 
             <form onSubmit={handleSubmitFD}>
-              <div className="flex w-[90%] mt-[55px] shadow-md rounded-[12px] overflow-hidden">
+              <div className="flex w-full max-w-[500px] shadow-lg rounded-[16px] overflow-hidden">
                 <input
                   type="email"
                   value={emailFooterDesktop}
                   onChange={(e) => setEmailFooterDesktop(e.target.value)}
                   placeholder="Enter your email address"
-                  className="lg:h-[72px] h-[52px] flex-1 min-w-0 bg-white px-4 text-[13px] sm:text-[15px] lg:text-[20px] text-[#111827] placeholder:text-[#9CA3AF] outline-none"
+                  className="h-[64px] flex-1 min-w-0 bg-white px-6 text-[16px] text-[#111827] placeholder:text-[#9CA3AF] outline-none"
                   required
                 />
                 <button
                   type="submit"
-                  className="lg:h-[72px] h-[52px] w-[35%] px-5 bg-[#FA6404] text-[13px] sm:text-[15px] lg:text-[20px] font-semibold text-white"
+                  className="h-[64px] px-8 bg-[#FA6404] text-[16px] font-semibold text-white whitespace-nowrap"
                   disabled={loadingFD}
                 >
                   {loadingFD ? "Submitting..." : "Get Early Access"}
@@ -114,31 +116,31 @@ export default function FooterCta() {
 
         {/* Mobile Layout */}
         <div className="lg:hidden">
-          <div className="text-center mb-16 relative z-20">
-            <p className="text-sm font-semibold text-[#FA6404] mb-2">
+          <div className="text-center mb-12 relative z-20">
+            <p className="text-lg font-semibold text-[#FA6404] mb-4">
               Join the waitlist
             </p>
-            <h2 className="text-[28px] sm:text-[32px] font-bold text-[#1F150F] leading-tight mb-4">
+            <h2 className="text-[28px] font-bold text-[#1F150F] leading-tight mb-6">
               Stop networking the hard way. Start connecting the smart way.
             </h2>
-            <p className="text-[#1F150F] text-base mb-6 max-w-lg mx-auto">
+            <p className="text-[#1F150F] text-base mb-8 leading-relaxed">
               Ditch the 100+ cold emails and LinkedIn messages that go
               unread—start making real connections that get results.
             </p>
 
             <form onSubmit={handleSubmitFM}>
-              <div className="flex w-full shadow-md rounded-[12px] overflow-hidden">
+              <div className="flex w-full shadow-lg rounded-[16px] overflow-hidden mb-12">
                 <input
                   type="email"
                   value={emailFooterMobile}
                   onChange={(e) => setEmailFooterMobile(e.target.value)}
                   placeholder="Enter your email address"
-                  className="lg:h-[72px] h-[52px] flex-1 min-w-0 bg-white px-4 text-[13px] sm:text-[15px] lg:text-[20px] text-[#111827] placeholder:text-[#9CA3AF] outline-none"
+                  className="h-[56px] flex-1 min-w-0 bg-white px-4 text-[14px] text-[#111827] placeholder:text-[#9CA3AF] outline-none"
                   required
                 />
                 <button
                   type="submit"
-                  className="lg:h-[72px] h-[52px] w-[35%] px-5 bg-[#FA6404] text-[13px] sm:text-[15px] lg:text-[20px] font-semibold text-white"
+                  className="h-[56px] px-6 bg-[#FA6404] text-[14px] font-semibold text-white whitespace-nowrap"
                   disabled={loadingFM}
                 >
                   {loadingFM ? "Submitting..." : "Get Early Access"}
@@ -147,32 +149,34 @@ export default function FooterCta() {
             </form>
           </div>
 
-          <div className="relative w-full max-w-sm mx-auto mt-8 z-20">
+          <div className="relative w-full max-w-sm mx-auto z-20">
             <Image
               src="/PhoneFooter.png"
               alt="Phone"
-              width={600}
-              height={600}
-              className="relative z-20 w-full h-auto mx-auto mt-auto"
+              width={400}
+              height={400}
+              className="relative z-20 w-full h-auto mx-auto"
               priority
             />
           </div>
         </div>
       </div>
 
-      <div className="relative mt-16 border-t border-[#F3D5C6] pt-6 px-6 text-sm text-[#4B5563] z-20">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
+      {/* Footer Bottom */}
+      <div className="relative mt-16 border-t border-[#F3D5C6] pt-8 z-20">
+        <div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center gap-6">
+          <div className="flex items-center">
             <Image
               src="/logo.png"
               alt="Caffriend Logo"
               width={140}
-              height={20}
+              height={26}
             />
           </div>
+          <div className="flex-1"></div>
           <a
-            href="mailto:caffriend@contact.com"
-            className="text-[#FA6404] hover:underline"
+            href="mailto:caffriendapp@gmail.com"
+            className="text-[#FA6404] hover:underline text-sm"
           >
             caffriendapp@gmail.com
           </a>
@@ -180,30 +184,33 @@ export default function FooterCta() {
             <a
               href="https://www.linkedin.com/company/caffriend/?viewAsMember=true"
               aria-label="LinkedIn"
+              className="hover:opacity-70 transition-opacity"
             >
               <Image
                 src="/linkedin.png"
                 alt="LinkedIn"
-                width={20}
-                height={20}
+                width={24}
+                height={24}
               />
             </a>
             <a
               href="https://www.instagram.com/caf_friend?igsh=ZHRqbHprdDhhMDY%3D&utm_source=qr"
               aria-label="Instagram"
+              className="hover:opacity-70 transition-opacity"
             >
               <Image
                 src="/instagram.png"
                 alt="Instagram"
-                width={20}
-                height={20}
+                width={24}
+                height={24}
               />
             </a>
             <a
               href="https://www.youtube.com/@caffriendapp"
               aria-label="YouTube"
+              className="hover:opacity-70 transition-opacity"
             >
-              <Image src="/youtube.png" alt="YouTube" width={20} height={20} />
+              <Image src="/youtube.png" alt="YouTube" width={24} height={24} />
             </a>
           </div>
         </div>
