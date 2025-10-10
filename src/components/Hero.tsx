@@ -279,7 +279,6 @@ export default function Hero() {
             <div className="relative lg:col-span-6 lg:translate-x-2">
               <div className="relative mt-20 sm:mt-10 lg:mt-0 h-[410px] sm:h-[468px] lg:h-[710px]">
                 {/* Orange accent lines - positioned to match design */}
-                {/* Orange accent lines - positioned to match design */}
                 <div
                   className="absolute -top-8 right-10 lg:absolute lg:right-8 lg:top-12 w-32 h-20
                 translate-x-12 lg:translate-x-0"
