@@ -178,7 +178,7 @@ export default function FooterCta() {
             href="mailto:caffriendapp@gmail.com"
             className="text-[#FA6404] hover:underline text-sm"
           >
-            caffriendapp@gmail.com
+            contact@caffriend.com
           </a>
           <div className="flex gap-4">
             <a
