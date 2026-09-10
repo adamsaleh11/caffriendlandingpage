@@ -1,0 +1,4 @@
+# Project-scoped Codex configuration for caffriend-backend.
+# Read AGENTS.md first; it holds the permanent laws for this repository.
+#
+# One workflow, one agent: .codex/skills/ticket/SKILL.md. No specialist subagents.
