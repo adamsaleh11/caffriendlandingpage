@@ -16,6 +16,13 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: "Missing email" }, { status: 400 });
     }
 
+    // Deterministic test runs must never contact the real email transport.
+    if (process.env.EARLY_ACCESS_TRANSPORT === "inert") {
+      return String(email).includes("undeliverable")
+        ? Response.json({ error: "Email failed to send" }, { status: 500 })
+        : Response.json({ success: true, data: null });
+    }
+
     const { data, error } = await resend.emails.send({
       from: "Caffriend Early Access <onboarding@resend.dev>", // ✅ hard-coded sender
       to: "shilpatel821@gmail.com",                           // ✅ hard-coded recipient
