@@ -1,0 +1,167 @@
+'use client';
+import Link from 'next/link';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { api, ApiError } from '@/lib/api';
+import { joinable, statusLabels, type AuditEvent, type Meeting } from '@/lib/contracts';
+import StateCard from './StateCard';
+
+const when = (value: string, timezone: string) => {
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) return 'Time unavailable';
+  try { return new Intl.DateTimeFormat('en', {dateStyle:'long', timeStyle:'short', timeZone:timezone}).format(parsed); }
+  catch { return new Intl.DateTimeFormat('en', {dateStyle:'long', timeStyle:'short', timeZone:'UTC'}).format(parsed); }
+};
+/** A local datetime-input value carries no offset, so the meeting's own zone supplies one. */
+function zoned(local: string, timezone: string) {
+  const naive = new Date(`${local}:00Z`);
+  if (!Number.isFinite(naive.getTime())) return null;
+  const shown = new Date(new Intl.DateTimeFormat('en-US', {timeZone:timezone, hour12:false,
+    year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit'}).format(naive).replace(/(\d+)\/(\d+)\/(\d+), (\d+)/, '$3-$1-$2T$4') + 'Z');
+  return new Date(naive.getTime() * 2 - shown.getTime()).toISOString();
+}
+
+export default function MeetingPage({workspaceId, meetingId}:{workspaceId:string; meetingId:string}) {
+  const [meeting, setMeeting] = useState<Meeting>();
+  const [audit, setAudit] = useState<AuditEvent[]>([]);
+  const [error, setError] = useState<ApiError>();
+  const [attempt, setAttempt] = useState(0);
+  const [notice, setNotice] = useState('');
+  const [problem, setProblem] = useState('');
+  const [dialog, setDialog] = useState<'reschedule'|'cancel'>();
+  const [pending, setPending] = useState(false);
+  const [start, setStart] = useState('');
+  const [end, setEnd] = useState('');
+  const opener = useRef<HTMLButtonElement>(null);
+  const base = `workspaces/${workspaceId}/meetings/${meetingId}`;
+
+  useEffect(() => {
+    const controller = new AbortController();
+    api<Meeting>(base, {signal:controller.signal})
+      .then(row => { if (!controller.signal.aborted) setMeeting(row); })
+      .catch(failure => { if (!controller.signal.aborted) setError(failure instanceof ApiError ? failure : new ApiError(503,'This meeting is unavailable right now.')); });
+    // Audit history is supporting detail: its absence must not hide the meeting.
+    api<AuditEvent[]>(`${base}/audit`, {signal:controller.signal})
+      .then(rows => { if (!controller.signal.aborted) setAudit(rows); })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [base, attempt]);
+
+  const close = useCallback(() => { setDialog(undefined); opener.current?.focus(); }, []);
+  useEffect(() => {
+    if (!dialog) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') close(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [dialog, close]);
+
+  if (error) return <div className="crm center"><StateCard
+    title={error.status === 404 ? 'Meeting unavailable' : error.status === 403 ? 'Access unavailable' : 'Unable to load this meeting'}
+    message={error.message} retry={error.status === 404 || error.status === 403 ? undefined : () => {setError(undefined); setMeeting(undefined); setAttempt(value => value + 1);}}/></div>;
+  if (!meeting) return <div className="crm center"><p role="status">Loading meeting…</p></div>;
+
+  const refresh = () => setAttempt(value => value + 1);
+
+  async function copyLink() {
+    setNotice(''); setProblem('');
+    try {
+      const {joinUrl} = await api<{joinUrl:string}>(`${base}/join-link`, {method:'POST'});
+      await navigator.clipboard.writeText(joinUrl);
+      setNotice('Invite link copied to your clipboard.');
+    } catch (failure) {
+      setProblem(failure instanceof ApiError ? failure.message : 'The invite link could not be copied. Try again.');
+    }
+  }
+
+  async function reschedule() {
+    const previous = meeting!;
+    const startsAt = zoned(start, previous.timezone);
+    const endsAt = zoned(end, previous.timezone);
+    if (!startsAt || !endsAt || Date.parse(endsAt) <= Date.parse(startsAt)) {
+      setProblem('Choose a start and an end, with the end after the start.'); return;
+    }
+    setPending(true); setNotice(''); setProblem('');
+    // Shown optimistically, then reconciled with whatever the server actually returns.
+    setMeeting({...previous, startsAt, endsAt});
+    try {
+      const updated = await api<Meeting>(`${base}/reschedule`, {method:'POST', body:JSON.stringify({startsAt, endsAt, timezone:previous.timezone})});
+      setMeeting(updated); setNotice('Meeting rescheduled.'); setDialog(undefined);
+    } catch (failure) {
+      setMeeting(previous);
+      setProblem(failure instanceof ApiError
+        ? `This meeting could not be rescheduled. ${failure.message}`
+        : 'This meeting could not be rescheduled. Its time is unchanged.');
+      refresh();
+    } finally { setPending(false); }
+  }
+
+  async function cancel() {
+    setPending(true); setNotice(''); setProblem('');
+    try {
+      const updated = await api<Meeting>(`${base}/cancel`, {method:'POST'});
+      setMeeting(updated);
+      // A 200 can still carry a failure status; only CANCELLED is a cancellation.
+      if (updated.status === 'CANCELLED') { setNotice('Meeting cancelled.'); setDialog(undefined); }
+      else { setProblem('This meeting could not be cancelled. The calendar still holds it — try again.'); setDialog(undefined); }
+    } catch (failure) {
+      setProblem(failure instanceof ApiError
+        ? `This meeting could not be cancelled. ${failure.message}`
+        : 'This meeting could not be cancelled. Try again.');
+      setDialog(undefined); refresh();
+    } finally { setPending(false); }
+  }
+
+  const cancelled = meeting.status === 'CANCELLED';
+  return <main className="crm center">
+    <section className="card meeting-detail">
+      <p className="eyebrow">MEETING</p>
+      <h1>{meeting.purpose || 'Untitled meeting'}</h1>
+      <p><strong>{statusLabels[meeting.status]}</strong></p>
+      <dl>
+        <dt>Starts</dt><dd>{when(meeting.startsAt, meeting.timezone)}</dd>
+        <dt>Ends</dt><dd>{when(meeting.endsAt, meeting.timezone)}</dd>
+        <dt>Timezone</dt><dd>{meeting.timezone}</dd>
+        {meeting.agenda && <><dt>Agenda</dt><dd>{meeting.agenda}</dd></>}
+        {meeting.physicalLocation && <><dt>Location</dt><dd>{meeting.physicalLocation}</dd></>}
+      </dl>
+      {meeting.errorCode && <p role="alert">The calendar reported: {meeting.errorCode}</p>}
+
+      {notice && <p role="status">{notice}</p>}
+      {problem && <p role="alert">{problem}</p>}
+
+      <div className="meeting-actions">
+        {meeting.joinUrl && joinable(meeting.status) && <a className="text-link" href={meeting.joinUrl}>Join on web</a>}
+        <button onClick={copyLink} disabled={cancelled}>Copy invite link</button>
+        <button ref={dialog === 'reschedule' ? opener : undefined} disabled={cancelled}
+          onClick={event => {opener.current = event.currentTarget; setStart(''); setEnd(''); setProblem(''); setDialog('reschedule');}}>Reschedule</button>
+        <button className="secondary" disabled={cancelled}
+          onClick={event => {opener.current = event.currentTarget; setProblem(''); setDialog('cancel');}}>Cancel meeting</button>
+      </div>
+
+      {dialog === 'reschedule' && <div role="dialog" aria-modal="true" aria-label="Reschedule this meeting" className="meeting-dialog">
+        <h2>Reschedule this meeting</h2>
+        <p>Everyone invited is notified through {meeting.provider === 'MICROSOFT' ? 'Outlook' : 'Google'} Calendar. Times are in {meeting.timezone}.</p>
+        <label>New start<input type="datetime-local" value={start} onChange={event => setStart(event.target.value)} required/></label>
+        <label>New end<input type="datetime-local" value={end} onChange={event => setEnd(event.target.value)} required/></label>
+        <button disabled={pending || !start || !end} onClick={reschedule}>{pending ? 'Rescheduling…' : 'Confirm reschedule'}</button>
+        <button className="secondary" onClick={close}>Keep current time</button>
+      </div>}
+
+      {dialog === 'cancel' && <div role="dialog" aria-modal="true" aria-label="Cancel this meeting" className="meeting-dialog">
+        <h2>Cancel this meeting?</h2>
+        <p>This cannot be undone. Everyone invited is notified, and the invitation link stops working.</p>
+        <button disabled={pending} onClick={cancel}>{pending ? 'Cancelling…' : 'Confirm cancellation'}</button>
+        <button className="secondary" onClick={close}>Keep meeting</button>
+      </div>}
+
+      <h2>Activity</h2>
+      {audit.length
+        ? <ul className="meeting-audit">{audit.map(row =>
+            <li key={row.id}><span>{row.action}</span> <span className="small">{when(row.createdAt, meeting.timezone)} · {row.actorType.toLowerCase()}</span></li>)}</ul>
+        : <p className="small">No recorded activity is available for this meeting.</p>}
+
+      {/* Attendees and the provider event are not in the backend's meeting projection. */}
+      <p className="small">Attendee details and the calendar event are managed in {meeting.provider === 'MICROSOFT' ? 'Outlook' : 'Google'} Calendar.</p>
+      <Link href={`/app/${workspaceId}/calendar`} className="text-link">Back to Calendar</Link>
+    </section>
+  </main>;
+}

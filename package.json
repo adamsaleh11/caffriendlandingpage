@@ -6,19 +6,27 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "eslint . --ignore-pattern .next --ignore-pattern .claude --ignore-pattern node_modules --ignore-pattern test-results --ignore-pattern playwright-report",
+    "typecheck": "tsc --noEmit",
+    "test": "playwright test"
   },
   "dependencies": {
+    "@livekit/components-react": "^2.9.24",
+    "@livekit/components-styles": "^1.2.0",
     "@react-email/render": "^1.2.0",
+    "axios": "^1.13.6",
     "clsx": "^2.1.1",
+    "iron-session": "^9.0.1",
+    "livekit-client": "^2.22.3",
     "next": "15.4.6",
     "react": "19.1.0",
     "react-dom": "19.1.0",
-    "resend": "^6.0.1",
-    "axios": "^1.13.6",
+    "resend": "^6.0.1"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@eslint/eslintrc": "^3",
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
