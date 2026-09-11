@@ -61,8 +61,8 @@ export default function Calendars({workspaceId}:{workspaceId:string}) {
 
   async function loadCalendars(connection:CalendarConnection) {
     try{
-      const result=await api<{data:CalendarOption[]}>(`workspaces/${workspaceId}/calendar-connections/${connection.id}/calendars`);
-      setCalendars(current=>({...current,[connection.id]:result.data ?? []}));
+      const result=await api<CalendarOption[]>(`workspaces/${workspaceId}/calendar-connections/${connection.id}/calendars`);
+      setCalendars(current=>({...current,[connection.id]:Array.isArray(result)?result:[]}));
     }
     catch{ setCalendars(current=>({...current,[connection.id]:'error'})); }
   }

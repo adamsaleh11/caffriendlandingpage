@@ -2,7 +2,9 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { sections, type Section, type Workspace, type User } from '@/lib/contracts';
+import { sections, sectionIcons, sectionNames, type Section, type Workspace, type User } from '@/lib/contracts';
+import NativeNav from '@/components/app/NativeNav';
+
 export default function Shell({workspaces,workspace,section,user,children}:{workspaces:Workspace[];workspace:Workspace;section:Section;user:User;children:ReactNode}){
   const router=useRouter();const [open,setOpen]=useState(false);const [menuOpen,setMenuOpen]=useState(false);
   const toggle=useRef<HTMLButtonElement>(null);const menuButton=useRef<HTMLButtonElement>(null);
@@ -16,7 +18,7 @@ export default function Shell({workspaces,workspace,section,user,children}:{work
     <aside id="workspace-sidebar" className={`sidebar ${open?'open':''}`} onKeyDown={event=>{if(event.key==='Escape'){setOpen(false);toggle.current?.focus();}}}>
       <Link href="/app" className="brand">caffriend<span> workspace</span></Link>
       <label className="workspace-label">Switch workspace<select value={workspace.id} onChange={event=>router.push(`/app/${event.target.value}/${section}`)}>{workspaces.map(item=><option value={item.id} key={item.id}>{item.name}</option>)}</select></label>
-      <p className="eyebrow nav-label">WORKSPACE</p><nav aria-label="Workspace navigation">{sections.map((item,index)=><Link key={item} href={`/app/${workspace.id}/${item}`} aria-current={item===section?'page':undefined}><span className="nav-icon" aria-hidden="true">{['◎','▤','▣','✳','▦','⚙'][index]}</span>{item[0].toUpperCase()+item.slice(1)}</Link>)}</nav>
+      <p className="eyebrow nav-label">WORKSPACE</p><nav aria-label="Workspace navigation">{sections.map(item=><Link key={item} href={`/app/${workspace.id}/${item}`} aria-current={item===section?'page':undefined}><span className="nav-icon" aria-hidden="true">{sectionIcons[item]}</span>{sectionNames[item]}</Link>)}</nav>
       <div className="sidebar-footer"><Link href="/app/workspaces/new" className="text-link">+ Create workspace</Link>
         <div className="user-menu" onKeyDown={event=>{if(event.key==='Escape'&&menuOpen){setMenuOpen(false);menuButton.current?.focus();}}}>
           <button ref={menuButton} className="secondary" aria-expanded={menuOpen} aria-controls="user-menu" onClick={()=>setMenuOpen(!menuOpen)}>{user.name}</button>
@@ -31,6 +33,6 @@ export default function Shell({workspaces,workspace,section,user,children}:{work
           </div>
         </div>
         <p className="small">Your relationships. Your pace.</p></div>
-    </aside><main id="workspace-content" tabIndex={-1} className="workspace-content">{children}</main>
+    </aside><main id="workspace-content" tabIndex={-1} className="workspace-content"><NativeNav/>{children}</main>
   </div>;
 }

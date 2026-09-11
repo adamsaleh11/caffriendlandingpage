@@ -8,5 +8,5 @@ export default async function Page({params}:{params:Promise<{segments?:string[]}
   const segments=(await params).segments || [];
   const session=await getSession();
   if(!session) redirect(`/login?returnTo=${encodeURIComponent(safeReturn('/app'+(segments.length?'/'+segments.join('/'):'')))}`);
-  return <WorkspaceApp key={segments.join('/')} segments={segments} user={session.user}/>;
+  return <WorkspaceApp segments={segments} user={session.user}/>;
 }

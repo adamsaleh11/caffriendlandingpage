@@ -7,7 +7,7 @@ async function login(page: Page) {
   await page.getByLabel('Email or phone number').fill('alex@example.com');
   await page.getByLabel('Password', {exact:true}).fill('correct');
   await page.getByRole('button', {name:'Sign in',exact:true}).click();
-  await expect(page).toHaveURL(`/app/${workspaceId}/people`);
+  await expect(page).toHaveURL(`/app/${workspaceId}/pipeline`);
 }
 /** The browser leaves for the registered client; the test observes that outgoing request. */
 const leavesFor = (page: Page) => page.waitForRequest(request => request.url().startsWith('https://client.example.com/'));
@@ -72,7 +72,7 @@ test('no eligible workspace shows unavailable access and a local exit', async ({
   await page.goto('/oauth/authorize?request=opaque-request');
   await expect(page.getByRole('heading',{name:'Access unavailable'})).toBeVisible();
   await page.getByRole('link',{name:'Go to your workspace'}).click();
-  await expect(page).toHaveURL(`/app/${workspaceId}/people`);
+  await expect(page).toHaveURL(`/app/${workspaceId}/pipeline`);
 });
 
 test('an expired request must restart at the requesting application', async ({page}) => {

@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 
 async function submitEarlyAccess(email: string) {
   const res = await fetch("/api/early-access", {
@@ -155,12 +156,20 @@ export default function Hero() {
                 priority
               />
             </div>
-            <button
-              onClick={() => setIsOpen(true)}
-              className="rounded-[10px] bg-[#FA6404] px-6 py-2.5 text-[16px] h-[48px] font-semibold text-white shadow-md"
-            >
-              Get Early Access
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setIsOpen(true)}
+                className="rounded-[10px] bg-[#FA6404] px-6 py-2.5 text-[16px] h-[48px] font-semibold text-white shadow-md"
+              >
+                Get Early Access
+              </button>
+              <Link
+                href="/login"
+                className="inline-flex items-center rounded-[10px] border border-[#FA6404] bg-white px-6 py-2.5 text-[16px] h-[48px] font-semibold text-[#FA6404] shadow-md"
+              >
+                Log in
+              </Link>
+            </div>
           </div>
         </header>
 

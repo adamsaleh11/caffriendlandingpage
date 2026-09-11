@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // A stray lockfile in the home directory made Turbopack treat ~/ as the project
+  // root, so dev watched every file under it. This pins the root to this project.
+  turbopack: { root: __dirname },
+  outputFileTracingRoot: __dirname,
   async headers() {
     return [
       {
