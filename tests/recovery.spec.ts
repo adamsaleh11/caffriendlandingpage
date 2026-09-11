@@ -19,7 +19,7 @@ test('a failing workspace service offers a retry that recovers', async ({page,re
   await expect(page.getByRole('heading',{name:'Unable to load workspaces'})).toBeVisible();
   await request.post(backend,{data:{}});
   await page.getByRole('button',{name:'Try again'}).click();
-  await expect(page).toHaveURL(`/app/${workspaceId}/people`);
+  await expect(page).toHaveURL(`/app/${workspaceId}/pipeline`);
 });
 
 test('revoked membership is explained without disclosing another workspace', async ({page,request}) => {
@@ -34,7 +34,7 @@ test('a deep link to a workspace the user cannot reach is not found, and the ses
   await login(page, `/app/${other.id}/people`);
   await expect(page.getByRole('heading',{name:'Page not found'})).toBeVisible();
   await page.getByRole('link',{name:'Back to workspaces'}).click();
-  await expect(page).toHaveURL(`/app/${workspaceId}/people`);
+  await expect(page).toHaveURL(`/app/${workspaceId}/pipeline`);
 });
 
 test('a stale remembered selection is revalidated instead of trusted', async ({page,request}) => {
@@ -44,7 +44,7 @@ test('a stale remembered selection is revalidated instead of trusted', async ({p
   // Membership of the remembered workspace is withdrawn.
   await request.post(backend,{data:{workspaces:[{id:workspaceId,name:'Studio'}]}});
   await page.goto('/app');
-  await expect(page).toHaveURL(`/app/${workspaceId}/people`);
+  await expect(page).toHaveURL(`/app/${workspaceId}/pipeline`);
 });
 
 test('workspace creation validates the name and reports a failure honestly', async ({page,request}) => {
