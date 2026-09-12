@@ -32,8 +32,21 @@ Permission for Caffriend to send explicitly confirmed invitation emails from the
 **Coffee-chat invitation**:
 An invitation from a Caffriend account holder to arrange a coffee chat using the sender's availability or proposed times. Recipients may book and participate with an account or as a guest; sending the invitation does not itself create a booking.
 
+**Meeting outreach**:
+The sender-owned record of a coffee-chat invitation, including its delivery and recipient-decision state. It belongs to an engagement but is not itself a meeting.
+_Avoid_: Meeting, booking
+
+**Invitation batch**:
+A desktop composing convenience that sends one independent meeting outreach and one private response link per recipient. It is not a group event or a shared booking.
+
+**Relationship lifecycle**:
+The five stable desktop pipeline steps: Prospect, Contacted, Meeting booked, Follow-up, and Closed. Invitation acceptance, not a manual pipeline action, advances a tracked engagement to Meeting booked.
+
 **Invitation acceptance**:
-A recipient's confirmation of a selected proposed time that results in a booked meeting. Opening an invitation or beginning time selection is not acceptance.
+A recipient's explicit confirmation of exactly one selected proposed time, resulting in a booked meeting. Opening an invitation, following an accept-intent link, or selecting a time is not acceptance.
+
+**Invitation decline**:
+A recipient's explicit decision not to book any proposed time. Following a decline-intent link is not a decline.
 
 **Coffee-chat booking**:
 A confirmed agreement to a coffee chat at a selected date, time, and duration.
@@ -43,3 +56,21 @@ An invited participant who books or joins a coffee chat without creating a Caffr
 
 **Call invitation**:
 Permission to join an already scheduled call, distinct from an invitation to select a coffee-chat time.
+
+**Event**:
+A scheduled, host-led Caffriend gathering with attendee registration and a capacity of at most 50. It is distinct from a coffee-chat booking even though both use the shared call surface.
+
+**Host**:
+The authenticated Caffriend account that owns an event and may start its call and spotlight queue. DESK-2 has exactly one Host per event.
+_Avoid_: Organizer, co-host
+
+**Event registration**:
+An authenticated attendee's reserved place at an event. A paid registration reserves capacity only after authoritative payment success.
+_Avoid_: RSVP, ticket
+
+**Listed event**:
+An event that appears in public discovery and has a shareable detail page. An unlisted event has a shareable detail page but is omitted from discovery.
+_Avoid_: Public event, private event
+
+**Spotlight turn**:
+A server-timed interval in which one event attendee occupies the spotlight stage. The server, rather than a participant's browser, is authoritative for its remaining duration.

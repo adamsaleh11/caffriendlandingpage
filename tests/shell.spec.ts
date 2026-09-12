@@ -20,6 +20,20 @@ test('the CRM sidebar is present on every app screen and never disappears', asyn
   }
 });
 
+test('events are a Home category, not a sidebar destination', async ({page}) => {
+  await page.goto('/home');
+  await login(page);
+  // The sidebar carries the CRM. Events sits beside the people categories instead.
+  await expect(page.getByRole('navigation', {name:'Workspace navigation'}).getByRole('link', {name:'Events'})).toHaveCount(0);
+  const categories = page.getByRole('group', {name:'Home category'});
+  for (const name of ['All','Mentees','Mentors','Events'])
+    await expect(categories.getByRole('button', {name, exact:true})).toBeVisible();
+  await categories.getByRole('button', {name:'Events', exact:true}).click();
+  await expect(categories.getByRole('button', {name:'Events', exact:true})).toHaveAttribute('aria-pressed','true');
+  // Still on Home: the category swaps what the card shows, it does not navigate.
+  await expect(page).toHaveURL('/home');
+});
+
 test('the sidebar reaches the CRM in one click from an app screen', async ({page}) => {
   await page.goto('/leaderboard');
   await login(page);

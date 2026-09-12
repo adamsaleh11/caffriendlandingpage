@@ -7,12 +7,13 @@ export type User = { id: string; name: string };
  * happening with the people I am actively pursuing. People, by contrast, is the
  * roster: everyone in the workspace, whether or not anything is in flight.
  */
-export const sections = ['pipeline', 'people', 'inbox', 'calendar', 'organizations', 'agents', 'history', 'settings'] as const;
+export const sections = ['pipeline', 'invites', 'people', 'inbox', 'calendar', 'organizations', 'agents', 'history', 'settings'] as const;
 export type Section = typeof sections[number];
 /** The default landing section: the last-used workspace opens on its pipeline. */
 export const homeSection: Section = 'pipeline';
 export const sectionNames: Record<Section, string> = {
   pipeline: 'Pipeline',
+  invites: 'Coffee chat invites',
   people: 'People',
   inbox: 'Inbox',
   calendar: 'Meetings',
@@ -23,7 +24,7 @@ export const sectionNames: Record<Section, string> = {
 };
 /** One glyph per section, in `sections` order. */
 export const sectionIcons: Record<Section, string> = {
-  pipeline: '\u25A4', people: '\u25CE', inbox: '\u25A3', calendar: '\u25F7',
+  pipeline: '\u25A4', invites: '\u2709', people: '\u25CE', inbox: '\u25A3', calendar: '\u25F7',
   organizations: '\u25A5', agents: '\u2733', history: '\u25A6', settings: '\u2699',
 };
 /**
@@ -44,6 +45,7 @@ export function safeReturn(value: unknown): string {
   if (typeof value !== 'string') return '/app';
   if (value === '/app' || value === '/app/workspaces/new') return value;
   if ((appScreens as readonly string[]).includes(value.replace(/^\//, ''))) return value;
+  if (value === '/events/new' || /^\/events\/[0-9a-f-]+(?:\/call)?$/i.test(value)) return value;
   const nested = value.match(/^\/app\/([^/]+)\/(meetings|people)\/([^/]+)$/);
   if (nested && uuidPattern.test(nested[1]) && uuidPattern.test(nested[3])) return value;
   const match = value.match(/^\/app\/([^/]+)\/([^/]+)$/);
@@ -53,6 +55,8 @@ export function safeReturn(value: unknown): string {
 export const providers = ['GOOGLE', 'MICROSOFT'] as const;
 export type Provider = typeof providers[number];
 export const providerNames: Record<Provider, string> = { GOOGLE: 'Google Calendar', MICROSOFT: 'Outlook Calendar' };
+/** The mailbox behind each provider, for the send-as grant rather than the calendar. */
+export const mailboxNames: Record<Provider, string> = { GOOGLE: 'Gmail', MICROSOFT: 'Outlook' };
 export type ProviderStatus = { configured: boolean; errorCode?: string | null };
 export type CalendarConnection = {
   id: string;
@@ -84,7 +88,7 @@ export const scopeExplanations: Record<string, string> = {
 };
 export const immediateScopes = ['notes:write', 'tasks:write'];
 
-export const meetingStatuses = ['LOCAL','PENDING','CONFIRMED','FAILED','CANCEL_PENDING','CANCEL_FAILED','CANCELLED'] as const;
+export const meetingStatuses = ['LOCAL','BOOKED','CONFERENCE_PENDING','PENDING','CONFIRMED','FAILED','CANCEL_PENDING','CANCEL_FAILED','CANCELLED'] as const;
 export type MeetingStatus = typeof meetingStatuses[number];
 /** Exactly the backend's `meetings` projection. Attendees and the provider event id are not in it. */
 export type Meeting = {
@@ -104,6 +108,8 @@ export type Meeting = {
 };
 export const statusLabels: Record<MeetingStatus, string> = {
   LOCAL: 'Not yet sent to a calendar',
+  BOOKED: 'Booked',
+  CONFERENCE_PENDING: 'Creating the join link',
   PENDING: 'Sending the calendar invitation',
   CONFIRMED: 'Confirmed',
   FAILED: 'The calendar invitation failed',
@@ -112,7 +118,7 @@ export const statusLabels: Record<MeetingStatus, string> = {
   CANCELLED: 'Cancelled',
 };
 /** A meeting is joinable only while the server says it is scheduled. */
-export const joinable = (status: MeetingStatus) => status === 'CONFIRMED' || status === 'LOCAL';
+export const joinable = (status: MeetingStatus) => status === 'CONFIRMED' || status === 'BOOKED' || status === 'LOCAL';
 export type AuditEvent = {
   id: string;
   createdAt: string;
@@ -154,6 +160,10 @@ export type Person = Record_ & Archivable & {
   phone?: string | null;
   sourceCategory: string;
   organizationId?: string | null;
+  /** Where to read up on them before a chat. Stored as https only. */
+  sourceUrl?: string | null;
+  /** Why they are worth the time, in the user's own words. */
+  discoveryReason?: string | null;
 };
 export type Organization = Record_ & Archivable & { name: string; domain?: string | null };
 export type Engagement = Record_ & Archivable & {
@@ -255,8 +265,31 @@ export const agentScopeNames: Record<AgentScope,string> = {
   'meetings:read': 'Read meetings.',
   'meetings:propose': 'Propose meetings. You confirm every invitation yourself.',
 };
+/** What each permission is called in front of a person. The scope string itself is never shown. */
+export const agentScopeLabels: Record<AgentScope,string> = {
+  'people:read': 'See your contacts',
+  'people:propose': 'Suggest new contacts',
+  'engagements:read': 'See your engagements',
+  'engagements:propose': 'Suggest engagements',
+  'pipelines:read': 'See your pipelines',
+  'notes:write': 'Write notes',
+  'tasks:write': 'Create tasks',
+  'approvals:read': 'See your inbox',
+  'meetings:read': 'See your meetings',
+  'meetings:propose': 'Suggest meetings',
+};
 /** Scopes that take effect without an approval step, so they need a clear warning at selection. */
 export const immediateAgentScopes: AgentScope[] = ['notes:write','tasks:write'];
+
+/** Permissions grouped by how much trust each one asks for, in the order a person should read them. */
+export const agentScopeGroups: { title: string; note: string; scopes: AgentScope[] }[] = [
+  { title: 'Look at your workspace', note: 'Read-only. The agent can see this, and change nothing.',
+    scopes: ['people:read','engagements:read','pipelines:read','meetings:read','approvals:read'] },
+  { title: 'Suggest things for you to approve', note: 'Every suggestion waits in your Inbox until you approve it.',
+    scopes: ['people:propose','engagements:propose','meetings:propose'] },
+  { title: 'Make changes on its own', note: 'These happen right away, with no approval step. Grant them only to an agent you trust.',
+    scopes: ['notes:write','tasks:write'] },
+];
 
 /** Readable audit actions. An unmapped action falls back to its raw value rather than being hidden. */
 export const auditActions: Record<string,string> = {
@@ -269,5 +302,44 @@ export const auditActions: Record<string,string> = {
   'approval.approved':'Approved a proposal','approval.rejected':'Rejected a proposal',
   'source.registered':'Registered a source','source.rights_reviewed':'Reviewed source rights',
   'oauth.client_registered':'Registered an agent','oauth.connection_revoked':'Revoked an agent connection',
+  'meeting.created':'Scheduled a meeting','meeting.updated':'Updated a meeting','meeting.cancelled':'Cancelled a meeting',
+  'outreach.mail_connect_started':'Started connecting a mailbox','outreach.mail_connected':'Connected a mailbox',
+  'outreach.mail_disconnected':'Disconnected a mailbox','outreach.sent':'Sent outreach','outreach.bulk_sent':'Sent bulk outreach',
+  'calendar.connected':'Connected a calendar','calendar.disconnected':'Disconnected a calendar',
 };
-export const actorLabels: Record<string,string> = { MEMBER:'Person', AGENT:'Agent', GUEST:'Guest', SYSTEM:'Caffriend' };
+export const actorLabels: Record<string,string> = { MEMBER:'Person', HUMAN:'Person', USER:'Person', AGENT:'Agent', GUEST:'Guest', SYSTEM:'Caffriend' };
+
+/**
+ * Readable names for what a change touched. The backend mixes plural resource
+ * names with model names, so both spellings are mapped; anything unmapped falls
+ * back to its raw value rather than being hidden.
+ */
+export const targetLabels: Record<string,string> = {
+  people:'a person', person:'a person', Person:'a person',
+  organizations:'an organization', organization:'an organization', Organization:'an organization',
+  engagements:'an engagement', engagement:'an engagement', Engagement:'an engagement',
+  notes:'a note', note:'a note', Note:'a note',
+  tasks:'a task', task:'a task', Task:'a task',
+  pipelines:'a pipeline', pipeline:'a pipeline', Pipeline:'a pipeline',
+  stages:'a stage', stage:'a stage', Stage:'a stage',
+  approvals:'a proposal', approval:'a proposal', Approval:'a proposal',
+  meetings:'a meeting', meeting:'a meeting', Meeting:'a meeting',
+  agents:'an agent', agent:'an agent', Agent:'an agent',
+  CalendarConnection:'a calendar connection', calendar_connections:'a calendar connection',
+  'source-artifacts':'a source', SourceArtifact:'a source',
+  'source-claims':'a cited claim', SourceClaim:'a cited claim',
+  conversations:'a chat', Conversation:'a chat',
+};
+
+/**
+ * A last resort for an action this UI has no wording for: turn
+ * `outreach.mail_connect_started` into `Outreach: mail connect started` so an
+ * unmapped event still reads as a sentence instead of an identifier.
+ */
+export function describeAction(action: string): string {
+  const [group, ...rest] = action.split('.');
+  const tail = rest.join(' ').replace(/[._-]+/g, ' ').trim();
+  const sentence = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+  if (!tail) return sentence(group.replace(/[._-]+/g, ' '));
+  return `${sentence(group.replace(/[._-]+/g, ' '))}: ${tail}`;
+}

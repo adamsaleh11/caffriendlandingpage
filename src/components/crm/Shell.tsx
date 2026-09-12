@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { sections, sectionIcons, sectionNames, type Section, type Workspace, type User } from '@/lib/contracts';
 import NativeNav from '@/components/app/NativeNav';
+import {FormSelect} from '@/components/ui/form-select';
 
 export default function Shell({workspaces,workspace,section,user,children}:{workspaces:Workspace[];workspace:Workspace;section:Section;user:User;children:ReactNode}){
   const router=useRouter();const [open,setOpen]=useState(false);const [menuOpen,setMenuOpen]=useState(false);
@@ -17,7 +18,7 @@ export default function Shell({workspaces,workspace,section,user,children}:{work
     <header className="mobile-header"><Link href="/app" className="brand">caffriend</Link><button ref={toggle} aria-expanded={open} aria-controls="workspace-sidebar" onClick={()=>setOpen(!open)}>Menu</button></header>
     <aside id="workspace-sidebar" className={`sidebar ${open?'open':''}`} onKeyDown={event=>{if(event.key==='Escape'){setOpen(false);toggle.current?.focus();}}}>
       <Link href="/app" className="brand">caffriend<span> workspace</span></Link>
-      <label className="workspace-label">Switch workspace<select value={workspace.id} onChange={event=>router.push(`/app/${event.target.value}/${section}`)}>{workspaces.map(item=><option value={item.id} key={item.id}>{item.name}</option>)}</select></label>
+      <div className="workspace-label">Switch workspace<FormSelect aria-label="Switch workspace" value={workspace.id} onValueChange={id=>router.push(`/app/${id}/${section}`)} options={workspaces.map(item=>({value:item.id,label:item.name}))} /></div>
       <p className="eyebrow nav-label">WORKSPACE</p><nav aria-label="Workspace navigation">{sections.map(item=><Link key={item} href={`/app/${workspace.id}/${item}`} aria-current={item===section?'page':undefined}><span className="nav-icon" aria-hidden="true">{sectionIcons[item]}</span>{sectionNames[item]}</Link>)}</nav>
       <div className="sidebar-footer"><Link href="/app/workspaces/new" className="text-link">+ Create workspace</Link>
         <div className="user-menu" onKeyDown={event=>{if(event.key==='Escape'&&menuOpen){setMenuOpen(false);menuButton.current?.focus();}}}>

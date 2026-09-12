@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import {chooseOption} from './controls';
 
 const backend = 'http://127.0.0.1:4100/__state';
 const workspaceId = '11111111-1111-4111-8111-111111111111';
@@ -67,7 +68,7 @@ test('switching workspaces keeps the current section and drops the previous work
   await request.post(backend,{data:{workspaces:[{id:workspaceId,name:'Studio'},other]}});
   await login(page, `/app/${workspaceId}/pipeline`);
   await expect(page.getByRole('heading',{name:'Pipeline',exact:true})).toBeVisible();
-  await page.getByLabel('Switch workspace').selectOption(other.id);
+  await chooseOption(page.getByLabel('Switch workspace'), {label:other.name});
   await expect(page).toHaveURL(`/app/${other.id}/pipeline`);
   await expect(page.locator('#workspace-content').getByText('Community')).toBeVisible();
   await expect(page.locator('#workspace-content').getByText('Studio')).toHaveCount(0);

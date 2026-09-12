@@ -4,6 +4,7 @@ import { backend, BackendError } from '@/lib/backend';
 import { isResource, project, projectPage } from '@/lib/crm-projection';
 import { writableResources, archivableResources, approvalActions } from '@/lib/contracts';
 import { uuidPattern, providers, meetingStatuses, type AuditEvent, type CalendarConnection, type Meeting, type MeetingStatus, type Provider, type Workspace } from '@/lib/contracts';
+import { projectCall } from '@/lib/app-projection';
 
 const json = (body: unknown, status = 200) => NextResponse.json(body, {status, headers:{'Cache-Control':'no-store','Referrer-Policy':'no-referrer'}});
 const failure = (error: unknown, message: string) => {
@@ -123,6 +124,16 @@ export async function GET(request: Request, {params}:{params:Promise<{segments:s
       if (segments.length === 5 && segments[4] === 'calendars' && uuidPattern.test(segments[3]))
         return json(await backend(`${workspace}/calendar-connections/${segments[3]}/calendars`, {token:session.token}));
     }
+    if (workspace && segments[2] === 'mail-connections' && segments.length === 4 && uuidPattern.test(segments[3]))
+      return json(await backend(`${workspace}/mail-connections/${segments[3]}`, {token:session.token}));
+    if (workspace && segments[2] === 'upcoming-calls' && segments.length === 3) {
+      const result = await backend<unknown>('/calendar/accepted-events/1', {token:session.token});
+      const value = result as {data?:unknown};
+      const rows = Array.isArray(value?.data) ? value.data : Array.isArray(result) ? result : [];
+      return json((rows as Record<string,unknown>[]).map(row=>projectCall(row,session.user.id)).filter(row=>!row.workspaceId||row.workspaceId===segments[1]));
+    }
+    if (workspace && segments[2] === 'meeting-outreach' && segments.length === 4 && uuidPattern.test(segments[3]))
+      return json(await backend(`${workspace}/meeting-outreach/${segments[3]}`, {token:session.token}));
     if (workspace && segments[2] === 'meetings' && segments.length === 4 && uuidPattern.test(segments[3]))
       return json(meetingProjection(await backend<Record<string, unknown>>(`${workspace}/meetings/${segments[3]}`, {token:session.token})));
     if (workspace && segments[2] === 'meetings' && segments.length === 5 && segments[4] === 'audit' && uuidPattern.test(segments[3]))
@@ -213,6 +224,34 @@ export async function POST(request: Request, {params}:{params:Promise<{segments:
         return json(await allConnections(`${workspace}/calendar-connections`, session.token));
       }
     }
+    if (workspace && segments[2] === 'mail-connections' && segments.length === 5 && uuidPattern.test(segments[3])) {
+      if (segments[4] === 'connect') {
+        const result = await backend<{redirect?:string}>(`${workspace}/mail-connections/${segments[3]}/connect`, {token:session.token, method:'POST', body:{}});
+        let redirect: URL;
+        try { redirect = new URL(result.redirect ?? ''); } catch { return json({error:'Mailbox authorization is unavailable right now.'}, 502); }
+        const state = redirect.searchParams.get('state');
+        if (redirect.protocol !== 'https:' || !['accounts.google.com','login.microsoftonline.com'].includes(redirect.hostname) || !state)
+          return json({error:'Mailbox authorization is unavailable right now.'}, 502);
+        // Remembered for the same reason the calendar flow remembers its own: the
+        // callback has to know which workspace to return the person to, and a
+        // replayed state must find nothing waiting for it.
+        const existing = (await readSealed<PendingFlows>(pendingCookie))?.flows ?? [];
+        const cutoff = Date.now() - fiveMinutes * 1000;
+        const flows = [...existing.filter(flow => flow.created > cutoff), {provider:'GOOGLE_MAIL', workspaceId:segments[1], stateHash: await hashState(state), created: Date.now()}].slice(-5);
+        await setSealed(pendingCookie, {flows}, fiveMinutes);
+        return json({redirect:redirect.toString()});
+      }
+      if (segments[4] === 'revoke')
+        return json(await backend(`${workspace}/mail-connections/${segments[3]}/revoke`, {token:session.token, method:'POST', body:{}}));
+    }
+    if (workspace && segments[2] === 'meeting-outreach') {
+      if (segments.length === 4 && segments[3] === 'preview')
+        return json(await backend(`${workspace}/meeting-outreach/preview`, {token:session.token, method:'POST', body}));
+      if (segments.length === 3) {
+        if (!key || !uuidPattern.test(key)) return json({error:'Request not allowed'}, 400);
+        return json(await backend(`${workspace}/meeting-outreach`, {token:session.token, method:'POST', body, key}));
+      }
+    }
     if (workspace && segments[2] === 'crm' && segments.length >= 4) {
       if (!key) return json({error:'Request not allowed'}, 400);
       const resource = segments[3];
@@ -263,6 +302,11 @@ export async function POST(request: Request, {params}:{params:Promise<{segments:
     }
     return json({error:'Not found'}, 404);
   } catch (error) {
+    if (error instanceof BackendError && path.includes('meeting-outreach')) {
+      const code = typeof error.body?.code === 'string' ? error.body.code : undefined;
+      const message = typeof error.body?.message === 'string' ? error.body.message : 'The invitation was not sent.';
+      return json({error:message, ...(code ? {code} : {})}, error.status);
+    }
     const {status, body: problem} = failure(error, path === 'workspaces'
       ? 'Unable to create workspace. Refresh the workspace list before trying again.'
       : 'That did not complete. Check the connection below before trying again.');

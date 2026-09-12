@@ -12,7 +12,7 @@ const common = ['id', 'workspaceId', 'createdAt', 'updatedAt'];
 const archivable = [...common, 'archivedAt'];
 
 const fields: Record<CrmResource, string[]> = {
-  people: [...archivable, 'displayName', 'title', 'location', 'email', 'phone', 'sourceCategory', 'organizationId'],
+  people: [...archivable, 'displayName', 'title', 'location', 'email', 'phone', 'sourceCategory', 'organizationId', 'sourceUrl', 'discoveryReason'],
   organizations: [...archivable, 'name', 'domain'],
   engagements: [...archivable, 'personId', 'organizationId', 'pipelineId', 'stageId', 'ownerId', 'status', 'objective', 'nextAction'],
   notes: [...archivable, 'body', 'personId', 'engagementId', 'sourceConversationId'],

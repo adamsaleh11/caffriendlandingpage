@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSession, clearSession, sameOrigin } from '@/lib/session';
 import { backend, BackendError } from '@/lib/backend';
-import { projectSuggestion, projectConnection, projectCall, projectRank, projectProfile, projectProfileDetail, type AppConnection } from '@/lib/app-projection';
+import { projectSuggestion, projectConnection, projectCall, projectRank, projectProfile, projectProfileDetail, profileEdit, projectPerson, type AppConnection } from '@/lib/app-projection';
 
 /**
  * The consumer Caffriend surface (Home, Connections, Calls, Leaderboard, Profile).
@@ -77,6 +77,23 @@ export async function GET(request: Request, {params}:{params:Promise<{segments:s
       return json(rows.map(row => projectCall(row, me)));
     }
 
+    /**
+     * One person's public profile, for the profile modal.
+     *
+     * The same three reads the native public profile makes. Only the profile
+     * itself is required: a person with no basic details or no separate media
+     * still opens, with those sections absent rather than an error.
+     */
+    if (segments.length === 2 && segments[0] === 'person' && segments[1]) {
+      const id = encodeURIComponent(segments[1]);
+      const [profile, details, media] = await Promise.all([
+        backend(`/user/profile/${id}`, {token:session.token}),
+        backend(`/basic-details/answers/${id}`, {token:session.token}).catch(() => ({})),
+        backend(`/media/user/${id}`, {token:session.token}).catch(() => []),
+      ]);
+      return json(projectPerson(unwrap(profile), unwrap(details), unwrap(media)));
+    }
+
     if (path === 'leaderboard') {
       const limit = Math.min(Math.max(Number(search.get('limit') ?? '10'), 1), 100);
       const offset = Math.max(Number(search.get('offset') ?? '0'), 0);
@@ -135,6 +152,93 @@ export async function POST(request: Request, {params}:{params:Promise<{segments:
       return json({isMatched: result?.isMatched === true});
     }
     return json({error:'Not found'}, 404);
+  } catch (error) {
+    const {status, body: problem} = failure(error);
+    if (status === 401) await clearSession();
+    return json(problem, status);
+  }
+}
+
+/** Re-reads the profile so an edit answers with the record the backend actually stored. */
+const freshProfile = async (token: string) =>
+  json(projectProfile(unwrap(await backend('/user/my-profile', {token}))));
+
+/**
+ * Profile edits.
+ *
+ * `me` writes the profile fields, `me/role` switches between mentee and mentor.
+ * Both are the endpoints the native edit screen calls (`PUT /user/profile` and
+ * `PUT /user/role`), so a change made here and one made in the app are the same
+ * write. The response is a re-read rather than the write's own body, because
+ * only some of these endpoints echo the updated record back.
+ */
+export async function PATCH(request: Request, {params}:{params:Promise<{segments:string[]}>}) {
+  if (!sameOrigin(request)) return json({error:'Request not allowed'}, 403);
+  const session = await getSession();
+  if (!session) return json({error:'Sign in required'}, 401);
+  const path = (await params).segments.join('/');
+  const body = await request.json().catch(() => ({})) as Record<string, unknown>;
+  try {
+    if (path === 'me') {
+      const payload = profileEdit(body);
+      if (!payload) return json({error:'Please check what you entered and try again.'}, 400);
+      await backend('/user/profile', {token:session.token, method:'PUT', body:payload});
+      return freshProfile(session.token);
+    }
+
+    if (path === 'me/role') {
+      const role = String(body.role ?? '').toUpperCase();
+      if (role !== 'MENTEE' && role !== 'MENTOR') return json({error:'Choose mentee or mentor.'}, 400);
+      await backend('/user/role', {token:session.token, method:'PUT', body:{role}});
+      return freshProfile(session.token);
+    }
+    return json({error:'Not found'}, 404);
+  } catch (error) {
+    const {status, body: problem} = failure(error);
+    if (status === 401) await clearSession();
+    return json(status === 400 ? {error:'That could not be saved.'} : problem, status);
+  }
+}
+
+/** What `/media/upload` accepts, kept in step with the native photo picker. */
+const IMAGE_TYPES = ['image/jpeg','image/png','image/webp','image/heic'];
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+
+/** Adds one profile photo. Multipart, because `/media/upload` takes a file. */
+export async function PUT(request: Request, {params}:{params:Promise<{segments:string[]}>}) {
+  if (!sameOrigin(request)) return json({error:'Request not allowed'}, 403);
+  const session = await getSession();
+  if (!session) return json({error:'Sign in required'}, 401);
+  const path = (await params).segments.join('/');
+  if (path !== 'me/photo') return json({error:'Not found'}, 404);
+  try {
+    const form = await request.formData().catch(() => null);
+    const file = form?.get('file');
+    if (!(file instanceof File)) return json({error:'Choose a photo first.'}, 400);
+    if (!IMAGE_TYPES.includes(file.type)) return json({error:'Use a JPEG, PNG, WebP or HEIC image.'}, 400);
+    if (file.size > MAX_IMAGE_BYTES) return json({error:'That image is larger than 8MB.'}, 400);
+    // Only the file is forwarded; any other part the browser sent is dropped.
+    const upload = new FormData();
+    upload.append('file', file, file.name || 'photo.jpg');
+    await backend('/media/upload', {token:session.token, method:'POST', body:upload});
+    return freshProfile(session.token);
+  } catch (error) {
+    const {status, body: problem} = failure(error);
+    if (status === 401) await clearSession();
+    return json(status === 400 ? {error:'That photo could not be uploaded.'} : problem, status);
+  }
+}
+
+/** Removes one profile photo. The backend checks the photo belongs to this person. */
+export async function DELETE(request: Request, {params}:{params:Promise<{segments:string[]}>}) {
+  if (!sameOrigin(request)) return json({error:'Request not allowed'}, 403);
+  const session = await getSession();
+  if (!session) return json({error:'Sign in required'}, 401);
+  const segments = (await params).segments;
+  if (segments.length !== 3 || segments[0] !== 'me' || segments[1] !== 'photo' || !segments[2]) return json({error:'Not found'}, 404);
+  try {
+    await backend(`/media/${encodeURIComponent(segments[2])}`, {token:session.token, method:'DELETE'});
+    return freshProfile(session.token);
   } catch (error) {
     const {status, body: problem} = failure(error);
     if (status === 401) await clearSession();

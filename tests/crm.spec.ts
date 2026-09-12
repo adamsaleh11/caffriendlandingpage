@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import {chooseDate, chooseOption, chooseTime} from './controls';
 
 const workspaceId = '11111111-1111-4111-8111-111111111111';
 const personId = '55555555-5555-4555-8555-555555555555';
@@ -70,31 +71,26 @@ test.describe('pipeline', () => {
   test('renders server-defined stages and moves an engagement without a pointer', async ({page}) => {
     await enter(page, 'pipeline');
     await expect(page.getByRole('heading', {name:/^Prospect/})).toBeVisible();
-    await expect(page.getByRole('heading', {name:/^Qualified/})).toBeVisible();
+    await expect(page.getByRole('heading', {name:/^Contacted/})).toBeVisible();
 
     const stage = page.getByLabel('Stage');
-    await stage.focus();
-    await stage.selectOption({label:'Qualified'});
-    await expect(page.getByRole('status').filter({hasText:'Moved to Qualified'})).toBeVisible();
+    await chooseOption(stage, {label:'Contacted'});
+    await expect(page.getByRole('status').filter({hasText:'Moved to Contacted'})).toBeVisible();
   });
 
   test('a failed move rolls back completely and says so', async ({page, request}) => {
     await request.post(state, {data:{moveFails:true}});
     await enter(page, 'pipeline');
-    await page.getByLabel('Stage').selectOption({label:'Qualified'});
+    await chooseOption(page.getByLabel('Stage'), {label:'Contacted'});
     await expect(alerts(page)).toContainText('Someone else changed this first');
     // The card is back where the server says it belongs.
-    await expect(page.getByLabel('Stage')).toHaveValue('77777777-7777-4777-8777-777777777777');
+    await expect(page.getByLabel('Stage')).toContainText('Prospect');
   });
 
-  test('stages can be added and reordered', async ({page}) => {
+  test('pipeline stages stay fixed for booking automation', async ({page}) => {
     await enter(page, 'pipeline');
-    await page.getByRole('button', {name:'Edit steps'}).click();
-    await page.getByLabel('Add a step').fill('Following up');
-    await page.getByRole('button', {name:'Add step'}).click();
-    await expect(page.getByRole('heading', {name:'Following up'})).toBeVisible();
-    await page.getByRole('button', {name:/Move later — Prospect/}).click();
-    await expect(alerts(page)).toHaveCount(0);
+    await expect(page.getByRole('button', {name:'Edit steps'})).toHaveCount(0);
+    await expect(page.locator('.stage')).toHaveCount(5);
   });
 });
 
@@ -200,7 +196,7 @@ test.describe('calendar and meetings', () => {
   test('reads busy time only, never what the events are', async ({page, request}) => {
     await request.post(state, {data:{connections:[{id:'33333333-3333-4333-8333-333333333333', provider:'GOOGLE', status:'CONNECTED', accountIdentifier:'alex@example.com', calendarId:'primary', calendarName:'Alex — Work'}]}});
     await enter(page, 'calendar');
-    await page.getByLabel('Date').fill('2026-09-12');
+    await chooseDate(page.getByLabel('Date'), '2026-09-12');
     await expect(page.getByRole('status').filter({hasText:'busy period'})).toBeVisible();
     expect(await page.content()).not.toContain('PRIVATE_CRM_SENTINEL');
   });
@@ -208,11 +204,11 @@ test.describe('calendar and meetings', () => {
   test('confirmation names the account, timezone, attendees and conference before sending', async ({page, request}) => {
     await request.post(state, {data:{connections:[{id:'33333333-3333-4333-8333-333333333333', provider:'GOOGLE', status:'CONNECTED', accountIdentifier:'alex@example.com', calendarId:'primary', calendarName:'Alex — Work'}]}});
     await enter(page, 'calendar');
-    await page.getByLabel('Engagement').selectOption({index:1});
+    await chooseOption(page.getByLabel('Engagement'), {index:0});
     await page.getByLabel('Purpose').fill('Intro chat');
     await page.getByLabel('Attendee emails').fill('jordan@example.com');
-    await page.getByLabel('Date').fill('2027-03-04');
-    await page.getByLabel('Start time').fill('10:00');
+    await chooseDate(page.getByLabel('Date'), '2027-03-04');
+    await chooseTime(page.getByLabel('Start time'), '10:00');
     await page.getByRole('button', {name:'Review before sending'}).click();
 
     await expect(page.getByText('alex@example.com')).toBeVisible();
@@ -224,10 +220,10 @@ test.describe('calendar and meetings', () => {
   test('a provider failure never reports success', async ({page, request}) => {
     await request.post(state, {data:{createMeetingFails:true, connections:[{id:'33333333-3333-4333-8333-333333333333', provider:'GOOGLE', status:'CONNECTED', accountIdentifier:'alex@example.com', calendarId:'primary', calendarName:'Alex — Work'}]}});
     await enter(page, 'calendar');
-    await page.getByLabel('Engagement').selectOption({index:1});
+    await chooseOption(page.getByLabel('Engagement'), {index:0});
     await page.getByLabel('Purpose').fill('Intro chat');
-    await page.getByLabel('Date').fill('2027-03-04');
-    await page.getByLabel('Start time').fill('10:00');
+    await chooseDate(page.getByLabel('Date'), '2027-03-04');
+    await chooseTime(page.getByLabel('Start time'), '10:00');
     await page.getByRole('button', {name:'Review before sending'}).click();
     await page.getByRole('button', {name:'Send the invitation'}).click();
     await expect(alerts(page)).toContainText('That did not complete');
@@ -257,7 +253,7 @@ test('history explains changes in words, with raw data secondary', async ({page}
   await expect(page.getByRole('heading', {name:'History', exact:true})).toBeVisible();
   await expect(page.getByText('Edited a person')).toBeVisible();
   await expect(page.locator('pre')).toHaveCount(0);
-  await page.getByRole('button', {name:'Show record'}).first().click();
+  await page.getByRole('button', {name:'Details', exact:true}).first().click();
   await expect(page.locator('pre').first()).toBeVisible();
 });
 
@@ -274,4 +270,136 @@ test('the CRM is usable at a phone width', async ({page}) => {
   await expect(page.getByRole('link', {name:'Alex Rivera'})).toBeVisible();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(1);
+});
+
+/**
+ * A dialog must actually be over the page, not merely present in the DOM.
+ *
+ * The backdrop is portalled to <body> carrying `crm modal-root modal-backdrop`
+ * on one element, so its rule has to be a compound selector — a descendant one
+ * silently misses, leaving the panel as a static block at the foot of a document
+ * whose scrolling the dialog has just locked. Playwright's toBeVisible() passes
+ * on that (it still has a box), so this asserts the thing a person would notice:
+ * the dialog sits inside the viewport, and the page behind it is inert.
+ */
+test('a dialog opens over the page, not below it', async ({page}) => {
+  await page.setViewportSize({width:1280, height:900});
+  await enter(page, 'people');
+  await page.getByRole('button', {name:'Add a person'}).click();
+
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  const box = (await dialog.boundingBox())!;
+  expect(box.y).toBeGreaterThanOrEqual(0);
+  // The whole panel is within the viewport it is supposed to be centred in.
+  expect(box.y + box.height).toBeLessThanOrEqual(900);
+  expect(await page.locator('.modal-backdrop').evaluate(el => getComputedStyle(el).position)).toBe('fixed');
+
+  // While it is open, the shell behind it is neither reachable nor announced.
+  await expect(page.locator('#workspace-content')).toHaveAttribute('aria-hidden', 'true');
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(page.locator('#workspace-content')).not.toHaveAttribute('aria-hidden', 'true');
+});
+
+/**
+ * Notes and tasks are presented as a pair, so they have to read across as well
+ * as down: the two "Add …" controls and their buttons sit on one line whatever
+ * is above them. A two-line empty note on one side used to shunt its whole
+ * column out of step with the other.
+ */
+test('the notes and tasks columns line up as a pair', async ({page}) => {
+  await page.setViewportSize({width:1280, height:1000});
+  await page.goto(`/app/${workspaceId}/people/${personId}`);
+  if (page.url().includes('/login')) await login(page);
+  await expect(page.getByRole('heading', {name:'Notes and tasks'})).toBeVisible();
+
+  const note = (await page.getByRole('button', {name:'Add note'}).boundingBox())!;
+  const task = (await page.getByRole('button', {name:'Add task'}).boundingBox())!;
+  expect(Math.abs(note.y - task.y)).toBeLessThanOrEqual(1);
+
+  // The controls they belong to end on the same line too.
+  const textarea = (await page.getByPlaceholder('Something worth remembering').boundingBox())!;
+  const input = (await page.getByPlaceholder('Send the portfolio').boundingBox())!;
+  expect(Math.abs((textarea.y + textarea.height) - (input.y + input.height))).toBeLessThanOrEqual(1);
+});
+
+/**
+ * The profile editor asks one question at a time, and must ask every one of them.
+ *
+ * Its queue has to be fixed when it opens: each save updates the person, so a
+ * queue recomputed from that person drops the answered field at the same moment
+ * the step advances past it — skipping a question per save and then reading past
+ * the end of the list, which crashed the page.
+ */
+test('the profile editor walks every question without skipping or crashing', async ({page}) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+
+  await page.goto(`/app/${workspaceId}/people/${personId}`);
+  if (page.url().includes('/login')) await login(page);
+  await page.getByRole('button', {name:/Complete profile|Edit profile/}).click();
+
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  const total = Number((await dialog.getByText(/Question 1 of \d+/).innerText()).match(/of (\d+)/)![1]);
+  expect(total).toBeGreaterThan(1);
+
+  // Step through the whole queue. Every question is numbered, in order, and the
+  // editor closes on the last one rather than running off the end.
+  for (let index = 1; index <= total; index++) {
+    await expect(dialog.getByText(`Question ${index} of ${total}`)).toBeVisible();
+    await dialog.getByRole('button', {name:'Skip'}).click();
+  }
+  await expect(dialog).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+/**
+ * A phone number on a profile is there to be read, not dialled.
+ *
+ * A `tel:` href hands the number to whatever the OS registered as its dialler —
+ * FaceTime on a Mac — so simply looking someone up was one stray click away from
+ * calling them. The number is plain text you can copy instead.
+ *
+ * The number is added through the editor rather than by posting fixture state,
+ * so this exercises the real write path and leaves the shared backend untouched.
+ */
+test('a phone number is readable without offering to call anyone', async ({page}) => {
+  await page.goto(`/app/${workspaceId}/people/${personId}`);
+  if (page.url().includes('/login')) await login(page);
+  await expect(page.getByRole('heading', {name:'Alex Rivera'})).toBeVisible();
+
+  await page.getByRole('button', {name:'+ Phone'}).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Phone').fill('+1 416 555 0134');
+  await dialog.getByRole('button', {name:/Save and/}).click();
+  await expect(dialog.getByRole('status')).toContainText('Phone saved');
+  await page.keyboard.press('Escape');
+
+  await expect(page.getByText('+1 416 555 0134')).toBeVisible();
+  // Nothing on the page may hand a number to the system dialler.
+  expect(await page.locator('a[href^="tel:"]').count()).toBe(0);
+});
+
+/**
+ * The People toolbar reads as one row with one primary action.
+ *
+ * The filters carry a divider — padding and a bottom border — when they stand
+ * alone, which hangs below their own button and pushed Search above the button
+ * beside it. And two orange buttons side by side gave the page two things that
+ * both looked like the main action.
+ */
+test('the people toolbar sits on one line with a single primary action', async ({page}) => {
+  await page.setViewportSize({width:1280, height:900});
+  await enter(page, 'people');
+
+  const search = (await page.getByRole('button', {name:'Search'}).boundingBox())!;
+  const add = (await page.getByRole('button', {name:'Add a person'}).boundingBox())!;
+  expect(Math.abs((search.y + search.height) - (add.y + add.height))).toBeLessThanOrEqual(1);
+
+  // Only "Add a person" carries the primary fill.
+  const fill = (name: string) => page.getByRole('button', {name})
+    .evaluate(el => getComputedStyle(el).backgroundColor);
+  expect(await fill('Search')).not.toBe(await fill('Add a person'));
 });

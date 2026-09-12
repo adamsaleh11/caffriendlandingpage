@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import {chooseOption} from './controls';
 
 const invite = 'a'.repeat(43);
 test('a guest sees only safe meeting details without signing in', async ({ page, request }) => {
@@ -162,8 +163,8 @@ test('the recipient chooses a microphone and camera before joining, and that cho
   await expect(microphone).toBeVisible();
   await expect(camera).toBeVisible();
 
-  await microphone.selectOption({ label: 'Headset Microphone' });
-  await camera.selectOption({ label: 'External Webcam' });
+  await chooseOption(microphone, { label: 'Headset Microphone' });
+  await chooseOption(camera, { label: 'External Webcam' });
   const used = await page.evaluate(() => (window as unknown as {__constraints: MediaStreamConstraints[]}).__constraints.at(-1));
   expect(JSON.stringify(used)).toContain('mic-2');
   expect(JSON.stringify(used)).toContain('cam-2');

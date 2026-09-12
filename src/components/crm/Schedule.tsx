@@ -1,9 +1,15 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { api, ApiError } from '@/lib/api';
 import { providerNames, statusLabels, type CalendarConnection, type CalendarOption, type Engagement, type Meeting, type Person } from '@/lib/contracts';
 import { useKeys, useList, useRows, Section, Empty, More } from './common';
+import { useLiveRows } from './record-actions';
+import type { AppCall } from '@/lib/app-projection';
+import {FormSelect} from '@/components/ui/form-select';
+import {DatePicker} from '@/components/ui/date-picker';
+import {TimePicker} from '@/components/ui/time-picker';
 
 type Busy = { busy: {start:string; end:string}[] };
 const hour = 3600000;
@@ -17,8 +23,9 @@ const zones = (): string[] => {
 
 export default function Schedule({workspaceId}:{workspaceId:string}) {
   const meetings = useList<Meeting>(`workspaces/${workspaceId}/meetings`);
-  const engagements = useList<Engagement>(`workspaces/${workspaceId}/crm/engagements`);
-  const people = useList<Person>(`workspaces/${workspaceId}/crm/people`);
+  const calls = useRows<AppCall>(`workspaces/${workspaceId}/upcoming-calls`);
+  const engagements=useLiveRows(useList<Engagement>(`workspaces/${workspaceId}/crm/engagements`));
+  const people=useLiveRows(useList<Person>(`workspaces/${workspaceId}/crm/people`));
   const connections = useRows<CalendarConnection>(`workspaces/${workspaceId}/calendar-connections`);
 
   const [connectionId, setConnectionId] = useState('');
@@ -31,6 +38,8 @@ export default function Schedule({workspaceId}:{workspaceId:string}) {
   const [cancelling, setCancelling] = useState<string>();
   /** Unset until the organizer chooses, so the capability answer can arrive late without overriding them. */
   const [conference, setConference] = useState<'yes'|'no'>();
+  const [meetingDate, setMeetingDate] = useState('');
+  const [meetingTime, setMeetingTime] = useState('');
   const keyFor = useKeys();
 
   const usable = (connections.rows ?? []).filter(row => row.status === 'CONNECTED');
@@ -109,10 +118,24 @@ export default function Schedule({workspaceId}:{workspaceId:string}) {
   };
 
   return <>
-    <Section title="Meetings" intro="The conversations booked from this workspace. Meetings you book in the Caffriend app are listed under Upcoming calls." state={meetings}>
+    <Section title="Meetings" intro="Your booked coffee chats, using the same meeting data as Upcoming Calls." state={calls}>
+      {!calls.rows && !calls.error && <p role="status">Loading meetings…</p>}
+      {calls.error && <p role="alert">Meetings could not be loaded. <button className="secondary" onClick={calls.reload}>Try again</button></p>}
+      {calls.rows?.length===0&&<Empty>No meetings yet.</Empty>}
+      <ul className="meetings">{(calls.rows??[]).map(call=><li key={call.id}>
+        <h3>{call.purpose||'Coffee chat'}</h3><dl>
+          <dt>When</dt><dd>{call.startDate?`${new Date(call.startDate).toLocaleString()}${call.endDate?` – ${new Date(call.endDate).toLocaleTimeString()}`:''}`:'Not scheduled'}{call.timezone?` (${Intl.DateTimeFormat().resolvedOptions().timeZone})`:''}</dd>
+          <dt>With</dt><dd className="counterpart">{call.image&&<Image className="avatar" src={call.image} alt="" width={32} height={32} unoptimized/>}{call.counterpart||'Guest recipient'}</dd>
+          <dt>Venue</dt><dd>{call.venue==='CAFFRIEND_LIVEKIT'?'Caffriend call':call.venue==='PROVIDER_CONFERENCE'?'Google Meet':call.physicalLocation||'In person'}</dd>
+          {call.status&&<><dt>Status</dt><dd>{call.status.replace(/_/g,' ').toLowerCase()}</dd></>}
+        </dl>{call.joinUrl&&<a className="button" href={call.joinUrl} target={call.venue==='PROVIDER_CONFERENCE'?'_blank':undefined} rel={call.venue==='PROVIDER_CONFERENCE'?'noreferrer noopener':undefined}>Join</a>}
+      </li>)}</ul>
+    </Section>
+
+    <Section title="Calendar delivery" intro="Provider delivery and cancellation controls for meetings created in this workspace." state={meetings}>
       {notice && <p role="status" className="notice">{notice}</p>}
       {problem && <p role="alert">{problem}</p>}
-      {(meetings.rows?.length ?? 0) === 0 && <Empty>No meetings yet.</Empty>}
+      {(meetings.rows?.length ?? 0) === 0 && <Empty>No calendar delivery records.</Empty>}
       <ul className="meetings">{(meetings.rows ?? []).map(meeting => <li key={meeting.id}>
         <h3><Link href={`/app/${workspaceId}/meetings/${meeting.id}`}>{meeting.purpose}</Link></h3>
         <dl>
@@ -154,27 +177,32 @@ export default function Schedule({workspaceId}:{workspaceId:string}) {
         setProblem('');
         setDraft({...values, startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString()});
       }}>
-        <label>Calendar to use
-          <select value={connection?.id ?? ''} onChange={event => setConnectionId(event.target.value)}>
-            {usable.map(row => <option key={row.id} value={row.id}>{providerNames[row.provider]} — {row.calendarName || row.calendarId}</option>)}
-          </select>
-        </label>
-        <label>Engagement
-          <select name="engagementId" required defaultValue="">
-            <option value="" disabled>Choose the engagement this meeting belongs to</option>
-            {(engagements.rows ?? []).map(row => <option key={row.id} value={row.id}>{row.objective}{personName(row.id) ? ` — ${personName(row.id)}` : ''}</option>)}
-          </select>
-        </label>
+        <div className="field">
+          <span className="field-label">Calendar to use</span>
+          <FormSelect aria-label="Calendar to use" value={connection?.id ?? ''} onValueChange={setConnectionId}
+            options={usable.map(row => ({value:row.id,label:`${providerNames[row.provider]} — ${row.calendarName || row.calendarId}`}))} />
+        </div>
+        <div className="field">
+          <span className="field-label">Engagement</span>
+          <FormSelect name="engagementId" required aria-label="Engagement" placeholder="Choose the engagement this meeting belongs to"
+            options={(engagements.rows ?? []).map(row => ({value:row.id,label:`${row.objective}${personName(row.id) ? ` — ${personName(row.id)}` : ''}`}))} />
+        </div>
         <label>Purpose<input name="purpose" required maxLength={2000} /></label>
         <label>Attendee emails<input name="attendees" placeholder="name@example.com, other@example.com" /><span className="small">Separate with commas. Everyone listed receives one invitation.</span></label>
-        <label>Date<input name="date" type="date" required onChange={event => loadBusy(event.target.value, Intl.DateTimeFormat().resolvedOptions().timeZone)} /></label>
-        <label>Start time<input name="time" type="time" required /></label>
-        <label>Duration
-          <select name="duration" defaultValue="30"><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">1 hour</option></select>
-        </label>
-        <label>Timezone
-          <select name="timezone" defaultValue={zones()[0]}>{zones().map(zone => <option key={zone} value={zone}>{zone}</option>)}</select>
-        </label>
+        <div className="field"><span className="field-label">Date</span>
+          <DatePicker name="date" required aria-label="Date" value={meetingDate}
+            onChange={date => { setMeetingDate(date); loadBusy(date, Intl.DateTimeFormat().resolvedOptions().timeZone); }} />
+        </div>
+        <div className="field"><span className="field-label">Start time</span>
+          <TimePicker name="time" required aria-label="Start time" value={meetingTime} onChange={setMeetingTime} />
+        </div>
+        <div className="field"><span className="field-label">Duration</span>
+          <FormSelect name="duration" aria-label="Duration" defaultValue="30"
+            options={[{value:'15',label:'15 minutes'},{value:'30',label:'30 minutes'},{value:'45',label:'45 minutes'},{value:'60',label:'1 hour'}]} />
+        </div>
+        <div className="field"><span className="field-label">Timezone</span>
+          <FormSelect name="timezone" aria-label="Timezone" defaultValue={zones()[0]} options={zones().map(zone => ({value:zone,label:zone}))} />
+        </div>
         <fieldset>
           <legend>Where will it happen?</legend>
           <label className="choice"><input type="radio" name="conference" value="yes" checked={(conference ?? (canConference ? 'yes' : 'no')) === 'yes'} disabled={!canConference} onChange={() => setConference('yes')} />

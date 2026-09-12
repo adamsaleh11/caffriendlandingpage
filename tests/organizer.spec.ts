@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import {setDateTime} from './controls';
 
 const backend = 'http://127.0.0.1:4100/__state';
 const workspaceId = '11111111-1111-4111-8111-111111111111';
@@ -37,8 +38,8 @@ test('the organizer copies the invite link without it being guessed client-side'
 test('rescheduling requires confirmation and reflects the server result', async ({page}) => {
   await login(page);
   await page.getByRole('button',{name:'Reschedule'}).click();
-  await page.getByLabel('New start').fill('2026-09-20T14:00');
-  await page.getByLabel('New end').fill('2026-09-20T14:30');
+  await setDateTime(page, 'New start', '2026-09-20', '14:00');
+  await setDateTime(page, 'New end', '2026-09-20', '14:30');
   await page.getByRole('button',{name:'Confirm reschedule'}).click();
   await expect(page.getByRole('main').getByRole('status')).toContainText('Meeting rescheduled');
   await expect(page.getByText('September 20, 2026', {exact:false}).first()).toBeVisible();
@@ -48,8 +49,8 @@ test('a failed reschedule rolls back to the server time and explains itself', as
   await login(page);
   await request.post(backend,{data:{rescheduleConflict:true}});
   await page.getByRole('button',{name:'Reschedule'}).click();
-  await page.getByLabel('New start').fill('2026-09-20T14:00');
-  await page.getByLabel('New end').fill('2026-09-20T14:30');
+  await setDateTime(page, 'New start', '2026-09-20', '14:00');
+  await setDateTime(page, 'New end', '2026-09-20', '14:30');
   await page.getByRole('button',{name:'Confirm reschedule'}).click();
   await expect(page.getByRole('main').getByRole('alert')).toContainText('could not be rescheduled');
   // The original server time is restored, not the attempted one.

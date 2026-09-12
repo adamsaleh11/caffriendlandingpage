@@ -16,8 +16,10 @@ import Agents from './Agents';
 import Schedule from './Schedule';
 import Audit from './Audit';
 import MeetingPage from './MeetingPage';
+import InviteHub from './InviteHub';
 const descriptions: Record<Section,string> = {
   pipeline:'Where each person you are pursuing currently stands.',
+  invites:'Invite people to a coffee chat by email.',
   people:'Everyone in this workspace, whether or not something is in flight.',
   organizations:'The companies behind the people you are tracking.',
   history:'Everything that has happened in this workspace.',
@@ -84,6 +86,7 @@ export default function WorkspaceApp({segments,user}:{segments:string[];user:Use
     {section==='people' && <People workspaceId={workspace.id}/>}
     {section==='organizations' && <Organizations workspaceId={workspace.id}/>}
     {section==='pipeline' && <Pipeline workspaceId={workspace.id}/>}
+    {section==='invites' && <InviteHub workspaceId={workspace.id}/>}
     {section==='inbox' && <Inbox workspaceId={workspace.id}/>}
     {section==='agents' && <Agents workspaceId={workspace.id}/>}
     {section==='calendar' && <Schedule workspaceId={workspace.id}/>}

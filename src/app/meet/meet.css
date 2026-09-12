@@ -18,3 +18,27 @@
 .meeting-card h2 { font-size: 22px; font-weight: 700; margin-top: 24px; }
 .meeting-card .lk-participant-tile { min-height: 180px; }
 .meeting-card .lk-button { color: white; background: #a83c00; }
+.group-meeting-card { max-width: 1440px; }
+.call-title h1 { margin-bottom: 14px; }
+.profile-grid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:18px 0; }
+.profile-tile { min-width:0;border:1px solid #e5d8ce;border-radius:18px;overflow:hidden;background:#fff; }
+.profile-tile .lk-participant-tile { min-height:190px;aspect-ratio:16/10; }
+.profile-tile .lk-participant-metadata,.profile-tile .lk-participant-name { display:none; }
+.profile-tile footer { display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px; }
+.profile-tile h3 { margin:0 0 4px;font-size:1rem; }
+.profile-tile footer p { margin:0;color:#765342;font-size:.76rem;line-height:1.35; }
+.meeting-card .connect-button { min-height:36px;padding:7px 13px;font-size:.78rem;flex:none; }
+.spotlight { display:flex;align-items:center;gap:18px;padding:16px 18px;margin:16px 0;border:1px solid #d7a88e;border-radius:16px;background:#fff5ed; }
+.spotlight h2 { margin:2px 0 0; }
+.spotlight>strong { margin-left:auto;font-size:1.8rem;font-variant-numeric:tabular-nums; }
+.host-controls { display:flex;align-items:center;justify-content:space-between;gap:16px;margin:16px 0;padding:12px 16px;border-radius:14px;background:#291b13;color:white; }
+.host-controls button { background:#fff;color:#291b13; }
+.call-notice { padding:10px 14px;border-radius:12px;background:#eef7ec;color:#285424; }
+.grid-pagination { display:flex;justify-content:center;align-items:center;gap:14px;margin:16px 0 24px; }
+.grid-pagination button { min-height:38px;padding:7px 15px; }
+.device-controls { display:grid;grid-template-columns:1fr 1fr;gap:12px; }
+@media(max-width:800px){.profile-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.device-controls{grid-template-columns:1fr}}
+@media(max-width:520px){.meeting-page{padding:12px}.meeting-card{padding:20px;margin:24px auto}.profile-grid{grid-template-columns:1fr}.profile-tile .lk-participant-tile{min-height:220px}.host-controls{align-items:flex-start;flex-direction:column}.host-controls button{width:100%}}
+
+/* Device pickers are shadcn triggers, not call-to-action buttons. */
+.meeting-card button[data-slot="select-trigger"] { background:#fff; color:#291b13; border:1px solid #d9cabf; border-radius:10px; padding:10px 12px; width:100%; justify-content:space-between; gap:8px; }

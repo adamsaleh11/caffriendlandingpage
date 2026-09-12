@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import {openSelect} from './controls';
 
 const workspaceId = '11111111-1111-4111-8111-111111111111';
 const backend = 'http://127.0.0.1:4100/__state';
@@ -40,33 +41,67 @@ test('google connect, callback, calendar selection and disconnect', async ({page
   await signedIn(page);
   await expect(page.getByRole('heading',{name:'Google Calendar'})).toBeVisible();
   await stubProvider(page,'code=provider-code');
-  await page.getByRole('button',{name:'Connect Google Calendar'}).click();
+  await page.getByRole('switch',{name:'Google Calendar calendar'}).click();
   await expect(page).toHaveURL(settings);
   // The authorization code never reaches the web app's URL or its rendered page.
   expect(page.url()).not.toContain('provider-code');
   await expect(page.getByText('Connected. Choose the calendar Caffriend should use.')).toBeVisible();
-  await expect(page.getByText('alex@example.com')).toBeVisible();
+  await expect(page.locator('dd').filter({hasText:'alex@example.com'})).toBeVisible();
   await expect(page.getByText('Granted access unavailable')).toBeVisible();
 
   await page.getByRole('button',{name:'Choose a calendar'}).click();
   const select = page.getByLabel('Calendar to use');
-  await expect(select.getByRole('option',{name:'Holidays'})).toHaveCount(0);
-  await select.selectOption('primary');
+  const calendars = await openSelect(select);
+  await expect(calendars.getByRole('option',{name:'Holidays'})).toHaveCount(0);
+  await calendars.getByRole('option',{name:'Alex — Work',exact:true}).click();
   await page.getByRole('button',{name:'Save calendar'}).click();
-  await expect(page.getByText('Alex — Work')).toBeVisible();
+  await expect(page.getByText('Alex — Work').first()).toBeVisible();
   const afterSelect = await (await request.get(backend)).json();
   expect(afterSelect.calls.find((call:{path:string})=>call.path.endsWith('/select')).key).toMatch(/^[0-9a-f-]{36}$/);
 
-  await page.getByRole('button',{name:'Disconnect'}).click();
+  await page.getByRole('switch',{name:'Google Calendar calendar'}).click();
   await expect(page.getByText(/Meetings already recorded stay in your workspace/)).toBeVisible();
   await page.getByRole('button',{name:'Yes, disconnect'}).click();
-  await expect(page.getByRole('button',{name:'Connect Google Calendar'})).toBeVisible();
+  await expect(page.getByRole('switch',{name:'Google Calendar calendar'})).toHaveAttribute('aria-checked','false');
+});
+
+test('the mailbox grant returns to settings, never to the API\'s raw response', async ({page,request}) => {
+  // Start with the grant genuinely absent, or the switch is already on.
+  await request.post(backend,{data:{mailConnected:false}});
+  await signedIn(page);
+  await stubProvider(page,'code=provider-code');
+  // The mail grant is held on a calendar connection, so one has to exist first.
+  await page.getByRole('switch',{name:'Google Calendar calendar'}).click();
+  await expect(page).toHaveURL(settings);
+  const grant = page.getByRole('switch',{name:'Send mail from my Gmail address'});
+  await expect(grant).toBeEnabled();
+  await grant.click();
+  // The person lands back in Settings, not on the backend's JSON body.
+  await expect(page).toHaveURL(settings);
+  expect(page.url()).not.toContain('provider-code');
+  await expect(page.getByText(/Caffriend can now send invitations from your address/)).toBeVisible();
+  await expect(page.getByText(/Sending as alex@example.com/)).toBeVisible();
+  await expect(page.getByRole('switch',{name:/Send mail from my Gmail address/})).toHaveAttribute('aria-checked','true');
+});
+
+test('a cancelled mailbox grant says so in settings instead of failing silently', async ({page,request}) => {
+  await request.post(backend,{data:{mailConnected:false}});
+  await signedIn(page);
+  await stubProvider(page,'code=provider-code');
+  await page.getByRole('switch',{name:'Google Calendar calendar'}).click();
+  await expect(page).toHaveURL(settings);
+  const grant = page.getByRole('switch',{name:'Send mail from my Gmail address'});
+  await expect(grant).toBeEnabled();
+  await stubProvider(page,'error=access_denied');
+  await grant.click();
+  await expect(page).toHaveURL(settings);
+  await expect(page.getByText(/You cancelled the mailbox permission/)).toBeVisible();
 });
 
 test('provider cancellation reports honestly and performs no exchange', async ({page,request}) => {
   await signedIn(page);
   await stubProvider(page,'error=access_denied');
-  await page.getByRole('button',{name:'Connect Outlook Calendar'}).click();
+  await page.getByRole('switch',{name:'Outlook Calendar calendar'}).click();
   await expect(page).toHaveURL(settings);
   await expect(page.getByText(/You cancelled the connection/)).toBeVisible();
   const state = await (await request.get(backend)).json();
@@ -76,7 +111,7 @@ test('provider cancellation reports honestly and performs no exchange', async ({
 test('replayed callback state is rejected without an exchange', async ({page,request}) => {
   await signedIn(page);
   await stubProvider(page,'code=provider-code');
-  await page.getByRole('button',{name:'Connect Google Calendar'}).click();
+  await page.getByRole('switch',{name:'Google Calendar calendar'}).click();
   await expect(page).toHaveURL(settings);
   await request.post(backend,{data:{}});
   const replay = await page.request.get('/crm-calendar/callback/GOOGLE?state=state-GOOGLE&code=provider-code',{maxRedirects:0});
@@ -102,9 +137,9 @@ test('a callback for a different provider than the pending flow is refused', asy
 test('unconfigured provider is disabled with actionable feedback and the CRM stays usable', async ({page,request}) => {
   await request.post(backend,{data:{status:{GOOGLE:{configured:false},MICROSOFT:{configured:true}}}});
   await signedIn(page);
-  await expect(page.getByRole('button',{name:'Connect Google Calendar'})).toBeDisabled();
+  await expect(page.getByRole('switch',{name:'Google Calendar calendar'})).toBeDisabled();
   await expect(page.getByText(/Google Calendar is not configured/)).toBeVisible();
-  await expect(page.getByRole('button',{name:'Connect Outlook Calendar'})).toBeEnabled();
+  await expect(page.getByRole('switch',{name:'Outlook Calendar calendar'})).toBeEnabled();
   await page.getByRole('navigation',{name:'Workspace navigation'}).getByRole('link',{name:'People',exact:true}).click();
   await expect(page.getByRole('heading',{name:'People',exact:true})).toBeVisible();
 });

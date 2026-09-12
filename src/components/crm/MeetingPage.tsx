@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { joinable, statusLabels, type AuditEvent, type Meeting } from '@/lib/contracts';
 import StateCard from './StateCard';
+import {DateTimePicker} from '@/components/ui/date-time-picker';
 
 const when = (value: string, timezone: string) => {
   const parsed = Date.parse(value);
@@ -140,8 +141,8 @@ export default function MeetingPage({workspaceId, meetingId}:{workspaceId:string
       {dialog === 'reschedule' && <div role="dialog" aria-modal="true" aria-label="Reschedule this meeting" className="meeting-dialog">
         <h2>Reschedule this meeting</h2>
         <p>Everyone invited is notified through {meeting.provider === 'MICROSOFT' ? 'Outlook' : 'Google'} Calendar. Times are in {meeting.timezone}.</p>
-        <label>New start<input type="datetime-local" value={start} onChange={event => setStart(event.target.value)} required/></label>
-        <label>New end<input type="datetime-local" value={end} onChange={event => setEnd(event.target.value)} required/></label>
+        <div className="field"><span className="field-label">New start</span><DateTimePicker aria-label="New start" value={start} onChange={setStart} required/></div>
+        <div className="field"><span className="field-label">New end</span><DateTimePicker aria-label="New end" value={end} onChange={setEnd} required/></div>
         <button disabled={pending || !start || !end} onClick={reschedule}>{pending ? 'Rescheduling…' : 'Confirm reschedule'}</button>
         <button className="secondary" onClick={close}>Keep current time</button>
       </div>}

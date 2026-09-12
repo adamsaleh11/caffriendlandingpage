@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import {chooseOption} from './controls';
 const workspaceId = '11111111-1111-4111-8111-111111111111';
 const personId = '55555555-5555-4555-8555-555555555555';
 
@@ -18,7 +19,7 @@ test('an engagement can be created from the pipeline board', async ({page}) => {
   await enter(page, `/app/${workspaceId}/pipeline`);
   await page.getByRole('button', {name:'Add an engagement'}).click();
   await page.getByLabel('What are you trying to achieve?').fill('Get an introduction to the platform team');
-  await page.getByLabel('Starting stage').selectOption({label:'Prospect'});
+  await chooseOption(page.getByLabel('Starting stage'), {label:'Prospect'});
   await page.getByLabel('Next action').fill('Send a short intro message');
   await page.getByRole('button', {name:'Create engagement'}).click();
   await expect(page.getByRole('status').filter({hasText:'Engagement created'})).toBeVisible();

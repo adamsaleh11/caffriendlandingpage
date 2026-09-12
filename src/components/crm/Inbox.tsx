@@ -4,6 +4,7 @@ import { api, ApiError } from '@/lib/api';
 import { rightsExplanations, statusLabels, type Agent, type Approval, type Conversation, type Engagement, type Meeting, type Person, type SourceArtifact, type SourceClaim, type Task } from '@/lib/contracts';
 import Link from 'next/link';
 import { useKeys, useList, Section, Empty, More, Rights, Evidence } from './common';
+import { useLiveRows } from './record-actions';
 
 const actionNames: Record<string,string> = {
   people: 'Add a person',
@@ -17,10 +18,10 @@ export default function Inbox({workspaceId}:{workspaceId:string}) {
   const artifacts = useList<SourceArtifact>(`workspaces/${workspaceId}/crm/source-artifacts`);
   const conversations = useList<Conversation>(`workspaces/${workspaceId}/crm/conversations`);
   const agents = useList<Agent>(`workspaces/${workspaceId}/crm/agents`);
-  const people = useList<Person>(`workspaces/${workspaceId}/crm/people`);
-  const tasks = useList<Task>(`workspaces/${workspaceId}/crm/tasks`);
+  const people=useLiveRows(useList<Person>(`workspaces/${workspaceId}/crm/people`));
+  const tasks=useLiveRows(useList<Task>(`workspaces/${workspaceId}/crm/tasks`));
   const meetings = useList<Meeting>(`workspaces/${workspaceId}/meetings`);
-  const engagements = useList<Engagement>(`workspaces/${workspaceId}/crm/engagements`);
+  const engagements=useLiveRows(useList<Engagement>(`workspaces/${workspaceId}/crm/engagements`));
 
   const [busy, setBusy] = useState<string>();
   const [problem, setProblem] = useState('');

@@ -11,6 +11,7 @@ import NativeNav from './NativeNav';
  * The workspace sidebar is deliberately always here, exactly as it is in the CRM:
  * the two surfaces share one sign-in, and the CRM must never be more than a click
  * away. The top-right navbar carries the app screens; the sidebar carries the CRM.
+ * Events are not a sidebar destination: they are one of the Home categories.
  */
 export default function AppShell({workspaces, children}:{workspaces:Workspace[]; children:ReactNode}) {
   const [open, setOpen] = useState(false);

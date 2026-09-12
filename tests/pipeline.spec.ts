@@ -20,8 +20,8 @@ test('a new workspace is offered ready-made pipelines, not a blank page', async 
   await expect(page.getByRole('heading', {name:'Coffee chats', exact:true})).toBeVisible();
   // Scoped to the template card: the same lifecycle appears in the explanation above it.
   const template = page.locator('.templates li').filter({hasText:'Coffee chats'});
-  await expect(template.getByText(/Prospect → Qualified → Contacted → Engaged → Scheduling → Meeting booked → Completed → Follow-up → Relationship → Closed/)).toBeVisible();
-  await expect(page.getByRole('heading', {name:'Start from scratch'})).toBeVisible();
+  await expect(template.getByText(/Prospect → Contacted → Meeting booked → Follow-up → Closed/)).toBeVisible();
+  await expect(page.getByRole('heading', {name:'Start from scratch'})).toHaveCount(0);
 });
 
 test('cards lead with the person and move a step at a time', async ({page}) => {
@@ -31,8 +31,16 @@ test('cards lead with the person and move a step at a time', async ({page}) => {
   // The step number is decorative (aria-hidden); the count is labelled for screen readers.
   await expect(page.getByRole('heading', {name:/Prospect 1 in this step/})).toBeVisible();
 
-  await card.getByRole('button', {name:/Move Alex Rivera forward to Qualified/}).click();
-  await expect(page.getByRole('status').filter({hasText:'Moved to Qualified'})).toBeVisible();
+  await card.getByRole('button', {name:/Move Alex Rivera forward to Contacted/}).click();
+  await expect(page.getByRole('status').filter({hasText:'Moved to Contacted'})).toBeVisible();
+});
+
+test('pipeline exposes five stable booking-aware steps without customization',async({page})=>{
+ await enter(page);
+ const board=page.getByRole('list',{name:'Active pipeline'});
+ await expect(board.locator(':scope > li')).toHaveCount(4);
+ await expect(page.getByRole('heading',{name:/^Meeting booked/})).toBeVisible();
+ await expect(page.getByRole('button',{name:/Edit steps|New pipeline/})).toHaveCount(0);
 });
 
 test('the first step cannot be moved backwards', async ({page}) => {
@@ -45,7 +53,7 @@ test('a failed move rolls back and says so', async ({page, request}) => {
   await request.post(state, {data:{moveFails:true}});
   await enter(page);
   const card = page.locator('.engagement').first();
-  await card.getByRole('button', {name:/forward to Qualified/}).click();
+  await card.getByRole('button', {name:/forward to Contacted/}).click();
   await expect(page.getByRole('main').getByRole('alert')).toContainText('Someone else changed this first');
   await expect(page.locator('.stage').first().locator('.engagement')).toHaveCount(1);
 });
@@ -54,12 +62,4 @@ test('an empty pipeline explains what an engagement is', async ({page, request})
   await request.post(state, {data:{crm:{engagements:[], people:[], organizations:[], notes:[], tasks:[], conversations:[], 'source-artifacts':[], 'source-claims':[], approvals:[], agents:[], meetings:[]}}});
   await enter(page);
   await expect(page.getByText(/one effort with one person/)).toBeVisible();
-});
-
-test('steps can be renamed and reordered behind Edit steps', async ({page}) => {
-  await enter(page);
-  await page.getByRole('button', {name:'Edit steps'}).click();
-  await expect(page.getByRole('heading', {name:/Steps in Coffee chats/})).toBeVisible();
-  await page.getByRole('button', {name:/Move later — Prospect/}).click();
-  await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
 });

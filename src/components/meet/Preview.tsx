@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import {FormSelect} from '@/components/ui/form-select';
 
 export type Devices = { audioInput: string; videoInput: string };
 
@@ -45,12 +46,14 @@ export default function Preview({ devices, onDevices }: { devices: Devices; onDe
     <p>You will join with camera and microphone off. Turn them on inside the call when ready.</p>
     <button disabled={pending} onClick={() => open(devices)}>{pending ? 'Opening devices…' : 'Preview camera and microphone'}</button>
     {granted && <>
-      <label>Microphone<select value={devices.audioInput} onChange={event => choose('audioInput', event.target.value)}>
-        {options('audioinput').map(device => <option key={device.deviceId} value={device.deviceId}>{device.label || 'Microphone'}</option>)}
-      </select></label>
-      <label>Camera<select value={devices.videoInput} onChange={event => choose('videoInput', event.target.value)}>
-        {options('videoinput').map(device => <option key={device.deviceId} value={device.deviceId}>{device.label || 'Camera'}</option>)}
-      </select></label>
+      <div className="field"><span className="field-label">Microphone</span>
+        <FormSelect aria-label="Microphone" value={devices.audioInput} onValueChange={value => choose('audioInput', value)}
+          options={options('audioinput').map(device => ({value:device.deviceId, label:device.label || 'Microphone'}))} />
+      </div>
+      <div className="field"><span className="field-label">Camera</span>
+        <FormSelect aria-label="Camera" value={devices.videoInput} onValueChange={value => choose('videoInput', value)}
+          options={options('videoinput').map(device => ({value:device.deviceId, label:device.label || 'Camera'}))} />
+      </div>
     </>}
     {error && <p role="alert">{error}</p>}
   </section>;

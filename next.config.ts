@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
+import { PHASE_DEVELOPMENT_SERVER } from "next/constants";
 
-const nextConfig: NextConfig = {
+const nextConfig = (phase: string): NextConfig => ({
+  // Builds replace their output tree. Keep development manifests separate so a
+  // concurrent `next build` cannot remove files that `next dev` is writing.
+  distDir: phase === PHASE_DEVELOPMENT_SERVER ? ".next-dev" : ".next",
   // A stray lockfile in the home directory made Turbopack treat ~/ as the project
   // root, so dev watched every file under it. This pins the root to this project.
   turbopack: { root: __dirname },
@@ -26,6 +30,6 @@ const nextConfig: NextConfig = {
       },
     ];
   },
-};
+});
 
 export default nextConfig;

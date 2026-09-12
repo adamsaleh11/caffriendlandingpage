@@ -10,6 +10,8 @@ const connectionId = '33333333-3333-4333-8333-333333333333';
 const oauthConnectionId = '22222222-2222-4222-8222-222222222222';
 export const meetingId = '44444444-4444-4444-8444-444444444444';
 const inviteToken = 'a'.repeat(43);
+export const eventId = '12121212-1212-4121-8121-121212121212';
+const baseEvent = () => ({id:eventId,kind:'EVENT',hostId:'host-1',title:'Builders over coffee',description:'A room for people turning thoughtful ideas into useful products.',startsAt:'2026-09-20T18:00:00.000Z',listed:true,priceCents:0,currency:'cad',status:'OPEN',micOpenOnArrival:false,spotlightTurnMs:60000,roomName:'PRIVATE_ROOM_SENTINEL'});
 const baseMeeting = () => ({
   id: meetingId, workspaceId: workspace.id,
   purpose:'Coffee with Alex', startsAt:'2026-09-12T19:00:00.000Z', endsAt:'2026-09-12T19:30:00.000Z',
@@ -31,17 +33,12 @@ const auditRows = () => [
 export const pipelineId = '66666666-6666-4666-8666-666666666666';
 /** The canonical lifecycle, as the stage rows a workspace actually holds. */
 export const stageA = '77777777-7777-4777-8777-777777777777'; // Prospect
-export const stageB = '88888888-8888-4888-8888-888888888888'; // Qualified
+export const stageB = '88888888-8888-4888-8888-888888888888'; // Contacted
 export const lifecycleStages = [
   {id: stageA, name: 'Prospect', terminalOutcome: null},
-  {id: stageB, name: 'Qualified', terminalOutcome: null},
-  {id: '77777777-7777-4777-8777-000000000002', name: 'Contacted', terminalOutcome: null},
-  {id: '77777777-7777-4777-8777-000000000003', name: 'Engaged', terminalOutcome: null},
-  {id: '77777777-7777-4777-8777-000000000004', name: 'Scheduling', terminalOutcome: null},
+  {id: stageB, name: 'Contacted', terminalOutcome: null},
   {id: '77777777-7777-4777-8777-000000000005', name: 'Meeting booked', terminalOutcome: null},
-  {id: '77777777-7777-4777-8777-000000000006', name: 'Completed', terminalOutcome: null},
   {id: '77777777-7777-4777-8777-000000000007', name: 'Follow-up', terminalOutcome: null},
-  {id: '77777777-7777-4777-8777-000000000008', name: 'Relationship', terminalOutcome: null},
   {id: '77777777-7777-4777-8777-000000000009', name: 'Closed', terminalOutcome: 'CLOSED'},
 ];
 export const engagementId = '99999999-9999-4999-8999-999999999999';
@@ -90,6 +87,36 @@ http.createServer(async (req,res) => {
     if(state.meetingFailure) return send({message:'PRIVATE_CRM_SENTINEL'},503);
     return send({purpose:'Coffee with Alex',startsAt:'2026-09-12T19:00:00.000Z',endsAt:'2026-09-12T19:30:00.000Z',timezone:'America/Toronto',requiresDisplayName:true,requiresTermsAcceptance:true,workspaceId:'PRIVATE_CRM_SENTINEL',notes:'PRIVATE_CRM_SENTINEL'});
   }
+  if(path === '/group-calls/events' && req.method === 'GET') return send(state.events ?? [baseEvent()]);
+  const eventResolve = path.match(/^\/group-calls\/([0-9a-f-]{36})\/resolve$/i);
+  if(eventResolve) {
+    const event=(state.events??[baseEvent()]).find(row=>row.id===eventResolve[1]);
+    return event?send({id:event.id,kind:'EVENT',title:event.title,description:event.description,startsAt:event.startsAt,micOpenOnArrival:false}):send({message:'Not found'},404);
+  }
+  if(path === `/group-calls/${eventId}/spotlight`) return send(state.spotlight ?? {holderId:null,remainingMs:0,reconnecting:false,finished:true});
+  if(path === '/meeting-invitations/resolve') {
+    if(state.outreachUnavailable || body.token !== inviteToken) return send({message:'Invitation unavailable'},404);
+    return send({purpose:'Coffee chat about the platform team',message:'Would love to hear about your team.',timezone:'America/Toronto',conference:'Caffriend call',recipientEmail:'guest@example.com',decision:state.outreachDecision??'PENDING',sender:{displayName:'Alex Rivera',jobTitle:'Founder'},slots:[{id:'slot-1',startsAt:'2026-09-20T15:00:00.000Z',endsAt:'2026-09-20T15:30:00.000Z'},{id:'slot-2',startsAt:'2026-09-21T16:00:00.000Z',endsAt:'2026-09-21T16:30:00.000Z'}]});
+  }
+  if(path === '/meeting-invitations/decide') {
+    if(body.token !== inviteToken) return send({message:'Invitation unavailable'},404);
+    if(body.decision==='ACCEPTED'&&!body.slotId)return send({message:'Invalid slotId'},400);
+    state.outreachDecision=body.decision;
+    if(body.decision==='ACCEPTED') {
+      state.crm ??= crmDefaults();
+      const booked=(state.stages??lifecycleStages).find(row=>row.name.toLowerCase()==='meeting booked');
+      const engagement=state.crm.engagements.find(row=>row.id===engagementId);
+      if(booked&&engagement) engagement.stageId=booked.id;
+    }
+    return send({purpose:'Coffee chat about the platform team',message:'Would love to hear about your team.',timezone:'America/Toronto',conference:'Caffriend call',decision:body.decision,sender:{displayName:'Alex Rivera'},slots:[]});
+  }
+  if(path==='/user/social/google') {
+    if(state.googleFails) return send({message:'Invalid Google token'},401);
+    // The real endpoint signs in or creates; `isNew` says which happened.
+    state.googleSignIns=(state.googleSignIns??0)+1;
+    const googleToken='eyJhbGciOiJIUzI1NiJ9.'+Buffer.from(JSON.stringify({sub:'user-guest',exp:Math.floor(Date.now()/1000)+3600})).toString('base64url')+'.test-signature';
+    return send({success:true,data:{token:googleToken,user:{id:'user-guest',firstName:'Sam',email:'guest@example.com',isNew:state.googleExisting!==true}}});
+  }
   if(path==='/user/login') {
     if(body.password !== 'correct') return send({message:'Password is incorrect'},400);
     const token = 'eyJhbGciOiJIUzI1NiJ9.'+Buffer.from(JSON.stringify({sub:'user-1',exp:Math.floor(Date.now()/1000)+3600})).toString('base64url')+'.test-signature';
@@ -100,6 +127,20 @@ http.createServer(async (req,res) => {
   if(state.workspacesFail && path==='/workspaces') return send({message:'Unavailable'},503);
   if(!req.headers.authorization) return send({},401);
   (state.calls ??= []).push({method:req.method,path,key:req.headers['idempotency-key'] ?? null,body});
+
+  if(path==='/group-calls' && req.method==='POST') {
+    const created={...baseEvent(),id:uid(),hostId:'user-1',title:body.title,description:body.description??null,startsAt:body.startsAt,listed:body.listed===true,priceCents:body.priceCents??0,spotlightTurnMs:body.spotlightTurnMs??60000};
+    state.events=[...(state.events??[baseEvent()]),created];return send(created);
+  }
+  if(path === `/group-calls/${eventId}/register`) {state.registered=true;return send({participantId:'participant-me'});}
+  if(path === `/group-calls/${eventId}/join`) {if(!state.registered)return send({message:'Registration required'},403);return send({token:'test-event-livekit-token',url:'wss://livekit.test'});}
+  if(path === `/group-calls/${eventId}/roster`) return send(state.roster??[
+    {participantId:'participant-jordan',userId:'u-2',displayName:'Jordan Patel',isGuest:false,canConnect:true,reasons:['Both in fintech','Both in Toronto']},
+    {participantId:'participant-sam',userId:'u-3',displayName:'Sam Okonkwo',isGuest:false,canConnect:true,reasons:['Both studied at UofT']},
+  ]);
+  if(path === `/group-calls/${eventId}/connect`) return send({state:'saved',mutual:false,threadId:null,matcherId:null});
+  if(path === `/group-calls/${eventId}/spotlight/start`) {state.spotlight={holderId:'participant-jordan',remainingMs:60000,reconnecting:false,finished:false};return send(state.spotlight);}
+  if(path === `/group-calls/${eventId}/end`) return send({threadId:null});
 
   if(path==='/workspaces') { if(req.method==='POST'){state.workspaces=[{...workspace,name:body.name}];return send(state.workspaces[0]);} return send(state.workspaces ?? [workspace]); }
   if(path===`/workspaces/${workspace.id}`) return send(workspace);
@@ -157,6 +198,14 @@ http.createServer(async (req,res) => {
     const consumed = start + items.length;
     return send({items, nextCursor: consumed < rows.length ? items[items.length-1].id : null});
   }
+  const mailBase=`/workspaces/${workspace.id}/mail-connections`;
+  if(path===`${mailBase}/${connectionId}`) return send({connectionId,provider:'GOOGLE',canSend:state.mailConnected!==false,senderAddress:state.mailConnected===false?undefined:'alex@example.com',grantedScopes:state.mailConnected===false?[]:['https://www.googleapis.com/auth/gmail.send'],mailStatus:state.mailConnected===false?'NOT_CONNECTED':'ACTIVE'});
+  if(path===`${mailBase}/${connectionId}/connect`) return send({redirect:'https://accounts.google.com/o/oauth2/v2/auth?client_id=test&state=state-GOOGLE-MAIL&redirect_uri=http%3A%2F%2Flocalhost%3A3100%2Fcrm-mail%2Fcallback%2FGOOGLE'});
+  if(path===`${mailBase}/${connectionId}/revoke`){state.mailConnected=false;return send({connectionId,canSend:false,mailStatus:'REVOKED'});}
+  if(path==='/crm-outreach/mail-callback/GOOGLE'){state.mailConnected=true;return send({connectionId,provider:'GOOGLE',canSend:true,senderAddress:'alex@example.com',grantedScopes:['https://www.googleapis.com/auth/gmail.send'],mailStatus:'ACTIVE'});}
+  const outreachBase=`/workspaces/${workspace.id}/meeting-outreach`;
+  if(path===`${outreachBase}/preview`){if(state.conferenceUnsupported)return send({code:'CONFERENCE_UNSUPPORTED',message:'This calendar cannot create Google Meet. Choose a Caffriend call.'},400);return send({subject:`Coffee chat with Alex Rivera: ${body.purpose}`,html:`<main><h1>${body.purpose}</h1><p>${body.message}</p></main>`,text:`${body.purpose}\n${body.message}`,from:'alex@example.com',to:body.recipientEmail,slots:body.slots,previewToken:'preview-not-a-live-invitation'});}
+  if(path===outreachBase){if(!req.headers['idempotency-key'])return send({message:'Idempotency-Key required'},400);return send({id:'abababab-abab-4bab-8bab-abababababab',sendStatus:'SENT',from:'alex@example.com',to:body.recipientEmail,decision:'PENDING'});}
   if(path.endsWith('/connect')) {
     const provider = path.split('/').at(-2);
     if(state.connectFails) return send({message:'Unavailable'},503);
@@ -181,7 +230,35 @@ http.createServer(async (req,res) => {
     return send({workspaceId:workspace.id,connectionId,status:'SELECT_CALENDAR'});
   }
   // ---- consumer surface: same endpoints the native app calls ----
-  if(path==='/user/my-profile') return send({data:{id:'user-1',firstName:'Alex',lastName:'Rivera',email:'alex@example.com',role:'mentee',image_url:null,bio:'Building things.'}});
+  // The signed-in person's own record, mutated by the profile editor below.
+  state.me ??= {id:'user-1',firstName:'Alex',lastName:'Rivera',email:'alex@example.com',role:'mentee',image_url:null,bio:'Building things.',
+    media:[{id:'photo-1',url:'https://cdn.example.com/alex-1.jpg'}],weeklyAvailability:[]};
+  if(path==='/user/my-profile') return send({data:state.me});
+  if(path==='/user/profile' && req.method==='PUT') {
+    if(state.saveFails) return send({message:'Save failed'},503);
+    state.me={...state.me,...body};
+    return send({data:state.me});
+  }
+  if(path==='/user/role' && req.method==='PUT') { state.me={...state.me,role:String(body.role).toLowerCase()}; return send({data:state.me}); }
+  if(path==='/media/upload' && req.method==='POST') {
+    state.me.media=[...(state.me.media??[]),{id:`photo-${state.me.media.length+1}`,url:`https://cdn.example.com/alex-${state.me.media.length+1}.jpg`}];
+    return send({id:'photo-new',url:'https://cdn.example.com/alex-new.jpg'});
+  }
+  if(path.startsWith('/media/') && req.method==='DELETE') {
+    const id=path.split('/').at(-1);
+    state.me.media=(state.me.media??[]).filter(m=>m.id!==id);
+    return send({message:'Deleted'});
+  }
+  if(path.startsWith('/media/user/')) return send([]);
+  if(path.startsWith('/basic-details/answers/')) {
+    const id=path.split('/').at(-1);
+    if(id!=='u-2') return send({basicDetails:[]});
+    return send({basicDetails:[{answer:'Career advice',questionType:'COFFEE_CHAT_TYPE'}],
+      promptsBlocks:[{question:'Best advice you ever got?',answer:'Ship it, then listen.'}],
+      workExperiences:[{position:'Staff Engineer',company:'Acme',startDate:'2022-01-01',endDate:null,isCurrentlyWorking:true}],
+      projects:[{id:'p-1',description:'A fintech ledger',projectLink:'https://acme.test/ledger',imageUrl:null}],
+      avgRating:4.6,matches:12,coffeeChat:7});
+  }
   if(path==='/match/suggestions') {
     const rows=[
       {userId:'u-2',firstName:'Jordan',lastName:'Patel',role:'mentor',score:0.9,avgRating:4.6,matches:12,image_url:null},
@@ -213,7 +290,7 @@ http.createServer(async (req,res) => {
   });
   if(path.startsWith('/calendar/accepted-events/')) return send([
     {id:'e-1',startDate:'2026-09-20T15:00:00.000Z',endDate:'2026-09-20T15:30:00.000Z',format:'Video call',notes:'Intro chat',
-     isPaid:true,amount:0,messageThreadId:'t-1',
+     isPaid:true,amount:0,messageThreadId:'t-1',source:'CRM',venue:'CAFFRIEND_LIVEKIT',joinUrl:`https://caffriend.com/meet/${inviteToken}`,timezone:'America/Toronto',purpose:'Coffee with Jordan',meetingId,workspaceId:workspace.id,engagementId,counterpartName:'Jordan Patel',status:'BOOKED',
      booker:{id:'u-2',firstName:'Jordan',lastName:'Patel',image_url:null},
      targetUser:{id:'user-1',firstName:'Alex',lastName:'Rivera',image_url:null}},
   ]);
@@ -257,7 +334,9 @@ http.createServer(async (req,res) => {
   if(path.startsWith(crmBase + '/')) {
     const rest = path.slice(crmBase.length+1).split('/');
     const [resource, id] = rest;
-    const rows = state.crm[resource];
+    // A test that posts a partial `crm` state must not take the server down and
+    // fail every test after it: an absent collection is simply empty.
+    const rows = state.crm[resource] ?? [];
     if(!rows) return send({message:'Unknown CRM resource'},400);
     if(req.method==='GET' && !id) return page(rows);
     if(req.method==='GET') { const row = rows.find(r=>r.id===id); return row ? send(row) : send({message:'Resource not found'},404); }
