@@ -33,6 +33,21 @@ test.describe('people and organizations', () => {
     await expect(page.getByRole('status').filter({hasText:'was added'})).toContainText('Sam Okonkwo was added');
   });
 
+  test('adds a person with a new organization from the same form', async ({page, request}) => {
+    await request.post(state, {data:{crm:{people:[], organizations:[], engagements:[], notes:[], tasks:[], conversations:[], 'source-artifacts':[], 'source-claims':[], approvals:[], agents:[], meetings:[]}}});
+    await enter(page, 'people');
+
+    await page.getByRole('button', {name:'Add a person'}).click();
+    await page.getByLabel('Name', {exact:true}).fill('Mina Lee');
+    await page.getByLabel('Role', {exact:true}).fill('Design Lead');
+    await page.getByLabel('New organization name').fill('Northwind Labs');
+    await page.getByRole('button', {name:'Add person'}).click();
+
+    await expect(page.getByRole('status').filter({hasText:'was added'})).toContainText('Mina Lee was added');
+    await expect(page.getByRole('link', {name:'Mina Lee'})).toBeVisible();
+    await expect(page.getByText('Design Lead · Northwind Labs')).toBeVisible();
+  });
+
   test('never renders backend fields outside the CRM-safe projection', async ({page}) => {
     await enter(page, 'people');
     await expect(page.getByRole('link', {name:'Alex Rivera'})).toBeVisible();
@@ -60,6 +75,16 @@ test.describe('people and organizations', () => {
     await expect(page.getByText('A durable link is unavailable.')).toBeVisible();
   });
 
+  test('permanently deletes a person through the explicit delete path', async ({page}) => {
+    await page.goto(`/app/${workspaceId}/people/${personId}`);
+    await login(page);
+    await page.getByRole('button', {name:/Delete person/}).click();
+    await expect(page.getByRole('heading', {name:'Delete this person permanently?'})).toBeVisible();
+    await page.getByRole('button', {name:'Yes, delete this person'}).click();
+    await expect(page).toHaveURL(`/app/${workspaceId}/people`);
+    await expect(page.getByRole('link', {name:'Alex Rivera'})).toHaveCount(0);
+  });
+
   test('a missing person gets a not-found state, not a crash', async ({page}) => {
     await page.goto(`/app/${workspaceId}/people/00000000-0000-4000-8000-000000000000`);
     await login(page);
@@ -85,6 +110,34 @@ test.describe('pipeline', () => {
     await expect(alerts(page)).toContainText('Someone else changed this first');
     // The card is back where the server says it belongs.
     await expect(page.getByLabel('Stage')).toContainText('Prospect');
+  });
+
+  test('deletes an engagement from the pipeline board icon', async ({page}) => {
+    await enter(page, 'pipeline');
+    const card = page.locator('li.engagement').filter({hasText:'Coffee chat about the platform team'});
+    await expect(card).toBeVisible();
+    await card.getByRole('button', {name:/Delete engagement Coffee chat about the platform team/}).click();
+    await expect(page.getByRole('heading', {name:'Delete this engagement permanently?'})).toBeVisible();
+    await page.getByRole('button', {name:'Yes, delete this engagement'}).click();
+    await expect(page.getByRole('status').filter({hasText:'Engagement deleted.'})).toBeVisible();
+    await expect(card).toHaveCount(0);
+  });
+
+  test('shows engagements that sit in a legacy completed stage', async ({page, request}) => {
+    const completed = '77777777-7777-4777-8777-000000000111';
+    await request.post(state, {data:{
+      stages:[
+        {id:completed, pipelineId:'66666666-6666-4666-8666-666666666666', name:'Completed', position:0, terminalOutcome:null, archived:false},
+      ],
+      crm:{
+        people:[{id:personId, workspaceId, displayName:'Alex Rivera', title:'Engineer', location:'Toronto', email:'alex@example.com', phone:null, sourceCategory:'MANUAL', organizationId:null, archivedAt:null, createdAt:'2026-09-01T10:00:00.000Z', updatedAt:'2026-09-01T10:00:00.000Z'}],
+        organizations:[], notes:[], tasks:[], conversations:[], 'source-artifacts':[], 'source-claims':[], approvals:[], agents:[], meetings:[],
+        engagements:[{id:'99999999-9999-4999-8999-999999999999', workspaceId, personId, organizationId:null, pipelineId:'66666666-6666-4666-8666-666666666666', stageId:completed, ownerId:null, status:'OPEN', objective:'Completed-stage relationship', nextAction:null, archivedAt:null, createdAt:'2026-09-01T10:00:00.000Z', updatedAt:'2026-09-01T10:00:00.000Z'}],
+      },
+    }});
+    await enter(page, 'pipeline');
+    await expect(page.getByRole('heading', {name:/^Completed/})).toBeVisible();
+    await expect(page.locator('.objective', {hasText:'Completed-stage relationship'})).toBeVisible();
   });
 
   test('pipeline stages stay fixed for booking automation', async ({page}) => {

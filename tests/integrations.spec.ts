@@ -134,6 +134,16 @@ test('a callback for a different provider than the pending flow is refused', asy
   expect((backendState.calls ?? []).some((call:{path:string})=>call.path.startsWith('/crm-calendar/callback/MICROSOFT'))).toBe(false);
 });
 
+test('a backend redirect using the wrong calendar callback is refused before Google', async ({page,request}) => {
+  await request.post(backend,{data:{calendarRedirectUri:'http://localhost:4000/crm-calendar/callback/GOOGLE'}});
+  await signedIn(page);
+  await page.getByRole('switch',{name:'Google Calendar calendar'}).click();
+  await expect(page).toHaveURL(settings);
+  await expect(page.getByText('This provider is unavailable right now.')).toBeVisible();
+  const backendState = await (await request.get(backend)).json();
+  expect((backendState.calls ?? []).some((call:{path:string})=>call.path.startsWith('/crm-calendar/callback'))).toBe(false);
+});
+
 test('unconfigured provider is disabled with actionable feedback and the CRM stays usable', async ({page,request}) => {
   await request.post(backend,{data:{status:{GOOGLE:{configured:false},MICROSOFT:{configured:true}}}});
   await signedIn(page);

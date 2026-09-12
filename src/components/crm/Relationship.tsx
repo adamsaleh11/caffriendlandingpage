@@ -8,7 +8,7 @@ import { Empty } from './common';
 import type { WorkspaceData } from './workspace-data';
 import OutreachComposer from './OutreachComposer';
 import Modal from './Modal';
-import { ArchiveButton, editRecord, problemText } from './record-actions';
+import { ArchiveButton, PermanentDeleteButton, editRecord, problemText } from './record-actions';
 import { EngagementEditor, NoteEditor, TaskEditor } from './RecordEditors';
 import {FormSelect} from '@/components/ui/form-select';
 import {DatePicker} from '@/components/ui/date-picker';
@@ -210,6 +210,11 @@ export default function Relationship({
           keeps={person ? `${person.displayName} stays in this workspace, along with their other engagements.` : undefined}
           onArchived={() => { setNotice('Engagement archived.'); onChanged(); }}
           onProblem={setProblem} />
+        <PermanentDeleteButton workspaceId={workspaceId} resource="engagements" id={engagement.id} what="engagement"
+          name={engagement.objective} className="secondary danger"
+          warning="This also removes meetings, notes, follow-ups and timeline activity for this engagement."
+          onDeleted={() => { setNotice('Engagement deleted.'); onChanged(); }}
+          onProblem={setProblem} />
         <button onClick={() => { setRecording(true); setNotice(''); }}>{step?.action ?? 'Record what happened'}</button>
       </div>}
     </header>
@@ -317,6 +322,8 @@ export default function Relationship({
             </button>
             <ArchiveButton workspaceId={workspaceId} resource="tasks" id={task.id} name={task.title} what="follow-up"
               onArchived={() => { setNotice('Follow-up archived.'); onChanged(); }} onProblem={setProblem} />
+            <PermanentDeleteButton workspaceId={workspaceId} resource="tasks" id={task.id} name={task.title} what="follow-up"
+              onDeleted={() => { setNotice('Follow-up deleted.'); onChanged(); }} onProblem={setProblem} />
           </span>
         </li>)}</ul>
       </div>
@@ -336,6 +343,9 @@ export default function Relationship({
         <ArchiveButton workspaceId={workspaceId} resource="notes" id={note.id} what="note"
           name={note.body.length > 60 ? `${note.body.slice(0, 60)}…` : note.body}
           onArchived={() => { setNotice('Note archived.'); onChanged(); }} onProblem={setProblem} />
+        <PermanentDeleteButton workspaceId={workspaceId} resource="notes" id={note.id} what="note"
+          name={note.body.length > 60 ? `${note.body.slice(0, 60)}…` : note.body}
+          onDeleted={() => { setNotice('Note deleted.'); onChanged(); }} onProblem={setProblem} />
       </p>
     </li>)}</ul>
 

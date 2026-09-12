@@ -1,5 +1,6 @@
 'use client';
 import { useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import { api, ApiError } from '@/lib/api';
 import Modal from './Modal';
 import type { Loaded } from './common';
@@ -29,6 +30,10 @@ export const editRecord = <T,>(workspaceId: string, resource: Editable, id: stri
  */
 export const archiveRecord = (workspaceId: string, resource: Editable, id: string) =>
   api(at(workspaceId, resource, id), {method: 'DELETE', headers: key()});
+
+/** Permanently remove the record and the backend-owned dependent CRM rows. */
+export const deleteRecord = (workspaceId: string, resource: Editable, id: string) =>
+  api(`${at(workspaceId, resource, id)}/permanent`, {method: 'DELETE', headers: key()});
 
 export const problemText = (error: unknown, fallback: string) =>
   error instanceof ApiError ? error.message : fallback;
@@ -103,6 +108,56 @@ export function ArchiveButton({
         <button type="button" className="secondary" disabled={pending} onClick={() => { setAsking(false); setProblem(''); }}>Keep it</button>
         <button type="button" className="secondary danger" disabled={pending} onClick={confirm}>
           {pending ? 'Archiving…' : `Yes, archive this ${what}`}
+        </button>
+      </div>
+    </Modal>}
+  </>;
+}
+
+export function PermanentDeleteButton({
+  workspaceId, resource, id, name, what, warning, label, className, onDeleted, onProblem,
+}:{
+  workspaceId: string;
+  resource: Editable;
+  id: string;
+  name: string;
+  what: string;
+  warning?: string;
+  label?: ReactNode;
+  className?: string;
+  onDeleted: () => void;
+  onProblem?: (message: string) => void;
+}) {
+  const [asking, setAsking] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [problem, setProblem] = useState('');
+
+  async function confirm() {
+    setPending(true); setProblem('');
+    try {
+      await deleteRecord(workspaceId, resource, id);
+      setAsking(false);
+      onDeleted();
+    } catch (error) {
+      const text = problemText(error, `That ${what} was not deleted. Nothing has changed.`);
+      setProblem(text); onProblem?.(text);
+    } finally { setPending(false); }
+  }
+
+  return <>
+    <button type="button" className={className ?? 'secondary small-button danger'} onClick={() => setAsking(true)}>
+      {label ?? 'Delete permanently'}<span className="sr-only"> {what} {name}</span>
+    </button>
+    {asking && <Modal title={`Delete this ${what} permanently?`}
+      description={`${name} will be removed from this workspace. This cannot be undone.`}
+      onClose={() => { if (!pending) { setAsking(false); setProblem(''); } }}>
+      {warning && <p>{warning}</p>}
+      <p className="small">Use Archive if you only want to hide it from active lists while keeping the CRM record.</p>
+      {problem && <p role="alert">{problem}</p>}
+      <div className="modal-actions">
+        <button type="button" className="secondary" disabled={pending} onClick={() => { setAsking(false); setProblem(''); }}>Keep it</button>
+        <button type="button" className="secondary danger" disabled={pending} onClick={confirm}>
+          {pending ? 'Deleting…' : `Yes, delete this ${what}`}
         </button>
       </div>
     </Modal>}

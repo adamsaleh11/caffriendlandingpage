@@ -37,11 +37,23 @@ async function writePerson(
   }
 }
 
+async function createOrganization(workspaceId: string, name: string, key: string) {
+  return api<Organization>(`workspaces/${workspaceId}/crm/organizations`, {
+    method: 'POST',
+    body: JSON.stringify({name}),
+    headers: {'X-Idempotency-Key': key},
+  });
+}
+
 function Field({field, person, organizations}:{field: ProfileField; person?: Person; organizations: Organization[]}) {
   const value = person ? valueOf(person, field) : '';
   if (field.kind === 'organization') return <div className="field">
     <span className="field-label">{field.label}</span>
     <FormSelect name="organizationId" aria-label={field.label} defaultValue={value} options={[{value:'',label:'No organization'},...organizations.map(row => ({value:row.id,label:row.name}))]} />
+    <label className="inline-field">
+      <span>New organization name</span>
+      <input name="organizationName" maxLength={200} placeholder="Type a company name" />
+    </label>
   </div>;
   if (field.kind === 'long') return <label className="field wide">
     <span className="field-label">{field.label}</span>
@@ -65,7 +77,7 @@ function Field({field, person, organizations}:{field: ProfileField; person?: Per
 export function AddPersonForm({workspaceId, organizations, onCreated, onCancel}:{
   workspaceId: string;
   organizations: Organization[];
-  onCreated: (person: Person) => void;
+  onCreated: (person: Person, organization?: Organization) => void;
   onCancel: () => void;
 }) {
   const [pending, setPending] = useState(false);
@@ -85,11 +97,17 @@ export function AddPersonForm({workspaceId, organizations, onCreated, onCancel}:
     }
     const organizationId = String(form.get('organizationId') ?? '');
     if (organizationId) body.organizationId = organizationId;
+    const organizationName = String(form.get('organizationName') ?? '').trim();
 
     setPending(true); setProblem('');
     try {
+      let createdOrganization: Organization | undefined;
+      if (!body.organizationId && organizationName) {
+        createdOrganization = await createOrganization(workspaceId, organizationName, keyFor(`org:${organizationName}`));
+        body.organizationId = createdOrganization.id;
+      }
       const {person} = await writePerson(`workspaces/${workspaceId}/crm/people`, 'POST', body, keyFor(`person:${JSON.stringify(body)}`));
-      onCreated(person);
+      onCreated(person, createdOrganization);
     } catch (error) {
       setProblem(error instanceof ApiError ? error.message : 'That did not save. Try again.');
     } finally { setPending(false); }
@@ -123,13 +141,14 @@ export function AddPersonForm({workspaceId, organizations, onCreated, onCancel}:
  * inputs. `Edit everything` is always one press away for anyone who would rather
  * see the whole record at once.
  */
-export function ProfileEditor({workspaceId, person, organizations, startAt, onSaved, onClose}:{
+export function ProfileEditor({workspaceId, person, organizations, startAt, onSaved, onOrganizationCreated, onClose}:{
   workspaceId: string;
   person: Person;
   organizations: Organization[];
   /** Open straight onto this field. Defaults to the first missing one. */
   startAt?: ProfileField['name'];
   onSaved: (person: Person, message: string) => void;
+  onOrganizationCreated?: () => void;
   onClose: () => void;
 }) {
   /**
@@ -156,9 +175,16 @@ export function ProfileEditor({workspaceId, person, organizations, startAt, onSa
   const field = queue[step];
 
   async function save(body: Record<string, unknown>, message: string, advance: boolean) {
-    if (Object.keys(body).length === 0) { if (advance) next(); else onClose(); return; }
+    const organizationName = String(body.organizationName ?? '').trim();
+    delete body.organizationName;
     setPending(true); setProblem(''); setConfirmed('');
     try {
+      if (!body.organizationId && organizationName) {
+        const organization = await createOrganization(workspaceId, organizationName, keyFor(`org:${organizationName}`));
+        body.organizationId = organization.id;
+        onOrganizationCreated?.();
+      }
+      if (Object.keys(body).length === 0) { if (advance) next(); else onClose(); return; }
       const {person: saved, dropped} = await writePerson(
         `workspaces/${workspaceId}/crm/people/${person.id}`, 'PATCH', body,
         keyFor(`person:${person.id}:${JSON.stringify(body)}`),
@@ -187,6 +213,8 @@ export function ProfileEditor({workspaceId, person, organizations, startAt, onSa
       const wire = row.name === 'displayName' ? raw.trim() : forWire(raw);
       if (String(wire ?? '') !== valueOf(person, row)) body[row.name] = wire;
     }
+    const organizationName = String(form.get('organizationName') ?? '').trim();
+    if (organizationName && !body.organizationId) body.organizationName = organizationName;
     save(body, 'Profile updated.', false);
   }}>
     <div className="field-grid">
@@ -205,9 +233,11 @@ export function ProfileEditor({workspaceId, person, organizations, startAt, onSa
 
   return <form className="person-form" onSubmit={event => {
     event.preventDefault();
-    const raw = String(new FormData(event.currentTarget).get(field.name) ?? '');
+    const form = new FormData(event.currentTarget);
+    const raw = String(form.get(field.name) ?? '');
     const wire = forWire(raw);
-    save(wire === null ? {} : {[field.name]: wire}, `${field.label} saved.`, true);
+    const organizationName = field.name === 'organizationId' ? String(form.get('organizationName') ?? '').trim() : '';
+    save(organizationName && wire === null ? {organizationName} : wire === null ? {} : {[field.name]: wire}, `${field.label} saved.`, true);
   }}>
     <div className="steps" aria-hidden="true">
       {queue.map((row, index) => <span key={row.name} className={index <= step ? 'on' : ''} />)}

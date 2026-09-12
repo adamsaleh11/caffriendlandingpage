@@ -67,7 +67,7 @@ export default function Calendars({workspaceId}:{workspaceId:string}) {
   // connection. Best-effort: a mailbox whose status cannot be read reads as "not
   // granted", which is the safe way round — it offers the grant rather than
   // implying one that may not exist.
-  const liveIds=(connections??[]).filter(row=>row.status!=='DISCONNECTED').map(row=>row.id).join(',');
+  const liveIds=(connections??[]).filter(row=>row.status!=='DISCONNECTED'&&row.status!=='RECONNECT_REQUIRED').map(row=>row.id).join(',');
   useEffect(()=>{
     if(!liveIds)return;
     const controller=new AbortController();
@@ -139,21 +139,23 @@ export default function Calendars({workspaceId}:{workspaceId:string}) {
       const live=connections.filter(row=>row.provider===provider&&row.status!=='DISCONNECTED');
       const configured=status[provider]?.configured!==false;
       const held=live[0];
+      const reconnect=held?.status==='RECONNECT_REQUIRED';
       const mail=held?mails[held.id]:undefined;
       return <article key={provider} className="connection">
         <h3>{providerNames[provider]}</h3>
         {!configured&&<p role="note">{providerNames[provider]} is not configured for Caffriend yet, so it cannot be connected. Everything else in your workspace still works.</p>}
         <div className="switches">
           <Switch label={`${providerNames[provider]} calendar`}
-            hint={live.length?'Caffriend can read your availability.':'Caffriend cannot see your availability.'}
-            checked={live.length>0} disabled={!configured||busy===provider||(held&&busy===held.id)}
-            onChange={next=>{ if(next){connect(provider);return;} if(held)setConfirming(`disconnect:${held.id}`); }} />
+            hint={reconnect?'Reconnect to restore calendar access.':live.length?'Caffriend can read your availability.':'Caffriend cannot see your availability.'}
+            checked={live.length>0&&!reconnect} disabled={!configured||busy===provider||(held&&busy===held.id)}
+            onChange={next=>{ if(next){connect(provider);return;} if(held&&!reconnect)setConfirming(`disconnect:${held.id}`); }} />
           <Switch label={`Send mail from my ${mailboxNames[provider]} address`}
             hint={mail?.canSend
               ? `Invitations are sent as ${mail.senderAddress}.`
+              : reconnect ? 'Reconnect the calendar before changing mailbox permission.'
               : live.length ? 'Invitations cannot be sent until you grant this.'
               : 'Connect the calendar first: the mail grant is held on that connection.'}
-            checked={!!mail?.canSend} disabled={!held||busy===held?.id}
+            checked={!!mail?.canSend&&!reconnect} disabled={!held||reconnect||busy===held?.id}
             onChange={next=>{ if(!held)return; if(next){connectMail(held.id);return;} setConfirming(`revokemail:${held.id}`); }} />
         </div>
         {held&&confirming===`disconnect:${held.id}`&&
@@ -172,12 +174,13 @@ export default function Calendars({workspaceId}:{workspaceId:string}) {
         {live.map(connection=><div key={connection.id} className="connection-detail">
           <dl>
             <dt>Account</dt><dd>{connection.accountIdentifier || 'Account identifier unavailable'}</dd>
-            <dt>Calendar</dt><dd>{connection.status==='SELECT_CALENDAR'?'Selection needed':connection.calendarName || connection.calendarId || 'Selection needed'}</dd>
+            <dt>Calendar</dt><dd>{connection.status==='RECONNECT_REQUIRED'?'Reconnect required':connection.status==='SELECT_CALENDAR'?'Selection needed':connection.calendarName || connection.calendarId || 'Selection needed'}</dd>
             {/* Granted scopes are a pending backend projection addition. */}
             <dt>Granted access</dt><dd>{connection.scopes?.length?connection.scopes.join(', '):'Granted access unavailable'}</dd>
             <dt>Last error</dt><dd>{connection.errorCode?`${connection.errorCode} — reconnect to resolve this.`:'No error reported. This does not confirm overall provider health.'}</dd>
           </dl>
-          {connection.status!=='CONNECTED'&&(
+          {connection.status==='RECONNECT_REQUIRED'&&<button disabled={!configured||busy===provider} onClick={()=>connect(provider)}>{busy===provider?'Opening…':'Reconnect calendar'}</button>}
+          {connection.status==='SELECT_CALENDAR'&&(
             calendars[connection.id]===undefined
               ? <button onClick={()=>loadCalendars(connection)}>Choose a calendar</button>
               : calendars[connection.id]==='error'

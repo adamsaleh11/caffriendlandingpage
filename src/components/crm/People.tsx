@@ -84,7 +84,7 @@ export default function People({workspaceId}:{workspaceId:string}) {
       onClose={() => setAdding(false)}>
       <AddPersonForm workspaceId={workspaceId} organizations={live(organizations.rows)}
         onCancel={() => setAdding(false)}
-        onCreated={person => { setAdding(false); setNotice(`${person.displayName} was added.`); people.reload(); }} />
+        onCreated={person => { setAdding(false); setNotice(`${person.displayName} was added.`); people.reload(); organizations.reload(); }} />
     </Modal>}
   </>;
 }

@@ -542,6 +542,8 @@
 .crm .field-grid .wide { grid-column: 1 / -1; }
 .crm .person-form { display: grid; gap: 20px; }
 .crm .person-form .field ~ .small { margin: 0; }
+.crm .inline-field { display: grid; gap: 6px; margin-top: 10px; }
+.crm .inline-field span { color: var(--muted); font-size: .76rem; font-weight: 700; }
 
 .crm .avatar { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--brand-tint); color: var(--brand-deep); font-weight: 800; font-size: 0.85rem; flex: 0 0 auto; }
 .crm .avatar.large { width: 64px; height: 64px; font-size: 1.25rem; }
@@ -706,11 +708,18 @@
 .crm .recipient-pill { background:var(--brand-tint); border-radius:999px; padding:6px 11px; font-size:.78rem; font-weight:600; }
 .crm button.add-time { background:var(--warm); color:var(--brand); border:1px dashed var(--brand); border-radius:10px; width:100%; }
 .crm .preview-tabs { display:flex; gap:8px; overflow-x:auto; padding:4px 0 12px; }.crm .preview-tabs button { white-space:nowrap; border-radius:999px; padding:8px 13px; }
-.crm .delivery-results { list-style:none; padding:0; display:grid; gap:10px; }.crm .delivery-results li { display:flex; justify-content:space-between; gap:14px; padding:14px; border:1px solid var(--line); border-radius:12px; }.crm .delivery-results .sent { border-left:4px solid #27834a; }.crm .delivery-results .failed { border-left:4px solid #b64032; }
+.crm .delivery-results { list-style:none; padding:0; margin:0; display:grid; gap:10px; }
+.crm .delivery-results li { display:grid; grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr); gap:10px 22px; padding:16px 18px; border:1px solid var(--line); border-left-width:5px; border-radius:12px; align-items:start; background:#fff; }
+.crm .delivery-results li > div { min-width:0; display:grid; gap:4px; }
+.crm .delivery-results strong, .crm .delivery-results span:not(.result-label) { overflow-wrap:anywhere; }
+.crm .delivery-results .sent { border-left-color:#27834a; }
+.crm .delivery-results .failed { border-left-color:#b64032; }
+.crm .result-label { color:var(--muted); font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; }
+.crm .delivery-actions { margin-top:16px; }
 
 @media (max-width: 800px) { .crm .slot-row { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 900px) { .crm .invite-hub-grid { grid-template-columns:1fr; }.crm .invite-email-card { position:static; } }
-@media (max-width: 480px) { .crm .slot-row { grid-template-columns: 1fr; } .crm .engagement-head-actions { width: 100%; } .crm .engagement-head-actions button { flex: 1 1 100%; }.crm .invite-hub-grid > section { padding:16px; }.crm .delivery-results li { flex-direction:column; } }
+@media (max-width: 480px) { .crm .slot-row { grid-template-columns: 1fr; } .crm .engagement-head-actions { width: 100%; } .crm .engagement-head-actions button { flex: 1 1 100%; }.crm .invite-hub-grid > section { padding:16px; }.crm .delivery-results li { grid-template-columns:1fr; } }
 
 /* In a toolbar the filters sit beside the page's primary action, so they drop
  * the standalone divider they carry elsewhere: that rule of padding and border
@@ -1015,25 +1024,33 @@
  * ------------------------------------------------------------------------- */
 .crm .step-flow {
   --bubble: 2.75rem;
+  --flow-pad: .35rem;
   display: flex;
   align-items: flex-start;
   width: 100%;
   overflow-x: auto;
-  padding: .35rem 0 .1rem;
+  padding: var(--flow-pad) 0 .1rem;
 }
-.crm .step-cell { display: flex; align-items: flex-start; flex: 1 1 0; min-width: 0; }
-.crm .step-cell:first-child { flex: 0 1 auto; }
+.crm .step-cell {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  flex: 1 0 6.25rem;
+  min-width: 0;
+}
 
 .crm .step-line {
-  flex: 1 1 1.5rem;
-  min-width: .9rem;
+  position: absolute;
+  top: calc(var(--bubble) / 2);
+  left: calc(-50% + var(--bubble) / 2);
+  right: calc(50% + var(--bubble) / 2);
   height: 0;
-  margin-top: calc(var(--bubble) / 2);
   border-top: 2px solid var(--line);
   border-radius: 2px;
 }
 .crm .step-line.travelled { border-color: var(--brand); }
-.crm .step-line.optional { border-top-style: dashed; border-color: rgba(31,21,15,.22); flex-basis: 1.75rem; }
+.crm .step-line.optional { border-top-style: dashed; border-color: rgba(31,21,15,.22); }
 
 .crm .step-node {
   display: flex; flex-direction: column; align-items: center; text-align: center;
@@ -1077,12 +1094,13 @@
 
 /* On a card there is no room for words: the bubbles carry it, and one line of
    text underneath says the same thing for anyone who needs it spelled out. */
-.crm .step-flow.compact { --bubble: 1.9rem; padding: .1rem 0; }
+.crm .step-flow.compact { --bubble: 1.9rem; --flow-pad: .1rem; padding: var(--flow-pad) 0; }
 .crm .step-flow.compact .step-node { width: auto; }
 .crm .step-flow.compact .step-label,
 .crm .step-flow.compact .step-sub { display: none; }
 .crm .step-flow.compact .step-tick { width: .8rem; height: .8rem; right: -2px; bottom: -2px; box-shadow: 0 0 0 2px #fff; }
-.crm .step-flow.compact .step-line { min-width: .5rem; flex-basis: .75rem; border-top-width: 2px; }
+.crm .step-flow.compact .step-cell { flex-basis: 1.9rem; }
+.crm .step-flow.compact .step-line { border-top-width: 2px; }
 .crm .engagement .step-caption { margin: -.15rem 0 0; }
 
 .crm .final-step-form { display: grid; gap: .4rem; padding: .55rem; border: 1px dashed rgba(31,21,15,.2); border-radius: 10px; background: var(--warm); }
@@ -1100,13 +1118,13 @@
    as its own thing: a longer dashed reach, and an outline instead of the fill
    that marks where someone stands on the shared run. */
 .crm .step-cell.extra { flex: 0 0 auto; }
-.crm .step-cell.extra .step-line.optional { flex-basis: 2.25rem; min-width: 1.5rem; border-top-width: 2px; }
+.crm .step-cell.extra .step-line.optional { left: -2.25rem; right: calc(var(--bubble) / 2); border-top-width: 2px; }
 .crm .step-cell.extra .step-bubble.current {
   background: #fff; color: var(--brand-deep);
   border: 2px solid var(--brand-deep); box-shadow: none;
 }
 .crm .step-cell.extra .step-bubble.done { background: var(--brand-tint); color: var(--brand-deep); }
-.crm .step-flow.compact .step-cell.extra .step-line.optional { flex-basis: 1.35rem; min-width: 1.1rem; }
+.crm .step-flow.compact .step-cell.extra .step-line.optional { left: -1.35rem; right: calc(var(--bubble) / 2); }
 
 /* A card says who, what for, where they stand, and what you can do — in that
    order, with nothing said twice and empty facts left unsaid. */

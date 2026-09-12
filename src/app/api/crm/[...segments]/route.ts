@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getSession, clearSession, sameOrigin, setSealed, readSealed, hashState, pendingCookie, fiveMinutes, type PendingFlows } from '@/lib/session';
+import { getSession, clearSession, sameOrigin, setSealed, readSealed, hashState, pendingCookie, fiveMinutes, webOrigin, type PendingFlows } from '@/lib/session';
 import { backend, BackendError } from '@/lib/backend';
 import { isResource, project, projectPage } from '@/lib/crm-projection';
-import { writableResources, archivableResources, approvalActions } from '@/lib/contracts';
+import { writableResources, archivableResources, deletableResources, approvalActions } from '@/lib/contracts';
 import { uuidPattern, providers, meetingStatuses, type AuditEvent, type CalendarConnection, type Meeting, type MeetingStatus, type Provider, type Workspace } from '@/lib/contracts';
 import { projectCall } from '@/lib/app-projection';
 
@@ -323,12 +323,17 @@ async function connect(token: string, workspaceId: string, provider: string) {
   try { redirect = new URL(result.redirect ?? ''); } catch { return json({error:'This provider is unavailable right now.'}, 502); }
   const expected = provider === 'GOOGLE' ? 'accounts.google.com' : 'login.microsoftonline.com';
   const state = redirect.searchParams.get('state');
-  if (redirect.protocol !== 'https:' || redirect.hostname !== expected || !state) return json({error:'This provider is unavailable right now.'}, 502);
+  const callback = redirect.searchParams.get('redirect_uri');
+  if (redirect.protocol !== 'https:' || redirect.hostname !== expected || !state || callback !== calendarCallback(provider)) return json({error:'This provider is unavailable right now.'}, 502);
   const existing = (await readSealed<PendingFlows>(pendingCookie))?.flows ?? [];
   const cutoff = Date.now() - fiveMinutes * 1000;
   const flows = [...existing.filter(flow => flow.created > cutoff), {provider, workspaceId, stateHash: await hashState(state), created: Date.now()}].slice(-5);
   await setSealed(pendingCookie, {flows}, fiveMinutes);
   return json({redirect: redirect.toString()});
+}
+
+function calendarCallback(provider: string) {
+  return new URL(`/crm-calendar/callback/${provider}`, webOrigin()).toString();
 }
 
 /** Shared preamble for every mutating verb below. */
@@ -398,6 +403,14 @@ export async function DELETE(request: Request, {params}:{params:Promise<{segment
   const segments = (await params).segments;
   const workspace = workspacePath(segments);
   try {
+    // Permanent deletion is distinct from archival and deliberately lives on a
+    // longer path so callers cannot hit it by accident.
+    if (workspace && segments[2] === 'crm' && segments.length === 6 && segments[5] === 'permanent' && uuidPattern.test(segments[4])) {
+      const resource = segments[3];
+      if (!isResource(resource) || !(deletableResources as readonly string[]).includes(resource))
+        return json({error:'This record cannot be deleted here.'}, 403);
+      return json(await backend(`${workspace}/crm/${resource}/${segments[4]}/permanent`, {token:session!.token, method:'DELETE', key}));
+    }
     // Archival, not deletion: the backend soft-archives and the record stays auditable.
     if (workspace && segments[2] === 'crm' && segments.length === 5 && uuidPattern.test(segments[4])) {
       const resource = segments[3];
@@ -407,7 +420,7 @@ export async function DELETE(request: Request, {params}:{params:Promise<{segment
     }
     return json({error:'Not found'}, 404);
   } catch (error) {
-    const {status, body: problem} = failure(error, 'That did not archive. Reload before trying again.');
+    const {status, body: problem} = failure(error, 'That did not delete. Reload before trying again.');
     if (status === 401) await clearSession();
     return json(problem, status);
   }

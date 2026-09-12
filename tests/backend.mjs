@@ -210,7 +210,8 @@ http.createServer(async (req,res) => {
     const provider = path.split('/').at(-2);
     if(state.connectFails) return send({message:'Unavailable'},503);
     const host = provider==='GOOGLE' ? 'accounts.google.com/o/oauth2/v2/auth' : 'login.microsoftonline.com/common/oauth2/v2.0/authorize';
-    return send({redirect:`https://${host}?client_id=test&state=state-${provider}&redirect_uri=http%3A%2F%2Flocalhost%3A3100%2Fcrm-calendar%2Fcallback%2F${provider}`});
+    const redirectUri = state.calendarRedirectUri ?? `http://localhost:3100/crm-calendar/callback/${provider}`;
+    return send({redirect:`https://${host}?client_id=test&state=state-${provider}&redirect_uri=${encodeURIComponent(redirectUri)}`});
   }
   if(path===`${calendarBase}/${connectionId}/calendars`) return send([{id:'primary',name:'Alex — Work',writable:true,supportsConference:true},{id:'readonly',name:'Holidays',writable:false,supportsConference:false}]);
   if(path===`${calendarBase}/${connectionId}/select`) {
@@ -352,7 +353,10 @@ http.createServer(async (req,res) => {
       if(!row) return send({message:'Resource not found'},404);
       Object.assign(row, body); return send(row);
     }
-    if(req.method==='DELETE') { state.crm[resource] = rows.filter(r=>r.id!==id); return send({id, status:'ARCHIVED'}); }
+    if(req.method==='DELETE') {
+      state.crm[resource] = rows.filter(r=>r.id!==id);
+      return send({id, status:rest[2] === 'permanent' ? 'DELETED' : 'ARCHIVED'});
+    }
   }
 
   // ---- pipelines and stages ----

@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import Link from 'next/link';
+import { Trash2 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import type { Engagement, Pipeline as PipelineRecord, Stage, Task } from '@/lib/contracts';
 import { canonicalPipeline, guidanceFor, isCanonical } from '@/lib/lifecycle';
@@ -10,6 +11,7 @@ import EngagementForm from './EngagementForm';
 import OutreachComposer from './OutreachComposer';
 import StepFlow, { type FlowStep, type StepIcon } from './StepFlow';
 import {FormSelect} from '@/components/ui/form-select';
+import { PermanentDeleteButton } from './record-actions';
 
 /**
  * Starting points for a new workspace.
@@ -31,6 +33,7 @@ const stepIcons: Record<string, StepIcon> = {
   'prospect': 'prospect', 'contacted': 'message', 'meeting booked': 'calendar',
   'follow-up': 'followup', 'closed': 'closed',
 };
+const legacyStageNames = new Set(['qualified', 'engaged', 'scheduling', 'completed', 'relationship']);
 /** The one line of who-they-are, or nothing at all when nothing is recorded. */
 const role = (person?: {title?: string|null; location?: string|null}, organization?: {name: string}) =>
   [person?.title, organization?.name, person?.location].filter(Boolean).join(' · ');
@@ -63,7 +66,10 @@ export default function Pipeline({workspaceId}:{workspaceId:string}) {
   const organizations = new Map((data.organizations.rows ?? []).map(row => [row.id, row]));
 
   const stageNames = new Set(canonicalPipeline.stages.map(stage => stage.name.toLowerCase()));
-  const openStages = (stages.rows ?? []).filter(stage => !stage.archived && stageNames.has(stage.name.toLowerCase()));
+  const openStages = (stages.rows ?? []).filter(stage => {
+    const name = stage.name.trim().toLowerCase();
+    return !stage.archived && (stageNames.has(name) || legacyStageNames.has(name));
+  });
   /** Terminal stages are real stages, kept out of the active run so it stays readable. */
   const flow = openStages.filter(stage => !stage.terminalOutcome);
   const terminal = openStages.filter(stage => !!stage.terminalOutcome);
@@ -302,6 +308,11 @@ export default function Pipeline({workspaceId}:{workspaceId:string}) {
           </button>
         </div>
         {engagement.status !== 'CLOSED' && person && <button className="secondary small-button" onClick={()=>setInviting(engagement)}>Invite</button>}
+        <PermanentDeleteButton workspaceId={workspaceId} resource="engagements" id={engagement.id} what="engagement"
+          name={engagement.objective} className="secondary small-button danger icon-action" label={<><Trash2 size={16} aria-hidden="true" /><span className="sr-only">Delete</span></>}
+          warning="This also removes meetings, notes, follow-ups and timeline activity for this engagement."
+          onDeleted={() => { setNotice('Engagement deleted.'); engagements.reload(); data.events.reload(); }}
+          onProblem={setProblem} />
       </div>
       {busy && <span role="status" className="small">Moving…</span>}
     </li>;

@@ -61,7 +61,12 @@ export type ProviderStatus = { configured: boolean; errorCode?: string | null };
 export type CalendarConnection = {
   id: string;
   provider: Provider;
-  status: 'SELECT_CALENDAR' | 'CONNECTED' | 'ERROR' | 'DISCONNECTED';
+  status:
+    | 'SELECT_CALENDAR'
+    | 'CONNECTED'
+    | 'RECONNECT_REQUIRED'
+    | 'ERROR'
+    | 'DISCONNECTED';
   accountIdentifier?: string | null;
   calendarId?: string | null;
   calendarName?: string | null;
@@ -146,6 +151,8 @@ export type CrmResource = typeof crmResources[number];
 export const writableResources = ['people','organizations','engagements','notes','tasks','source-artifacts','source-claims','conversations'] as const;
 /** Resources the backend soft-archives instead of deleting. */
 export const archivableResources = ['people','organizations','engagements','notes','tasks'] as const;
+/** Resources the backend allows a human member to permanently delete. */
+export const deletableResources = ['people','organizations','engagements','notes','tasks'] as const;
 
 export type Page<T> = { items: T[]; nextCursor: string | null };
 
@@ -294,9 +301,13 @@ export const agentScopeGroups: { title: string; note: string; scopes: AgentScope
 /** Readable audit actions. An unmapped action falls back to its raw value rather than being hidden. */
 export const auditActions: Record<string,string> = {
   'people.created':'Added a person','people.updated':'Edited a person','people.archived':'Archived a person',
+  'people.deleted':'Deleted a person',
   'organizations.created':'Added an organization','organizations.updated':'Edited an organization','organizations.archived':'Archived an organization',
+  'organizations.deleted':'Deleted an organization',
   'engagements.created':'Created an engagement','engagements.updated':'Updated an engagement','engagements.archived':'Archived an engagement',
-  'notes.created':'Added a note','tasks.created':'Created a task','tasks.updated':'Updated a task',
+  'engagements.deleted':'Deleted an engagement',
+  'notes.created':'Added a note','notes.archived':'Archived a note','notes.deleted':'Deleted a note',
+  'tasks.created':'Created a task','tasks.updated':'Updated a task','tasks.archived':'Archived a task','tasks.deleted':'Deleted a task',
   'pipeline.created':'Created a pipeline','pipeline.updated':'Updated a pipeline',
   'stage.created':'Added a stage','stage.updated':'Updated a stage','stages.reordered':'Reordered stages',
   'approval.approved':'Approved a proposal','approval.rejected':'Rejected a proposal',

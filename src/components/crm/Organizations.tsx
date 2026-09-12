@@ -4,7 +4,7 @@ import { api } from '@/lib/api';
 import type { Organization, Person } from '@/lib/contracts';
 import { useKeys, useList, Section, Empty, More } from './common';
 import Modal from './Modal';
-import { ArchiveButton, editRecord, live, problemText } from './record-actions';
+import { ArchiveButton, PermanentDeleteButton, editRecord, live, problemText } from './record-actions';
 
 /** The one form, used to add an organization and to correct one. */
 function OrganizationForm({organization, pending, problem, onSubmit, onCancel}:{
@@ -81,6 +81,12 @@ export default function Organizations({workspaceId}:{workspaceId:string}) {
                   ? `${counts.get(row.id)} ${counts.get(row.id) === 1 ? 'person stays' : 'people stay'} in this workspace. They will simply show no organization.`
                   : undefined}
                 onArchived={() => { setNotice(`${row.name} was archived.`); organizations.reload(); people.reload(); }}
+                onProblem={setProblem} />
+              <PermanentDeleteButton workspaceId={workspaceId} resource="organizations" id={row.id} name={row.name} what="organization"
+                warning={(counts.get(row.id) ?? 0) > 0
+                  ? `${counts.get(row.id)} ${counts.get(row.id) === 1 ? 'person keeps' : 'people keep'} their record and will show no organization.`
+                  : undefined}
+                onDeleted={() => { setNotice(`${row.name} was deleted.`); organizations.reload(); people.reload(); }}
                 onProblem={setProblem} />
             </td>
           </tr>)}</tbody>

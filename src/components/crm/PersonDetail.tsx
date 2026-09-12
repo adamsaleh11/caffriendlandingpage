@@ -12,7 +12,7 @@ import EngagementForm from './EngagementForm';
 import Relationship from './Relationship';
 import Modal from './Modal';
 import { ProfileEditor } from './PersonForm';
-import { ArchiveButton, editRecord, problemText } from './record-actions';
+import { ArchiveButton, PermanentDeleteButton, editRecord, problemText } from './record-actions';
 import { NoteEditor, TaskEditor } from './RecordEditors';
 import { canonicalPipeline } from '@/lib/lifecycle';
 
@@ -144,6 +144,13 @@ export default function PersonDetail({workspaceId, personId}:{workspaceId:string
             : undefined}
           onArchived={() => router.push(`/app/${workspaceId}/people`)}
           onProblem={setProblem} />
+        <PermanentDeleteButton workspaceId={workspaceId} resource="people" id={person.id} name={person.displayName} what="person"
+          className="secondary danger" label="Delete person"
+          warning={theirEngagements.length
+            ? `This also removes their engagements, meetings, notes, tasks and CRM source claims.`
+            : 'This also removes their notes, tasks and CRM source claims.'}
+          onDeleted={() => router.push(`/app/${workspaceId}/people`)}
+          onProblem={setProblem} />
       </div>
     </header>
 
@@ -246,6 +253,10 @@ export default function PersonDetail({workspaceId, personId}:{workspaceId:string
                 name={note.body.length > 60 ? `${note.body.slice(0, 60)}…` : note.body}
                 onArchived={() => { setNotice('Note archived.'); data.notes.reload(); data.events.reload(); }}
                 onProblem={setProblem} />
+              <PermanentDeleteButton workspaceId={workspaceId} resource="notes" id={note.id} what="note"
+                name={note.body.length > 60 ? `${note.body.slice(0, 60)}…` : note.body}
+                onDeleted={() => { setNotice('Note deleted.'); data.notes.reload(); data.events.reload(); }}
+                onProblem={setProblem} />
             </p>
           </li>)}</ul>
           <form className="quick-add" onSubmit={event => { event.preventDefault(); const form = event.currentTarget;
@@ -275,6 +286,9 @@ export default function PersonDetail({workspaceId, personId}:{workspaceId:string
               </button>
               <ArchiveButton workspaceId={workspaceId} resource="tasks" id={task.id} name={task.title} what="task"
                 onArchived={() => { setNotice('Task archived.'); data.tasks.reload(); data.events.reload(); }}
+                onProblem={setProblem} />
+              <PermanentDeleteButton workspaceId={workspaceId} resource="tasks" id={task.id} name={task.title} what="task"
+                onDeleted={() => { setNotice('Task deleted.'); data.tasks.reload(); data.events.reload(); }}
                 onProblem={setProblem} />
             </p>
           </li>)}</ul>
@@ -344,6 +358,7 @@ export default function PersonDetail({workspaceId, personId}:{workspaceId:string
       onClose={() => setEditing(undefined)}>
       <ProfileEditor workspaceId={workspaceId} person={person} organizations={data.organizations.rows ?? []}
         startAt={editing.startAt}
+        onOrganizationCreated={data.organizations.reload}
         onSaved={(saved, message) => { setPerson(saved); setNotice(message); data.people.reload(); data.events.reload(); }}
         onClose={() => setEditing(undefined)} />
     </Modal>}
