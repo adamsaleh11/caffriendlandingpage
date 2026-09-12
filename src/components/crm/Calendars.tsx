@@ -1,6 +1,6 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, ApiError } from '@/lib/api';
+import { api, ApiError, startCrmOAuth } from '@/lib/api';
 import { providers, providerNames, mailboxNames, type CalendarConnection, type CalendarOption, type Provider } from '@/lib/contracts';
 import {FormSelect} from '@/components/ui/form-select';
 
@@ -93,7 +93,7 @@ export default function Calendars({workspaceId}:{workspaceId:string}) {
   async function connect(provider:Provider) {
     setBusy(provider);setNotice(undefined);
     try{
-      const {redirect}=await api<{redirect:string}>(`workspaces/${workspaceId}/calendar-connections/${provider}/connect`,{method:'POST',body:'{}'});
+      const redirect=await startCrmOAuth(`/workspaces/${workspaceId}/calendar-connections/${provider}/connect`,provider,workspaceId);
       window.location.assign(redirect);
     }catch(problem){setError(problem instanceof ApiError?problem.message:'Unable to start the connection.');setBusy(undefined);}
   }
@@ -102,7 +102,7 @@ export default function Calendars({workspaceId}:{workspaceId:string}) {
   async function connectMail(id:string) {
     setBusy(id);setNotice(undefined);
     try{
-      const {redirect}=await api<{redirect:string}>(`workspaces/${workspaceId}/mail-connections/${id}/connect`,{method:'POST',body:'{}'});
+      const redirect=await startCrmOAuth(`/workspaces/${workspaceId}/mail-connections/${id}/connect`,'GOOGLE_MAIL',workspaceId);
       window.location.assign(redirect);
     }catch(problem){setError(problem instanceof ApiError?problem.message:'Mailbox permission could not be started.');setBusy(undefined);}
   }

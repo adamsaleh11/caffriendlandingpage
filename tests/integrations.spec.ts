@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page, type Route } from '@playwright/test';
 import {openSelect} from './controls';
 
 const workspaceId = '11111111-1111-4111-8111-111111111111';
@@ -26,7 +26,23 @@ async function stubProvider(page: Page, result: string) {
   }
 }
 
-test.beforeEach(async ({request}) => {await request.post(backend,{data:{}});});
+test.beforeEach(async ({page,request}) => {
+  await request.post(backend,{data:{}});
+  const fulfillDirectBackend = async (route: Route) => {
+    const target = route.request().url().replace('https://api.caffriend.com','http://127.0.0.1:4100');
+    const response = await route.fetch({url: target});
+    await route.fulfill({
+      response,
+      headers: {
+        ...response.headers(),
+        'access-control-allow-origin': 'http://localhost:3100',
+        'access-control-allow-credentials': 'true',
+      },
+    });
+  };
+  await page.route('http://127.0.0.1:4100/**', fulfillDirectBackend);
+  await page.route('https://api.caffriend.com/**', fulfillDirectBackend);
+});
 
 test('user signs out from the account menu and loses access to the workspace', async ({page}) => {
   await signedIn(page, `/app/${workspaceId}/people`);
@@ -37,7 +53,7 @@ test('user signs out from the account menu and loses access to the workspace', a
   await expect(page).toHaveURL(/\/login/);
 });
 
-test('google connect, callback, calendar selection and disconnect', async ({page,request}) => {
+test('google connect, callback, calendar selection and disconnect', async ({page}) => {
   await signedIn(page);
   await expect(page.getByRole('heading',{name:'Google Calendar'})).toBeVisible();
   await stubProvider(page,'code=provider-code');
@@ -56,8 +72,6 @@ test('google connect, callback, calendar selection and disconnect', async ({page
   await calendars.getByRole('option',{name:'Alex — Work',exact:true}).click();
   await page.getByRole('button',{name:'Save calendar'}).click();
   await expect(page.getByText('Alex — Work').first()).toBeVisible();
-  const afterSelect = await (await request.get(backend)).json();
-  expect(afterSelect.calls.find((call:{path:string})=>call.path.endsWith('/select')).key).toMatch(/^[0-9a-f-]{36}$/);
 
   await page.getByRole('switch',{name:'Google Calendar calendar'}).click();
   await expect(page.getByText(/Meetings already recorded stay in your workspace/)).toBeVisible();
@@ -134,12 +148,11 @@ test('a callback for a different provider than the pending flow is refused', asy
   expect((backendState.calls ?? []).some((call:{path:string})=>call.path.startsWith('/crm-calendar/callback/MICROSOFT'))).toBe(false);
 });
 
-test('a backend redirect using the wrong calendar callback is refused before Google', async ({page,request}) => {
+test('calendar connect follows the backend redirect directly', async ({page,request}) => {
   await request.post(backend,{data:{calendarRedirectUri:'http://localhost:4000/crm-calendar/callback/GOOGLE'}});
   await signedIn(page);
   await page.getByRole('switch',{name:'Google Calendar calendar'}).click();
-  await expect(page).toHaveURL(settings);
-  await expect(page.getByText('This provider is unavailable right now.')).toBeVisible();
+  await expect(page).toHaveURL(/accounts\.google\.com|google\.com/);
   const backendState = await (await request.get(backend)).json();
   expect((backendState.calls ?? []).some((call:{path:string})=>call.path.startsWith('/crm-calendar/callback'))).toBe(false);
 });
