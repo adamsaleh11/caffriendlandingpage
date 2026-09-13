@@ -1,6 +1,7 @@
 'use client';
 import {useEffect,useState} from 'react';
 import {api,ApiError,startCrmOAuth} from '@/lib/api';
+import { isLiveConnection } from '@/lib/contracts';
 import type {CalendarConnection,Engagement,Person,Pipeline,Stage} from '@/lib/contracts';
 import Modal from './Modal';
 import {DatePicker} from '@/components/ui/date-picker';
@@ -17,7 +18,7 @@ const displayName=(email:string)=>email.split('@')[0].replace(/[._-]+/g,' ').rep
 export default function BulkOutreachComposer({workspaceId,targets,pipeline,stages,onClose,onSent}:{workspaceId:string;targets:InviteTarget[];pipeline:Pipeline;stages:Stage[];onClose:()=>void;onSent:()=>void}){
  const [connections,setConnections]=useState<CalendarConnection[]>();const [mails,setMails]=useState<Mail[]>([]);const [connectionId,setConnectionId]=useState('');const [problem,setProblem]=useState('');const [working,setWorking]=useState('');
  const [purpose,setPurpose]=useState('Coffee chat');const [message,setMessage]=useState('');const [timezone,setTimezone]=useState(localZone());const [venue,setVenue]=useState<'CAFFRIEND_LIVEKIT'|'PROVIDER_CONFERENCE'>('CAFFRIEND_LIVEKIT');const [slots,setSlots]=useState<Slot[]>([{date:'',time:'',duration:'30'}]);const [previews,setPreviews]=useState<Preview[]>();const [previewIndex,setPreviewIndex]=useState(0);const [results,setResults]=useState<{email:string;ok:boolean;error?:string}[]>();
- useEffect(()=>{let live=true;api<CalendarConnection[]>(`workspaces/${workspaceId}/calendar-connections`).then(async rows=>{if(!live)return;setConnections(rows);const statuses=await Promise.all(rows.filter(row=>row.status==='CONNECTED'||row.status==='SELECT_CALENDAR').map(row=>api<Mail>(`workspaces/${workspaceId}/mail-connections/${row.id}`).catch(()=>({connectionId:row.id,provider:row.provider,canSend:false,mailStatus:'UNAVAILABLE'}))));if(!live)return;setMails(statuses);const usable=statuses.filter(row=>row.canSend);if(usable.length===1)setConnectionId(usable[0].connectionId);}).catch(error=>setProblem(error instanceof ApiError?error.message:'Connections could not be loaded.'));return()=>{live=false};},[workspaceId]);
+ useEffect(()=>{let live=true;api<CalendarConnection[]>(`workspaces/${workspaceId}/calendar-connections`).then(async rows=>{if(!live)return;setConnections(rows);const statuses=await Promise.all(rows.filter(row=>isLiveConnection(row.status)).map(row=>api<Mail>(`workspaces/${workspaceId}/mail-connections/${row.id}`).catch(()=>({connectionId:row.id,provider:row.provider,canSend:false,mailStatus:'UNAVAILABLE'}))));if(!live)return;setMails(statuses);const usable=statuses.filter(row=>row.canSend);if(usable.length===1)setConnectionId(usable[0].connectionId);}).catch(error=>setProblem(error instanceof ApiError?error.message:'Connections could not be loaded.'));return()=>{live=false};},[workspaceId]);
  const selected=connections?.find(row=>row.id===connectionId);const usable=mails.filter(row=>row.canSend);const invalidate=()=>setPreviews(undefined);
  async function connectCalendar(){setWorking('connect');try{window.location.assign(await startCrmOAuth(`/workspaces/${workspaceId}/calendar-connections/GOOGLE/connect`));}catch(error){setProblem(error instanceof ApiError?error.message:'Google Calendar could not be connected.');setWorking('');}}
  async function connectMail(id:string){setWorking('connect');try{window.location.assign(await startCrmOAuth(`/workspaces/${workspaceId}/mail-connections/${id}/connect`));}catch(error){setProblem(error instanceof ApiError?error.message:'Mailbox permission could not be connected.');setWorking('');}}
@@ -29,7 +30,7 @@ export default function BulkOutreachComposer({workspaceId,targets,pipeline,stage
  // Same rule as the single composer: the mail grant is its own consent step and
  // does not wait on a calendar being chosen, so do not hide the button behind
  // CONNECTED and leave the gate with nothing to press.
- const mailable=(connections??[]).filter(row=>row.status==='CONNECTED'||row.status==='SELECT_CALENDAR');
+ const mailable=(connections??[]).filter(row=>isLiveConnection(row.status));
  const pendingCalendars=(connections??[]).filter(row=>row.status==='SELECT_CALENDAR');
  const shown=previews?.[previewIndex];
  return <Modal title={`Create coffee chat invitation${targets.length>1?'s':''}`} description={`${targets.length} recipient${targets.length===1?'':'s'} · each person receives a private invitation`} onClose={onClose} wide>

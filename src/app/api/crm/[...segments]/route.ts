@@ -132,6 +132,8 @@ export async function GET(request: Request, {params}:{params:Promise<{segments:s
       const rows = Array.isArray(value?.data) ? value.data : Array.isArray(result) ? result : [];
       return json((rows as Record<string,unknown>[]).map(row=>projectCall(row,session.user.id)).filter(row=>!row.workspaceId||row.workspaceId===segments[1]));
     }
+    if (workspace && segments[2] === 'meeting-outreach' && segments.length === 3)
+      return json(await backend(`${workspace}/meeting-outreach`, {token:session.token}));
     if (workspace && segments[2] === 'meeting-outreach' && segments.length === 4 && uuidPattern.test(segments[3]))
       return json(await backend(`${workspace}/meeting-outreach/${segments[3]}`, {token:session.token}));
     if (workspace && segments[2] === 'meetings' && segments.length === 4 && uuidPattern.test(segments[3]))

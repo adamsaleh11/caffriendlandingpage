@@ -313,7 +313,7 @@ export default function PersonDetail({workspaceId, personId}:{workspaceId:string
             ? <><strong>{provenance.addedBy.name}</strong> — an agent connected to this workspace{provenance.viaApproval ? ', after you approved its proposal' : ''}. Caffriend did not find them itself.</>
             : `${provenance.addedBy.name} in this workspace`
           : 'Not recorded. No creation event is held for this person.'}</dd>
-        <dt>Details obtained</dt><dd>{provenance.sourceCategory}</dd>
+        <dt>Details obtained</dt><dd>{sourceLabel(provenance.sourceCategory)}</dd>
         <dt>Confidence</dt>
         <dd>{provenance.confidence !== null
           ? <>{percent(provenance.confidence)} — the highest confidence recorded on a cited claim about them.</>
@@ -321,10 +321,10 @@ export default function PersonDetail({workspaceId, personId}:{workspaceId:string
         <dt>Permitted uses</dt>
         <dd>
           {permissions === undefined && <span role="status">Checking permitted uses…</span>}
-          {permissions === 'unavailable' && <span role="alert">Permitted uses could not be checked, so outreach, export and republication should be treated as blocked until this loads.</span>}
+          {permissions === 'unavailable' && <span role="alert"><span className="verdict blocked">Unknown</span> Permitted uses could not be checked, so outreach, export and republication should be treated as blocked until this loads.</span>}
           {permissions && permissions !== 'unavailable' && (permissions.blocked
-            ? <span role="alert">Nothing is permitted yet. Their source needs a rights review before they can be contacted, exported or republished.</span>
-            : <>Permitted: <strong>{permissions.permittedUses.join(', ')}</strong>. Anything not listed is blocked.</>)}
+            ? <span role="alert"><span className="verdict blocked">Blocked</span> Their source needs a rights review before they can be contacted, exported or republished.</span>
+            : <><span className="verdict allowed">Permitted</span> <strong>{permissions.permittedUses.join(', ')}</strong>. Anything not listed is blocked.</>)}
         </dd>
       </dl>
       {!data.claims.rows

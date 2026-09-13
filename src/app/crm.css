@@ -632,6 +632,34 @@
 .crm dl.facts { display: grid; grid-template-columns: minmax(9rem, auto) minmax(0, 1fr); gap: 10px 24px; margin: 14px 0 0; font-size: 0.9rem; }
 .crm dl.facts dt { font-weight: 700; }
 .crm dl.facts dd { margin: 0; color: var(--muted); }
+/* A hairline under each pair, so long values stay tied to their label. */
+.crm dl.facts dt, .crm dl.facts dd { padding-bottom: 10px; border-bottom: 1px solid var(--line-soft); }
+.crm dl.facts dt:nth-last-of-type(1), .crm dl.facts dd:nth-last-of-type(1) { padding-bottom: 0; border-bottom: 0; }
+/* The verdict is the thing being read; the sentence after it is the reason. */
+.crm .verdict {
+  display: inline-block; margin-right: 6px; padding: 2px 9px; border-radius: 999px;
+  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase;
+}
+.crm .verdict.blocked { background: #fdece8; color: #963b2b; }
+.crm .verdict.allowed { background: #e8f4ec; color: #2c6b45; }
+.crm .provenance [role="alert"], .crm .provenance [role="alert"] * { color: var(--muted); }
+.crm .provenance .verdict.blocked { color: #963b2b; }
+
+/* The source detail behind the summary: one quiet panel, not loose paragraphs. */
+.crm .provenance .evidence {
+  margin: 18px 0 0; padding: 16px 18px; border: 1px solid var(--line); border-left-width: 1px;
+  border-radius: 12px; background: var(--warm);
+}
+.crm .provenance .evidence h4 {
+  margin: 16px 0 4px; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em;
+  opacity: 1; color: var(--muted); font-weight: 700;
+}
+.crm .provenance .evidence > h4:first-child { margin-top: 0; }
+.crm .provenance .evidence > p { margin: 0; font-size: 0.9rem; color: var(--muted); }
+.crm .provenance .evidence dl { display: grid; grid-template-columns: minmax(9rem, auto) minmax(0, 1fr); gap: 8px 20px; margin: 6px 0 0; font-size: 0.88rem; }
+.crm .provenance .evidence dt { font-weight: 700; }
+.crm .provenance .evidence dd { margin: 0; color: var(--muted); overflow-wrap: anywhere; }
+.crm .provenance .evidence .claims { gap: 8px; margin: 6px 0 0; font-size: 0.9rem; }
 
 /* Modals: one job, on top of a page that keeps its place. */
 .crm.modal-backdrop { position: fixed; inset: 0; z-index: 60; background: rgba(31,21,15,0.45); display: grid; place-items: center; padding: 24px; overflow-y: auto; }
@@ -1205,3 +1233,22 @@
    strength — it is a live state and a live way out, not a footnote. */
 .crm .pipeline-filter { color: var(--ink); }
 .crm .pipeline-filter button { vertical-align: baseline; }
+
+/* Sent invitations. The answer is the point of the row, so it is what the eye
+   lands on: a colour-coded state on the right, the person on the left, and no
+   grid of fields in between. */
+.crm .sent-invites {margin-top:32px;}
+.crm .sent-invites h2 {margin-bottom:12px;}
+.crm .sent-list {list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:white;}
+.crm .sent-row {display:flex;justify-content:space-between;align-items:flex-start;gap:20px;padding:16px 18px;border-top:1px solid var(--line);}
+.crm .sent-row:first-child {border-top:0;}
+.crm .sent-who {display:flex;flex-direction:column;gap:2px;min-width:0;}
+.crm .sent-who strong {color:var(--ink);overflow-wrap:anywhere;}
+.crm .sent-who small,.crm .sent-state small {color:var(--muted);font-size:.82rem;overflow-wrap:anywhere;}
+.crm .sent-state {display:flex;flex-direction:column;align-items:flex-end;gap:3px;text-align:right;flex:none;max-width:52%;}
+.crm .sent-label {font-weight:700;font-size:.85rem;padding:3px 10px;border-radius:999px;background:var(--brand-tint);color:var(--brand-deep);}
+.crm .sent-row.yes .sent-label {background:#dcfce7;color:#166534;}
+.crm .sent-row.no .sent-label {background:#fee2e2;color:#991b1b;}
+.crm .sent-row.wait .sent-label {background:#fef3c7;color:#92400e;}
+.crm .sent-row.off .sent-label {background:#eeeeee;color:#555555;}
+@media (max-width:560px){.crm .sent-row{flex-direction:column;gap:8px;}.crm .sent-state{align-items:flex-start;text-align:left;max-width:none;}}
