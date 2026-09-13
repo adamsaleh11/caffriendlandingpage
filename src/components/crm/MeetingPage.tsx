@@ -130,7 +130,9 @@ export default function MeetingPage({workspaceId, meetingId}:{workspaceId:string
       {problem && <p role="alert">{problem}</p>}
 
       <div className="meeting-actions">
-        {meeting.joinUrl && joinable(meeting.status) && <a className="text-link" href={meeting.joinUrl}>Join on web</a>}
+        {joinable(meeting.status) && meeting.groupCallId
+          ? <a className="text-link" href={`/calls/${meeting.groupCallId}`}>Join on web</a>
+          : meeting.joinUrl && joinable(meeting.status) && <a className="text-link" href={meeting.joinUrl}>Join on web</a>}
         <button onClick={copyLink} disabled={cancelled}>Copy invite link</button>
         <button ref={dialog === 'reschedule' ? opener : undefined} disabled={cancelled}
           onClick={event => {opener.current = event.currentTarget; setStart(''); setEnd(''); setProblem(''); setDialog('reschedule');}}>Reschedule</button>

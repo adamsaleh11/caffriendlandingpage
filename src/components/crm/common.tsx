@@ -70,7 +70,7 @@ export function useList<T>(path: string | null, deps: unknown[] = []): Loaded<T>
 }
 
 /** A plain array endpoint. Pipelines and stages are not cursor-paginated. */
-export function useRows<T>(path: string | null): Loaded<T> {
+export function useRows<T>(path: string | null, base: 'crm' | 'app' | 'call' = 'crm'): Loaded<T> {
   const [rows, setRows] = useState<T[]>();
   const [error, setError] = useState<ApiError>();
   const [attempt, setAttempt] = useState(0);
@@ -80,7 +80,7 @@ export function useRows<T>(path: string | null): Loaded<T> {
     const controller = new AbortController();
     if (shown.current !== path) { setRows(undefined); shown.current = path; }
     setError(undefined);
-    api<T[]>(path, {signal: controller.signal})
+    api<T[]>(path, {signal: controller.signal}, base)
       .then(result => { if (!controller.signal.aborted) setRows(Array.isArray(result) ? result : []); })
       .catch(problem => { if (!controller.signal.aborted) setError(problem instanceof ApiError ? problem : new ApiError(503, 'This is unavailable right now.')); });
     return () => controller.abort();

@@ -46,6 +46,7 @@ export function safeReturn(value: unknown): string {
   if (value === '/app' || value === '/app/workspaces/new') return value;
   if ((appScreens as readonly string[]).includes(value.replace(/^\//, ''))) return value;
   if (value === '/events/new' || /^\/events\/[0-9a-f-]+(?:\/call)?$/i.test(value)) return value;
+  if (/^\/calls\/[0-9a-f-]{36}$/i.test(value)) return value;
   const nested = value.match(/^\/app\/([^/]+)\/(meetings|people)\/([^/]+)$/);
   if (nested && uuidPattern.test(nested[1]) && uuidPattern.test(nested[3])) return value;
   const match = value.match(/^\/app\/([^/]+)\/([^/]+)$/);
@@ -122,6 +123,8 @@ export type Meeting = {
   errorCode?: string | null;
   /** Present on the CRM meetings list, which links a meeting to its engagement. */
   engagementId?: string | null;
+  /** Present for Caffriend LiveKit meetings that share the group-call collaboration surface. */
+  groupCallId?: string | null;
 };
 export const statusLabels: Record<MeetingStatus, string> = {
   LOCAL: 'Not yet sent to a calendar',

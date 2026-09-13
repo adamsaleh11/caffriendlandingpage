@@ -1,255 +1,190 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
-import { api, ApiError } from '@/lib/api';
-import { isLiveConnection, providerNames, statusLabels, type CalendarConnection, type CalendarOption, type Engagement, type Meeting, type Person } from '@/lib/contracts';
-import { useKeys, useList, useRows, Section, Empty, More } from './common';
-import { useLiveRows } from './record-actions';
+import { api } from '@/lib/api';
+import { useRows, Section, Empty } from './common';
 import type { AppCall } from '@/lib/app-projection';
-import {FormSelect} from '@/components/ui/form-select';
-import {DatePicker} from '@/components/ui/date-picker';
-import {TimePicker} from '@/components/ui/time-picker';
+import { callFinished, participantName, type CallState, type MyCall } from '@/lib/call';
 
-type Busy = { busy: {start:string; end:string}[] };
-const hour = 3600000;
-const calendarLabel = (connection?: CalendarConnection) =>
-  connection?.calendarName || connection?.calendarId || connection?.accountIdentifier || 'Default calendar';
-const accountLabel = (connection?: CalendarConnection) =>
-  connection?.accountIdentifier || (connection ? providerNames[connection.provider] : 'Calendar account');
-const venueLabel = (call: AppCall) =>
-  call.venue === 'CAFFRIEND_LIVEKIT' ? 'Caffriend call'
-    : call.venue === 'PROVIDER_CONFERENCE' ? 'Google Meet'
-    : call.physicalLocation || call.format || 'In person';
-const meetingTimeLabel = (start?: string | null, end?: string | null) =>
-  start ? `${new Date(start).toLocaleDateString(undefined, {weekday:'short', month:'short', day:'numeric'})} · ${new Date(start).toLocaleTimeString(undefined, {hour:'numeric', minute:'2-digit'})}${end ? ` - ${new Date(end).toLocaleTimeString(undefined, {hour:'numeric', minute:'2-digit'})}` : ''}` : 'Not scheduled';
+/**
+ * Calls, as a calendar.
+ *
+ * Upcoming calls are shown on a month grid rather than as a list, because the question
+ * people actually bring to this page is "what does my week look like", which a list of
+ * rows answers badly. Past calls stay a list: they are looked up by who and what, not by
+ * when, and each one opens on what the call produced.
+ */
 
-/** The viewer's own zone is the honest default; every other IANA zone stays selectable. */
-const zones = (): string[] => {
-  const local = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const common = ['UTC','America/New_York','America/Chicago','America/Denver','America/Los_Angeles','Europe/London','Europe/Berlin','Asia/Kolkata','Asia/Singapore','Australia/Sydney'];
-  return [local, ...common.filter(zone => zone !== local)];
+const DAY = 86400000;
+const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+const timeLabel = (value?: string | null) =>
+  value ? new Date(value).toLocaleTimeString(undefined, {hour:'numeric', minute:'2-digit'}) : '';
+const dayLabel = (value?: string | null) =>
+  value ? new Date(value).toLocaleDateString(undefined, {weekday:'short', month:'short', day:'numeric'}) : 'Not scheduled';
+const sameDay = (a: Date, b: Date) =>
+  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+
+/** Monday-first, so a week reads as a working week. */
+function monthGrid(month: Date): Date[] {
+  const first = new Date(month.getFullYear(), month.getMonth(), 1);
+  const offset = (first.getDay() + 6) % 7;
+  const start = new Date(first.getTime() - offset * DAY);
+  return Array.from({length: 42}, (_, index) => new Date(start.getTime() + index * DAY));
+}
+
+const minutesBetween = (from?: string | null, to?: string | null) => {
+  if (!from || !to) return null;
+  const span = Math.round((Date.parse(to) - Date.parse(from)) / 60000);
+  return Number.isFinite(span) && span > 0 ? span : null;
 };
 
-export default function Schedule({workspaceId}:{workspaceId:string}) {
-  const meetings = useList<Meeting>(`workspaces/${workspaceId}/meetings`);
-  const calls = useRows<AppCall>(`workspaces/${workspaceId}/upcoming-calls`);
-  const engagements=useLiveRows(useList<Engagement>(`workspaces/${workspaceId}/crm/engagements`));
-  const people=useLiveRows(useList<Person>(`workspaces/${workspaceId}/crm/people`));
-  const connections = useRows<CalendarConnection>(`workspaces/${workspaceId}/calendar-connections`);
+function CallCalendar({calls}:{calls: AppCall[]}) {
+  const [month, setMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const today = new Date();
+  const days = useMemo(() => monthGrid(month), [month]);
+  const monthName = month.toLocaleDateString(undefined, {month:'long', year:'numeric'});
+  const move = (by: number) => setMonth(current => new Date(current.getFullYear(), current.getMonth() + by, 1));
 
-  const [connectionId, setConnectionId] = useState('');
-  const [calendars, setCalendars] = useState<CalendarOption[] | 'error'>();
-  const [busy, setBusy] = useState<Busy['busy']>();
-  const [draft, setDraft] = useState<Record<string,string>>();
+  const forDay = (day: Date) => calls.filter(call =>
+    call.startDate && sameDay(new Date(call.startDate), day));
+
+  return <div className="cal">
+    <div className="cal-head">
+      <button className="secondary" onClick={() => move(-1)} aria-label="Previous month">←</button>
+      <h3 aria-live="polite">{monthName}</h3>
+      <button className="secondary" onClick={() => move(1)} aria-label="Next month">→</button>
+      <button className="secondary cal-today"
+        onClick={() => setMonth(new Date(today.getFullYear(), today.getMonth(), 1))}>Today</button>
+    </div>
+    <div className="cal-weekdays" aria-hidden="true">
+      {weekdays.map(day => <span key={day}>{day}</span>)}
+    </div>
+    <div className="cal-grid" role="grid" aria-label={`Calls in ${monthName}`}>
+      {days.map(day => {
+        const onDay = forDay(day);
+        const outside = day.getMonth() !== month.getMonth();
+        return <div key={day.toISOString()} role="gridcell" className="cal-day"
+          data-outside={outside ? 'true' : undefined} data-today={sameDay(day, today) ? 'true' : undefined}>
+          <span className="cal-date">{day.getDate()}</span>
+          {onDay.map(call => <Link key={call.id} className="cal-event"
+            href={call.groupCallId ? `/calls/${call.groupCallId}` : (call.joinUrl ?? '#')}>
+            <span className="cal-event-time">{timeLabel(call.startDate)}</span>
+            <span className="cal-event-who">{call.counterpart || call.purpose || 'Coffee chat'}</span>
+          </Link>)}
+        </div>;
+      })}
+    </div>
+  </div>;
+}
+
+/**
+ * One past call, opened in place.
+ *
+ * The listing endpoint gives the call but not who was in it, so the detail is fetched
+ * once, when someone asks for it, rather than N times to render the list.
+ */
+function PastCall({call, me}:{call: MyCall; me: string}) {
+  const [open, setOpen] = useState(false);
+  const [detail, setDetail] = useState<CallState>();
   const [problem, setProblem] = useState('');
-  const [notice, setNotice] = useState('');
-  const [working, setWorking] = useState('');
-  const [cancelling, setCancelling] = useState<string>();
-  /** Unset until the organizer chooses, so the capability answer can arrive late without overriding them. */
-  const [conference, setConference] = useState<'yes'|'no'>();
-  const [meetingDate, setMeetingDate] = useState('');
-  const [meetingTime, setMeetingTime] = useState('');
-  const keyFor = useKeys();
 
-  const usable = (connections.rows ?? []).filter(row => isLiveConnection(row.status));
-  const connection = usable.find(row => row.id === connectionId) ?? usable[0];
-  const calendar = calendars !== 'error' ? (calendars ?? []).find(row => row.id === connection?.calendarId) : undefined;
-  const canConference = calendar?.supportsConference === true;
+  async function toggle() {
+    const next = !open;
+    setOpen(next);
+    if (!next || detail) return;
+    setProblem('');
+    try { setDetail(await api<CallState>(`${call.id}/call-state`, {}, 'call')); }
+    catch (failure) { setProblem(failure instanceof Error ? failure.message : 'That call could not be loaded.'); }
+  }
 
+  const minutes = minutesBetween(call.startsAt, call.endedAt);
+  const others = (detail?.participants ?? []).filter(row => row.userId !== me);
+
+  return <li className="past-call">
+    <div className="past-call-row">
+      <button className="past-call-open" aria-expanded={open} onClick={toggle}>
+        <span className="past-call-title">{call.title || 'Coffee chat'}</span>
+        <span className="past-call-meta">
+          {dayLabel(call.startsAt ?? call.createdAt)}
+          {minutes ? ` · ${minutes} min` : ''}
+          {call.kind === 'EVENT' ? ' · group call' : ' · coffee chat'}
+        </span>
+      </button>
+      {/* Read-only. Opening a finished call must never go through join, which would
+          provision a LiveKit room for a call that is over. */}
+      <Link className="button" href={`/calls/${call.id}`}>Open notes</Link>
+    </div>
+
+    {open && <div className="past-call-detail">
+      {problem && <p role="alert">{problem}</p>}
+      {!detail && !problem && <p role="status">Loading the call…</p>}
+      {detail && <>
+        <div className="past-call-people">
+          <h4>Who was there</h4>
+          <ul aria-label="People on this call">
+            {detail.participants.map(person => <li key={person.id}>
+              <span className="past-call-person">{participantName(person, me)}</span>
+              <span className="past-call-person-meta">
+                {[person.jobTitle, person.company].filter(Boolean).join(' · ')}
+                {person.role === 'host' ? ' · Host' : person.role === 'co_host' ? ' · Co-host' : ''}
+              </span>
+            </li>)}
+          </ul>
+          {others.length === 1 && others[0].userId &&
+            <Link className="past-call-profile" href={`/connections`}>See {others[0].displayName} in Connections</Link>}
+        </div>
+        <dl className="past-call-counts">
+          <div><dt>Notes</dt><dd>{detail.notes.length}</dd></div>
+          <div><dt>Commitments</dt><dd>{detail.actionItems.filter(item => !item.done).length} open</dd></div>
+          <div><dt>Messages</dt><dd>{detail.chat.messages.length}</dd></div>
+          <div><dt>Agenda</dt><dd>{detail.agendaBlocks.length} blocks</dd></div>
+        </dl>
+      </>}
+    </div>}
+  </li>;
+}
+
+export default function Schedule({workspaceId}:{workspaceId:string}) {
+  const calls = useRows<AppCall>(`workspaces/${workspaceId}/upcoming-calls`);
+  const history = useRows<MyCall>('mine', 'call');
+  // Only used to name the viewer as "You" on a past call's roster.
+  const [me, setMe] = useState('');
   useEffect(() => {
-    if (!connection) return;
-    setCalendars(undefined);
-    api<CalendarOption[]>(`workspaces/${workspaceId}/calendar-connections/${connection.id}/calendars`)
-      .then(result => setCalendars(Array.isArray(result) ? result : []))
-      .catch(() => setCalendars('error'));
-  }, [workspaceId, connection]);
+    let live = true;
+    api<{id?:string}>('me', {}, 'app')
+      .then(profile => { if (live && profile?.id) setMe(profile.id); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, []);
 
-  /** Busy intervals only. Titles and attendees of unrelated events are never requested. */
-  async function loadBusy(from: string, zone: string) {
-    if (!connection) return;
-    const start = new Date(`${from}T00:00:00`);
-    if (!Number.isFinite(start.getTime())) return;
-    const end = new Date(start.getTime() + 7 * 24 * hour);
-    try {
-      const result = await api<Busy>(`workspaces/${workspaceId}/calendar-connections/${connection.id}/availability?start=${encodeURIComponent(start.toISOString())}&end=${encodeURIComponent(end.toISOString())}`);
-      setBusy(result.busy);
-    } catch { setBusy(undefined); setProblem(`Availability for ${zone} could not be loaded, so busy times are not shown. You can still choose a time.`); }
-  }
+  const upcoming = (calls.rows ?? [])
+    .filter(row => row.startDate)
+    .sort((a, b) => (Date.parse(a.startDate ?? '') || 0) - (Date.parse(b.startDate ?? '') || 0));
 
-  const overlapsBusy = (startsAt: string, endsAt: string) =>
-    (busy ?? []).some(slot => Date.parse(startsAt) < Date.parse(slot.end) && Date.parse(endsAt) > Date.parse(slot.start));
-
-  async function confirm() {
-    if (!draft) return;
-    setWorking('create'); setProblem(''); setNotice('');
-    const body: Record<string, unknown> = {
-      purpose: draft.purpose,
-      startsAt: draft.startsAt,
-      endsAt: draft.endsAt,
-      timezone: draft.timezone,
-      attendees: draft.attendees ? draft.attendees.split(',').map(value => value.trim()).filter(Boolean) : [],
-      conference: draft.conference === 'yes',
-      engagementId: draft.engagementId,
-    };
-    if (draft.conference === 'yes') body.connectionId = connection?.id;
-    else body.physicalLocation = draft.physicalLocation;
-    try {
-      await api<Meeting>(`workspaces/${workspaceId}/meetings`, {
-        method:'POST', body: JSON.stringify(body),
-        headers:{'X-Idempotency-Key': keyFor(`meeting:${JSON.stringify(body)}`)},
-      });
-      setDraft(undefined); setNotice('The invitation was sent to your calendar provider. Its status is shown below.');
-      meetings.reload();
-    } catch (error) {
-      // A failed create is unconfirmed, never a silent success: reconcile with the server.
-      setProblem(error instanceof ApiError ? error.message : 'The meeting was not created. Nothing was sent.');
-      meetings.reload();
-    } finally { setWorking(''); }
-  }
-
-  async function act(meeting: Meeting, what: 'retry'|'cancel') {
-    setWorking(meeting.id); setProblem(''); setNotice('');
-    const path = what === 'retry' ? `workspaces/${workspaceId}/meetings/${meeting.id}/retry` : `workspaces/${workspaceId}/meetings/${meeting.id}/cancel`;
-    try {
-      await api(path, {method:'POST', body:'{}', headers:{'X-Idempotency-Key': keyFor(`${what}:${meeting.id}`)}});
-      setNotice(what === 'retry' ? 'Caffriend is trying the calendar provider again.' : 'Cancellation was sent to your calendar provider.');
-      setCancelling(undefined); meetings.reload();
-    } catch (error) {
-      setProblem(error instanceof ApiError ? error.message : 'That did not complete. The status below is the server’s.');
-      meetings.reload();
-    } finally { setWorking(''); }
-  }
-
-  const personName = (engagementId?: string | null) => {
-    const engagement = (engagements.rows ?? []).find(row => row.id === engagementId);
-    const person = (people.rows ?? []).find(row => row.id === engagement?.personId);
-    return person?.displayName;
-  };
+  /**
+   * History comes from the call itself, never from the calendar: an accepted event is a
+   * booking between two people against one availability slot, so it has no participants
+   * and a group call never produces one.
+   */
+  const past = (history.rows ?? []).filter(callFinished)
+    .sort((a, b) => (Date.parse(b.startsAt ?? b.createdAt ?? '') || 0) - (Date.parse(a.startsAt ?? a.createdAt ?? '') || 0));
 
   return <>
-    <Section title="Meetings" intro="Your booked coffee chats, using the same meeting data as Upcoming Calls." state={calls}>
-      {!calls.rows && !calls.error && <p role="status">Loading meetings…</p>}
-      {calls.error && <p role="alert">Meetings could not be loaded. <button className="secondary" onClick={calls.reload}>Try again</button></p>}
-      {calls.rows?.length===0&&<Empty>No meetings yet.</Empty>}
-      <ul className="workspace-meeting-list">{(calls.rows??[]).map(call=><li className="workspace-meeting" key={call.id}>
-        <div className="workspace-meeting-avatar">
-          {call.image?<Image className="avatar" src={call.image} alt="" width={40} height={40} unoptimized/>:<span className="avatar initials" aria-hidden="true">{(call.counterpart||'Guest').split(' ').filter(Boolean).slice(0,2).map(part=>part[0]).join('').toUpperCase()}</span>}
-        </div>
-        <div className="workspace-meeting-main">
-          <div className="workspace-meeting-title"><h3>{call.purpose||'Coffee chat'}</h3>{call.status&&<span>{call.status.replace(/_/g,' ').toLowerCase()}</span>}</div>
-          <p>{call.counterpart||'Guest recipient'}</p>
-          <dl><div><dt>When</dt><dd>{meetingTimeLabel(call.startDate, call.endDate)}</dd></div><div><dt>Where</dt><dd>{venueLabel(call)}</dd></div></dl>
-        </div>
-        <div className="workspace-meeting-actions">{call.joinUrl&&<a className="button" href={call.joinUrl} target={call.venue==='PROVIDER_CONFERENCE'?'_blank':undefined} rel={call.venue==='PROVIDER_CONFERENCE'?'noreferrer noopener':undefined}>Join</a>}</div>
-      </li>)}</ul>
+    <Section title="Upcoming calls" intro="Everything you have booked, on a calendar. Open one to join it." state={calls}>
+      {calls.error && <p role="alert">Calls could not be loaded. <button className="secondary" onClick={calls.reload}>Try again</button></p>}
+      {!calls.rows && !calls.error && <p role="status">Loading your calendar…</p>}
+      {calls.rows && <CallCalendar calls={upcoming} />}
+      {calls.rows && upcoming.length === 0 && <Empty>Nothing booked yet.</Empty>}
     </Section>
 
-    <Section title="Calendar delivery" intro="Provider delivery and cancellation controls for meetings created in this workspace." state={meetings}>
-      {notice && <p role="status" className="notice">{notice}</p>}
-      {problem && <p role="alert">{problem}</p>}
-      {(meetings.rows?.length ?? 0) === 0 && <Empty>No calendar delivery records.</Empty>}
-      <ul className="workspace-meeting-list">{(meetings.rows ?? []).map(meeting => <li className="workspace-meeting delivery" key={meeting.id}>
-        <div className="workspace-meeting-main">
-          <div className="workspace-meeting-title"><h3><Link href={`/app/${workspaceId}/meetings/${meeting.id}`}>{meeting.purpose}</Link></h3><span>{statusLabels[meeting.status]}</span></div>
-          <p>{personName(meeting.engagementId) ?? 'Linked to an engagement'}</p>
-          <dl>
-            <div><dt>When</dt><dd>{meetingTimeLabel(meeting.startsAt, meeting.endsAt)} · {meeting.timezone}</dd></div>
-            <div><dt>Where</dt><dd>{meeting.joinUrl ? <a href={meeting.joinUrl} target="_blank" rel="noreferrer noopener">Join link</a> : meeting.physicalLocation || 'No location recorded'}</dd></div>
-            {meeting.errorCode&&<div><dt>Issue</dt><dd>{meeting.errorCode}</dd></div>}
-          </dl>
-        </div>
-        <div className="workspace-meeting-actions">
-        {(meeting.status === 'FAILED' || meeting.status === 'CANCEL_FAILED') && <button disabled={!!working} onClick={() => act(meeting, 'retry')}>{working === meeting.id ? 'Retrying…' : 'Try again'}</button>}
-        {['CONFIRMED','PENDING','LOCAL'].includes(meeting.status) && (cancelling === meeting.id
-          ? <div role="group" aria-label="Confirm cancellation" className="confirm">
-              <p>Cancel this meeting? Caffriend asks your provider to cancel the invitation and notify the attendees.</p>
-              <button disabled={!!working} onClick={() => act(meeting, 'cancel')}>{working === meeting.id ? 'Cancelling…' : 'Yes, cancel the meeting'}</button>
-              <button className="secondary" onClick={() => setCancelling(undefined)}>Keep it</button>
-            </div>
-          : <button className="secondary" onClick={() => setCancelling(meeting.id)}>Cancel meeting</button>)}
-        </div>
-      </li>)}</ul>
-      <More state={meetings} />
+    <Section title="Past calls" intro="What each call produced — its notes, commitments and who was there." state={history}>
+      {history.error && <p role="alert">Past calls could not be loaded. <button className="secondary" onClick={history.reload}>Try again</button></p>}
+      {!history.rows && !history.error && <p role="status">Loading past calls…</p>}
+      {history.rows && past.length === 0 && <Empty>No calls have finished yet.</Empty>}
+      {past.length > 0 && <ul className="past-call-list" aria-label="Past calls">
+        {past.map(call => <PastCall key={call.id} call={call} me={me} />)}
+      </ul>}
     </Section>
-
-    <section className="card schedule-panel">
-      <div className="card-head"><div><h2>Schedule a meeting</h2><p className="small">Choose the relationship, time, attendees and provider account before anything is sent.</p></div></div>
-      {!connections.rows && <p role="status">Checking your calendar connections…</p>}
-      {connections.rows && usable.length === 0 && <p role="note">
-        No calendar is connected, so meetings cannot be scheduled. Everything else in this workspace still works.{' '}
-        <Link className="text-link" href={`/app/${workspaceId}/settings`}>Connect a calendar →</Link>
-      </p>}
-
-      {usable.length > 0 && !draft && <form onSubmit={event => { event.preventDefault();
-        const data = new FormData(event.currentTarget);
-        const values = Object.fromEntries([...data.entries()].map(([k, v]) => [k, String(v)]));
-        const startsAt = new Date(`${values.date}T${values.time}`);
-        if (!Number.isFinite(startsAt.getTime())) { setProblem('Choose a valid date and time.'); return; }
-        const endsAt = new Date(startsAt.getTime() + Number(values.duration) * 60000);
-        if (startsAt.getTime() <= Date.now()) { setProblem('Choose a time in the future.'); return; }
-        if (values.conference === 'no' && !values.physicalLocation.trim()) { setProblem('Give a location, or choose an online conference.'); return; }
-        setProblem('');
-        setDraft({...values, startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString()});
-      }}>
-        <div className="field">
-          <span className="field-label">Calendar to use</span>
-          <FormSelect aria-label="Calendar to use" value={connection?.id ?? ''} onValueChange={setConnectionId}
-            options={usable.map(row => ({value:row.id,label:`${providerNames[row.provider]} - ${calendarLabel(row)}`}))} />
-        </div>
-        <div className="field">
-          <span className="field-label">Engagement</span>
-          <FormSelect name="engagementId" required aria-label="Engagement" placeholder="Choose the engagement this meeting belongs to"
-            options={(engagements.rows ?? []).map(row => ({value:row.id,label:`${row.objective}${personName(row.id) ? ` — ${personName(row.id)}` : ''}`}))} />
-        </div>
-        <label>Purpose<input name="purpose" required maxLength={2000} /></label>
-        <label>Attendee emails<input name="attendees" placeholder="name@example.com, other@example.com" /><span className="small">Separate with commas. Everyone listed receives one invitation.</span></label>
-        <div className="field"><span className="field-label">Date</span>
-          <DatePicker name="date" required aria-label="Date" value={meetingDate}
-            onChange={date => { setMeetingDate(date); loadBusy(date, Intl.DateTimeFormat().resolvedOptions().timeZone); }} />
-        </div>
-        <div className="field"><span className="field-label">Start time</span>
-          <TimePicker name="time" required aria-label="Start time" value={meetingTime} onChange={setMeetingTime} />
-        </div>
-        <div className="field"><span className="field-label">Duration</span>
-          <FormSelect name="duration" aria-label="Duration" defaultValue="30"
-            options={[{value:'15',label:'15 minutes'},{value:'30',label:'30 minutes'},{value:'45',label:'45 minutes'},{value:'60',label:'1 hour'}]} />
-        </div>
-        <div className="field"><span className="field-label">Timezone</span>
-          <FormSelect name="timezone" aria-label="Timezone" defaultValue={zones()[0]} options={zones().map(zone => ({value:zone,label:zone}))} />
-        </div>
-        <fieldset>
-          <legend>Where will it happen?</legend>
-          <label className="choice"><input type="radio" name="conference" value="yes" checked={(conference ?? (canConference ? 'yes' : 'no')) === 'yes'} disabled={!canConference} onChange={() => setConference('yes')} />
-            {connection?.provider === 'GOOGLE' ? 'Google Meet' : 'Microsoft Teams'}
-            <span className="small">{canConference
-              ? 'Your provider creates the conference link with the invitation.'
-              : `This calendar does not report ${connection?.provider === 'GOOGLE' ? 'Meet' : 'Teams'} support, so an online conference cannot be created on it.`}</span>
-          </label>
-          <label className="choice"><input type="radio" name="conference" value="no" checked={(conference ?? (canConference ? 'yes' : 'no')) === 'no'} onChange={() => setConference('no')} /> A physical location</label>
-        </fieldset>
-        <label>Location<input name="physicalLocation" maxLength={1000} /><span className="small">Used only when you chose a physical location.</span></label>
-        {busy && <p className="small" role="status">{busy.length} busy period{busy.length === 1 ? '' : 's'} found in the week from your chosen date. Only busy times are read; Caffriend never sees what those events are.</p>}
-        {calendars === 'error' && <p role="alert">This calendar’s conference capability could not be checked, so an online conference is not offered.</p>}
-        <button>Review before sending</button>
-      </form>}
-
-      {draft && <div role="group" aria-label="Confirm this meeting" className="confirm">
-        <h3>Send this invitation?</h3>
-        <dl>
-          <dt>Account</dt><dd>{accountLabel(connection)}</dd>
-          <dt>Calendar</dt><dd>{calendarLabel(connection)}{connection ? ` (${providerNames[connection.provider]})` : ''}</dd>
-          <dt>Purpose</dt><dd>{draft.purpose}</dd>
-          <dt>When</dt><dd>{new Date(draft.startsAt).toLocaleString()} – {new Date(draft.endsAt).toLocaleTimeString()}</dd>
-          <dt>Timezone</dt><dd>{draft.timezone}</dd>
-          <dt>Attendees</dt><dd>{draft.attendees?.trim() || 'No attendees — only your own calendar'}</dd>
-          <dt>Conference</dt><dd>{draft.conference === 'yes' ? (connection?.provider === 'GOOGLE' ? 'A Google Meet link is created by Google' : 'A Microsoft Teams link is created by Outlook') : draft.physicalLocation}</dd>
-          <dt>Invitations</dt><dd>Your provider sends exactly one invitation to each attendee above. Caffriend does not email them separately.</dd>
-        </dl>
-        {overlapsBusy(draft.startsAt, draft.endsAt) && <p role="alert">This overlaps a busy period on the selected calendar. You can still send it.</p>}
-        <button disabled={working === 'create'} onClick={confirm}>{working === 'create' ? 'Sending…' : 'Send the invitation'}</button>
-        <button className="secondary" onClick={() => setDraft(undefined)}>Go back and change it</button>
-      </div>}
-    </section>
   </>;
 }

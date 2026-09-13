@@ -10,8 +10,8 @@ async function parseApiResponse<T>(response: Response): Promise<T> {
   return result as T;
 }
 
-export async function api<T>(path:string, options:RequestInit={}):Promise<T> {
-  const response=await fetch(`/api/crm/${path}`,{...options,headers:{'Content-Type':'application/json','X-Caffriend-Request':'1',...options.headers},cache:'no-store'});
+export async function api<T>(path:string, options:RequestInit={}, base:'crm'|'app'|'call'='crm'):Promise<T> {
+  const response=await fetch(`/api/${base}/${path}`,{...options,headers:{'Content-Type':'application/json','X-Caffriend-Request':'1',...options.headers},cache:'no-store'});
   if(response.status===401){window.location.replace(`/login?returnTo=${encodeURIComponent(safeReturn(window.location.pathname))}`);throw new ApiError(401,'Sign in required');}
   // Not everything that answers this fetch is this app's API: a dev-server error
   // page, a proxy, or a stale build all answer in HTML. Parsing that as JSON

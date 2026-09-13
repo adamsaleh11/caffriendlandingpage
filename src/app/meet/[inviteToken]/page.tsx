@@ -1,5 +1,6 @@
 import Meeting from '@/components/meet/Meeting';
 import '@livekit/components-styles';
+import '@/app/calls/[id]/call.css';
 import '../meet.css';
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Coffee chat · Caffriend', robots: { index: false, follow: false }, referrer: 'no-referrer' };

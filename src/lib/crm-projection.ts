@@ -25,7 +25,7 @@ const fields: Record<CrmResource, string[]> = {
   'source-claims': [...common, 'artifactId', 'conversationId', 'personId', 'engagementId', 'targetField', 'extractedValue', 'locator', 'confidence', 'rightsState', 'permittedUses'],
   conversations: [...common, 'provider', 'providerConversationId', 'title', 'durableUrl'],
   agents: [...common, 'name', 'status'],
-  meetings: [...common, 'purpose', 'startsAt', 'endsAt', 'timezone', 'status', 'provider', 'joinUrl', 'physicalLocation', 'agenda', 'engagementId', 'organizerId', 'connectionId', 'errorCode'],
+  meetings: [...common, 'purpose', 'startsAt', 'endsAt', 'timezone', 'status', 'provider', 'joinUrl', 'physicalLocation', 'agenda', 'engagementId', 'organizerId', 'connectionId', 'errorCode', 'groupCallId'],
 };
 
 export const isResource = (value: string): value is CrmResource => (crmResources as readonly string[]).includes(value);
