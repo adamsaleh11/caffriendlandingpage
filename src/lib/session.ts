@@ -44,7 +44,6 @@ export function sameOrigin(request: Request) {
 
 export const consentCookie = 'caffriend_consent';
 export const pendingCookie = 'caffriend_calendar_pending';
-export const directPendingCookie = 'caffriend_direct_calendar_pending';
 export const feedbackCookie = 'caffriend_calendar_result';
 export const fiveMinutes = 300;
 

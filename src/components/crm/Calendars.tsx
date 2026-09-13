@@ -93,7 +93,7 @@ export default function Calendars({workspaceId}:{workspaceId:string}) {
   async function connect(provider:Provider) {
     setBusy(provider);setNotice(undefined);
     try{
-      const redirect=await startCrmOAuth(`/workspaces/${workspaceId}/calendar-connections/${provider}/connect`,provider,workspaceId);
+      const redirect=await startCrmOAuth(`/workspaces/${workspaceId}/calendar-connections/${provider}/connect`);
       window.location.assign(redirect);
     }catch(problem){setError(problem instanceof ApiError?problem.message:'Unable to start the connection.');setBusy(undefined);}
   }
@@ -102,7 +102,7 @@ export default function Calendars({workspaceId}:{workspaceId:string}) {
   async function connectMail(id:string) {
     setBusy(id);setNotice(undefined);
     try{
-      const redirect=await startCrmOAuth(`/workspaces/${workspaceId}/mail-connections/${id}/connect`,'GOOGLE_MAIL',workspaceId);
+      const redirect=await startCrmOAuth(`/workspaces/${workspaceId}/mail-connections/${id}/connect`);
       window.location.assign(redirect);
     }catch(problem){setError(problem instanceof ApiError?problem.message:'Mailbox permission could not be started.');setBusy(undefined);}
   }

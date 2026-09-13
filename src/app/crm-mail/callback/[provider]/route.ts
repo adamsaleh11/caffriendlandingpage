@@ -1,15 +1,10 @@
 import { NextResponse } from 'next/server';
-import { getSession, readSealed, setSealed, clearCookie, hashState, pendingCookie, directPendingCookie, feedbackCookie, fiveMinutes, webOrigin, type PendingFlows } from '@/lib/session';
+import { getSession, readSealed, setSealed, clearCookie, hashState, pendingCookie, feedbackCookie, fiveMinutes, webOrigin, type PendingFlows } from '@/lib/session';
 import { backend } from '@/lib/backend';
 import { uuidPattern } from '@/lib/contracts';
 
 const headers = {'Cache-Control':'no-store', 'Referrer-Policy':'no-referrer'};
 const to = (path: string) => NextResponse.redirect(new URL(path, webOrigin()), {status:303, headers});
-function readDirectPending(request: Request): PendingFlows | null {
-  const direct = request.headers.get('cookie')?.split(';').map(item=>item.trim()).find(item=>item.startsWith(`${directPendingCookie}=`))?.slice(directPendingCookie.length+1);
-  if (!direct) return null;
-  try { return JSON.parse(decodeURIComponent(direct)) as PendingFlows; } catch { return null; }
-}
 
 /**
  * The mailbox grant returns here rather than to the API, so the person ends up back
@@ -25,15 +20,13 @@ export async function GET(request: Request, {params}:{params:Promise<{provider:s
   const code = query.get('code');
   const denied = query.get('error');
 
-  const directPending = readDirectPending(request);
-  const pending = [...((await readSealed<PendingFlows>(pendingCookie))?.flows ?? []), ...(directPending?.flows ?? [])];
+  const pending = (await readSealed<PendingFlows>(pendingCookie))?.flows ?? [];
   const cutoff = Date.now() - fiveMinutes * 1000;
   const hash = state ? await hashState(state) : null;
   const flow = hash ? pending.find(item => item.stateHash === hash && item.created > cutoff) : undefined;
   const remaining = pending.filter(item => item !== flow && item.created > cutoff);
   if (remaining.length) await setSealed(pendingCookie, {flows: remaining}, fiveMinutes);
   else await clearCookie(pendingCookie);
-  await clearCookie(directPendingCookie);
 
   // A mail state must not be redeemable through the calendar callback, or the reverse.
   if (!flow || provider !== 'GOOGLE' || flow.provider !== 'GOOGLE_MAIL' || !uuidPattern.test(flow.workspaceId)) {

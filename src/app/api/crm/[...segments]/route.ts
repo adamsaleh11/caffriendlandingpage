@@ -349,7 +349,14 @@ function normalizeProviderCallback(value: string | null, expectedPath: string) {
 
   let apiOrigin: string;
   try { apiOrigin = new URL(process.env.CAFFRIEND_API_ORIGIN ?? '').origin; } catch { return null; }
-  if (callback.origin !== apiOrigin || callback.pathname !== expectedPath || callback.search || callback.hash || callback.username || callback.password)
+  // The backend registers its mail callback under its own outreach path, which
+  // is spelled differently from the one this app answers on. Both name the same
+  // backend-owned callback, so both are recognised before rewriting; anything
+  // else is not the backend's redirect and is refused.
+  const backendPaths = expectedPath === '/crm-mail/callback/GOOGLE'
+    ? [expectedPath, '/crm-outreach/mail-callback/GOOGLE']
+    : [expectedPath];
+  if (callback.origin !== apiOrigin || !backendPaths.includes(callback.pathname) || callback.search || callback.hash || callback.username || callback.password)
     return null;
   return frontend.toString();
 }

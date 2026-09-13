@@ -691,7 +691,17 @@
 .crm .slot-row { display: grid; grid-template-columns: minmax(9rem,1fr) minmax(7rem,.7fr) minmax(7rem,.65fr) auto; gap: 10px; align-items: end; }
 .crm .slot-row label { margin: 0; }
 .crm .slot-row button { margin-bottom: 1px; }
-.crm .email-preview { margin-top: 24px; border-top: 1px solid var(--line); padding-top: 20px; }
+/* The preview is step two of the composer, not a tail appended under the form:
+   the form unmounts while it is up, so it opens at the top of the dialog and
+   its actions stay pinned to the bottom instead of hiding below the fold. */
+.crm .email-preview { display: grid; gap: 14px; }
+.crm .preview-head { display: grid; gap: 10px; justify-items: start; }
+.crm .preview-head h3 { margin: 0; }
+.crm .preview-head p { margin: 4px 0 0; color: var(--muted); }
+.crm button.link.back { padding: 0; font-weight: 600; }
+.crm .preview-actions { position: sticky; bottom: -28px; margin: 0 -28px -28px; padding: 14px 28px; background: #fff; border-top: 1px solid var(--line); box-shadow: 0 -8px 20px rgba(31,21,15,0.06); }
+@media (max-width: 800px) { .crm .preview-actions { bottom: -22px; margin: 0 -22px -22px; padding: 12px 22px; } }
+.crm .compose-steps { margin-bottom: 18px; }
 .crm .email-preview dl { display: grid; grid-template-columns: auto minmax(0,1fr); gap: 6px 14px; font-size: .9rem; }
 .crm .email-preview dt { font-weight: 700; }
 .crm .email-preview dd { margin: 0; overflow-wrap: anywhere; }

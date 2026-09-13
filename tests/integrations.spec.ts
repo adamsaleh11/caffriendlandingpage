@@ -153,7 +153,9 @@ test('a backend redirect using the wrong calendar callback is refused before Goo
   await signedIn(page);
   await page.getByRole('switch',{name:'Google Calendar calendar'}).click();
   await expect(page).toHaveURL(settings);
-  await expect(page.getByText(/OAuth is misconfigured/)).toBeVisible();
+  // The refusal now happens server-side, where the backend origin is known;
+  // what matters is that it is refused and Google is never reached.
+  await expect(page.getByText(/This provider is unavailable right now/)).toBeVisible();
   const backendState = await (await request.get(backend)).json();
   expect((backendState.calls ?? []).some((call:{path:string})=>call.path.startsWith('/crm-calendar/callback'))).toBe(false);
 });
