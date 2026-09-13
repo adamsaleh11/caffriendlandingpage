@@ -63,3 +63,17 @@ export function completeness(person: Person) {
 
 /** Fields the backend only accepts once the CRM field registry update is deployed. */
 export const extendedFields = ['sourceUrl', 'discoveryReason'] as const;
+
+/**
+ * "What to talk about" is one text field on the backend, but people write a list
+ * into it. Splitting on line breaks and on the dashes and bullets they type by
+ * hand lets the screen show each point on its own without a schema change.
+ */
+export const talkingPoints = (value: string | null | undefined): string[] =>
+  String(value ?? '')
+    .split(/\r?\n|(?:^|\s)[-•*]\s+/)
+    .map(point => point.trim().replace(/^[-•*]\s*/, '').trim())
+    .filter(Boolean);
+
+/** The same list written back the way it is read: one point per line. */
+export const talkingPointsText = (points: string[]) => points.map(point => point.trim()).filter(Boolean).join('\n');

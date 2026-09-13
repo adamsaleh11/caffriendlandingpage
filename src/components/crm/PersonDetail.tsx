@@ -6,7 +6,7 @@ import { api, ApiError } from '@/lib/api';
 import { statusLabels, type Note, type Person, type Pipeline as PipelineRecord, type Task } from '@/lib/contracts';
 import { useKeys, useRows, Empty, Evidence, Rights } from './common';
 import { provenanceFor, timelineFor, useAllStages, useWorkspaceData, type TimelineEntry } from './workspace-data';
-import { completeness, sourceLabel, type ProfileField } from './person-profile';
+import { completeness, sourceLabel, talkingPoints, talkingPointsText, type ProfileField } from './person-profile';
 import StateCard from './StateCard';
 import EngagementForm from './EngagementForm';
 import Relationship from './Relationship';
@@ -119,7 +119,7 @@ export default function PersonDetail({workspaceId, personId}:{workspaceId:string
         <h1>{person.displayName}</h1>
         <p className="small">{[person.title, organization?.name, person.location].filter(Boolean).join(' · ') || 'No role or organization recorded yet.'}</p>
         <p className="chips">
-          {person.email && <a className="chip" href={`mailto:${person.email}`}>✉ {person.email}</a>}
+          {person.email && <a className="chip" href={`mailto:${person.email}`} title={person.email}><span className="chip-icon" aria-hidden="true">✉</span>{person.email}</a>}
           {/* Not a tel: link. That hands the number to the OS dialler — FaceTime on
             a Mac — so glancing at a profile is one stray click from calling
             someone. The number is here to be read and taken away. */}
@@ -128,8 +128,8 @@ export default function PersonDetail({workspaceId, personId}:{workspaceId:string
               setProblem('');
               try { await navigator.clipboard.writeText(person.phone!); setNotice(`Phone number copied: ${person.phone}`); }
               catch { setNotice(`Phone number: ${person.phone}`); }
-            }}>✆ {person.phone}</button>}
-          {person.sourceUrl && <a className="chip" href={person.sourceUrl} target="_blank" rel="noreferrer noopener">↗ Profile</a>}
+            }}><span className="chip-icon" aria-hidden="true">✆</span>{person.phone}</button>}
+          {person.sourceUrl && <a className="chip" href={person.sourceUrl} target="_blank" rel="noreferrer noopener"><span className="chip-icon" aria-hidden="true">↗</span>Profile</a>}
         </p>
       </div>
       <div className="person-head-actions">
@@ -170,7 +170,7 @@ export default function PersonDetail({workspaceId, personId}:{workspaceId:string
         ? <p className="small">Everything worth knowing before a chat is recorded.</p>
         : <p className="chips">
             {progress.missing.map(field => <button key={field.name} type="button" className="chip add"
-              onClick={() => { setEditing({startAt: field.name}); setNotice(''); }}>+ {field.label}</button>)}
+              onClick={() => { setEditing({startAt: field.name}); setNotice(''); }}><span className="chip-icon" aria-hidden="true">+</span>{field.label}</button>)}
           </p>}
     </section>
 
@@ -205,12 +205,8 @@ export default function PersonDetail({workspaceId, personId}:{workspaceId:string
             : <p className="small">Nothing recorded yet.</p>}
         </div>
       </div>
-      <div className="talking-points">
-        <p className="eyebrow">What to talk about</p>
-        {person.discoveryReason
-          ? <p>{person.discoveryReason}</p>
-          : <p className="small">Nothing yet. <button type="button" className="link" onClick={() => setEditing({startAt: 'discoveryReason'})}>Add what to talk about</button> and it will be here before the call.</p>}
-      </div>
+      <TalkingPoints workspaceId={workspaceId} person={person}
+        onSaved={row => { setPerson(row); setProblem(''); }} onProblem={setProblem} />
     </section>
 
     <section className="card">
@@ -410,4 +406,54 @@ function Timeline({entries, loading}:{entries:TimelineEntry[]; loading:boolean})
     </ol>
     <p className="small">Changes are shown as they were recorded. The backend does not store the previous and new values of an edit, so this history does not reconstruct them.</p>
   </section>;
+}
+
+
+/**
+ * The talking points, one per line in the record and one card each on screen.
+ *
+ * People were already typing lists into a single box — dashes, line breaks — and
+ * reading them back as a paragraph. Each point gets its own row here, and adding
+ * or removing one writes the whole list back to the same field.
+ */
+function TalkingPoints({workspaceId, person, onSaved, onProblem}:{
+  workspaceId: string; person: Person; onSaved: (person: Person) => void; onProblem: (message: string) => void;
+}) {
+  const points = talkingPoints(person.discoveryReason);
+  const [draft, setDraft] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function write(next: string[]) {
+    setSaving(true); onProblem('');
+    try {
+      const row = await editRecord<Person>(workspaceId, 'people', person.id, {discoveryReason: talkingPointsText(next) || null});
+      onSaved(row?.id ? row : {...person, discoveryReason: talkingPointsText(next)});
+    } catch (error) { onProblem(problemText(error, 'That talking point did not save.')); }
+    finally { setSaving(false); }
+  }
+
+  const add = async () => {
+    const point = draft.trim();
+    if (!point || saving) return;
+    setDraft('');
+    await write([...points, point]);
+  };
+
+  return <div className="talking-points">
+    <p className="eyebrow">What to talk about</p>
+    {points.length
+      ? <ul className="point-list">{points.map((point, index) => <li key={`${index}:${point}`} className="point">
+          <span className="point-dot" aria-hidden="true">{index + 1}</span>
+          <span className="point-text">{point}</span>
+          <button type="button" className="point-remove" disabled={saving}
+            aria-label={`Remove talking point: ${point}`}
+            onClick={() => write(points.filter((_, at) => at !== index))}>×</button>
+        </li>)}</ul>
+      : <p className="small">Nothing yet. Add the things you want in front of you five minutes before the call.</p>}
+    <form className="point-add" onSubmit={event => { event.preventDefault(); void add(); }}>
+      <input value={draft} maxLength={2000} onChange={event => setDraft(event.target.value)}
+        aria-label="Add a talking point" placeholder="Add a talking point…" />
+      <button type="submit" className="secondary" disabled={saving || !draft.trim()}>{saving ? 'Saving…' : 'Add'}</button>
+    </form>
+  </div>;
 }

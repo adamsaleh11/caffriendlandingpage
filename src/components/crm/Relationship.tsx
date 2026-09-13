@@ -10,6 +10,7 @@ import OutreachComposer from './OutreachComposer';
 import Modal from './Modal';
 import { ArchiveButton, PermanentDeleteButton, editRecord, problemText } from './record-actions';
 import { EngagementEditor, NoteEditor, TaskEditor } from './RecordEditors';
+import { talkingPoints } from './person-profile';
 import {FormSelect} from '@/components/ui/form-select';
 import {DatePicker} from '@/components/ui/date-picker';
 
@@ -189,6 +190,8 @@ export default function Relationship({
 
   /** Where this sits in its own pipeline, shown the same way a profile's progress is. */
   const statusWord = engagement.status.replace(/_/g, ' ').toLowerCase();
+  /** People type next actions as a dashed list; show them as one, not as raw text. */
+  const nextActions = talkingPoints(engagement.nextAction);
 
   return <article className="engagement-detail">
     <header className="engagement-head">
@@ -196,15 +199,21 @@ export default function Relationship({
         <h3>{engagement.objective}</h3>
         {/* The facts about this effort, each as its own chip rather than one run-on line. */}
         <p className="chips static">
-          <span className="chip solid">{stage?.name ?? 'Stage unavailable'}{stage?.archived ? ' (retired step)' : ''}</span>
+          {stage
+            ? <span className="chip solid">{stage.name}{stage.archived ? ' (retired step)' : ''}</span>
+            : <span className="chip warn" title="This engagement points at a pipeline step this workspace no longer has. Choose a stage below.">Stage unavailable</span>}
           <span className="chip">{statusWord}</span>
           <span className="chip">{engagement.ownerId ? 'Owner recorded' : 'No owner'}</span>
           <span className="chip">Started {new Date(engagement.createdAt).toLocaleDateString()}</span>
         </p>
       </div>
       {!recording && <div className="engagement-head-actions">
+        {/* What this engagement is asking for comes first; the ways to end it sit
+          apart at the end, so archiving is never the nearest button. */}
+        <button onClick={() => { setRecording(true); setNotice(''); }}>{step?.action ?? 'Record what happened'}</button>
         {engagement.status !== 'CLOSED' && <button className="secondary" onClick={() => { setInviting(true); setNotice(''); }}>Send coffee chat invite</button>}
         <button className="secondary" onClick={() => { setEditingEngagement(true); setNotice(''); setProblem(''); }}>Edit engagement</button>
+        <span className="action-split" aria-hidden="true" />
         <ArchiveButton workspaceId={workspaceId} resource="engagements" id={engagement.id} what="engagement"
           name={engagement.objective} className="secondary"
           keeps={person ? `${person.displayName} stays in this workspace, along with their other engagements.` : undefined}
@@ -215,7 +224,6 @@ export default function Relationship({
           warning="This also removes meetings, notes, follow-ups and timeline activity for this engagement."
           onDeleted={() => { setNotice('Engagement deleted.'); onChanged(); }}
           onProblem={setProblem} />
-        <button onClick={() => { setRecording(true); setNotice(''); }}>{step?.action ?? 'Record what happened'}</button>
       </div>}
     </header>
 
@@ -237,8 +245,8 @@ export default function Relationship({
     <div className="engagement-state">
       <div className="field">
         <span className="field-label" id={`detail-stage-label-${engagement.id}`}>Stage</span>
-        <FormSelect id={`detail-stage-${engagement.id}`} aria-label="Stage" value={engagement.stageId} disabled={pending}
-          onValueChange={moveTo}
+        <FormSelect id={`detail-stage-${engagement.id}`} aria-label="Stage" value={stage ? engagement.stageId : ''} disabled={pending}
+          placeholder="Choose a stage" onValueChange={moveTo}
           options={[...open.map(option => ({value:option.id,label:option.name})), ...(stage?.archived ? [{value:stage.id,label:`${stage.name} (retired)`}] : [])]} />
       </div>
       <div className="field">
@@ -249,7 +257,9 @@ export default function Relationship({
       </div>
       <div className="next">
         <p className="eyebrow">Next action</p>
-        {engagement.nextAction ? <p>{engagement.nextAction}</p> : <p className="small">None recorded.</p>}
+        {nextActions.length
+          ? <ul className="point-list plain-points">{nextActions.map((action, at) => <li key={at}>{action}</li>)}</ul>
+          : <p className="small">None recorded.</p>}
       </div>
     </div>
 

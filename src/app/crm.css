@@ -60,9 +60,17 @@
 .crm .connections {margin-top:30px;}
 .crm .connection {border-top:1px solid var(--line);padding-top:24px;margin-top:24px;}
 .crm h3 {font-size:1rem;font-weight:700;margin:0 0 8px;}
-.crm .connection-detail dl {display:grid;grid-template-columns:minmax(120px,auto) minmax(0,1fr);gap:8px 20px;margin:12px 0 20px;font-size:.9rem;}
-.crm .connection-detail dt {font-weight:700;}
-.crm .connection-detail dd {margin:0;color:var(--muted);overflow-wrap:anywhere;}
+.crm .connection-detail {margin-top:14px;}
+/* The status of a connection is one sentence about what it is doing, not a
+   table of internals. A healthy connection should read as reassurance and take
+   up almost no room; only a broken one earns attention. */
+.crm .connection-line {display:flex;align-items:baseline;gap:10px;margin:0;font-size:.9rem;color:var(--muted);overflow-wrap:anywhere;}
+.crm .connection-line strong {color:var(--ink);font-weight:600;}
+.crm .connection-dot {flex:none;width:7px;height:7px;border-radius:50%;background:#16a34a;transform:translateY(-1px);}
+.crm .connection-line.warn {color:var(--ink);}
+.crm .connection-line.warn .connection-dot {background:#d97706;}
+.crm .link-button {background:none;border:0;padding:0;margin-top:10px;color:var(--brand-deep);font-size:.85rem;font-weight:600;text-decoration:underline;text-underline-offset:3px;cursor:pointer;width:auto;}
+.crm .link-button:hover {opacity:.75;}
 .crm .connection button {margin-right:10px;margin-top:10px;}
 .crm .connection form>button {width:auto;}
 .crm .confirm {background:var(--warm);border-radius:12px;padding:18px;margin-top:14px;}
@@ -565,10 +573,20 @@
 .crm .person-head p { margin: 0; }
 .crm .person-head-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 
-.crm .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px !important; }
-.crm .chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: white; font-size: 0.8rem; font-weight: 600; color: var(--ink); cursor: pointer; }
+.crm .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px !important; align-items: center; }
+.crm .chip {
+  display: inline-flex; align-items: center; gap: 7px; max-width: 100%;
+  padding: 5px 12px 5px 10px; border-radius: 999px; border: 1px solid var(--line);
+  background: white; font-size: 0.78rem; font-weight: 600; line-height: 1.5; color: var(--ink);
+  text-decoration: none; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+/* The leading glyph is a label, not a second thing to read: it stays quiet. */
+.crm .chip > .chip-icon { color: var(--muted); font-weight: 400; font-size: 0.85em; flex: none; }
 .crm .chip.add { border-style: dashed; color: var(--brand-deep); }
-.crm .chip:hover { background: var(--brand-tint); }
+.crm .chip:hover { background: var(--brand-tint); border-color: var(--brand-deep); box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.crm .chip:hover > .chip-icon { color: var(--brand-deep); }
+.crm .chip:active { transform: translateY(1px); }
 .crm button.link { background: none; padding: 0; color: var(--brand-deep); text-decoration: underline; text-underline-offset: 3px; font: inherit; font-weight: 600; }
 
 .crm .card + .card { margin-top: 20px; }
@@ -584,6 +602,28 @@
 .crm .talking-points { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }
 .crm .talking-points .eyebrow { margin: 0 0 6px; color: var(--muted); }
 .crm .talking-points p { margin: 0; }
+.crm .point-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
+.crm .point {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 10px 10px 12px; border: 1px solid var(--line); border-radius: 12px;
+  background: white;
+}
+.crm .point-dot {
+  flex: none; width: 20px; height: 20px; margin-top: 1px; border-radius: 999px;
+  background: var(--brand-tint); color: var(--brand-deep);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 0.7rem; font-weight: 700;
+}
+.crm .point-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.crm .point-remove {
+  flex: none; width: 24px; height: 24px; padding: 0; border-radius: 999px;
+  border: 1px solid transparent; background: transparent; color: var(--muted);
+  font-size: 1rem; line-height: 1; cursor: pointer;
+}
+.crm .point-remove:hover:not(:disabled) { background: var(--brand-tint); color: var(--brand-deep); }
+.crm .point-add { display: flex; gap: 8px; margin-top: 10px; }
+.crm .point-add input { flex: 1; min-width: 0; margin: 0; }
+.crm .point-add button { flex: none; }
 .crm ul.plain { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; font-size: 0.9rem; color: var(--muted); }
 
 .crm .two-up { display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: 28px; }
@@ -637,16 +677,25 @@
 .crm .chips.static .chip { cursor: default; }
 .crm .chips.static .chip:hover { background: white; }
 .crm .chip.solid { background: var(--brand-tint); border-color: transparent; color: var(--brand-deep); }
+/* A stage the workspace no longer has is a gap to fill, not a value to read. */
+.crm .chip.warn { background: #fff6ed; border-color: #f0c9a4; color: #8a4a12; cursor: help; }
+.crm .chips.static .chip.warn:hover { background: #fff6ed; }
 .crm .chips.static .chip.solid:hover { background: var(--brand-tint); }
 
 .crm .engagement-detail .intro { margin: 0; }
 .crm .engagement-detail .intro .quiet { color: var(--muted); }
 
-.crm .engagement-state { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 16px; align-items: start; }
+.crm .engagement-state { display: grid; grid-template-columns: minmax(9rem, 14rem) minmax(9rem, 14rem) minmax(12rem, 1fr); gap: 16px 24px; align-items: start; }
+@media (max-width: 720px) { .crm .engagement-state { grid-template-columns: minmax(0, 1fr); } }
 .crm .engagement-state .field select { width: 100%; }
 .crm .engagement-state .next { display: grid; gap: 6px; align-content: start; }
 .crm .engagement-state .next .eyebrow { margin: 0; color: var(--muted); }
 .crm .engagement-state .next p { margin: 0; }
+.crm .plain-points { gap: 6px; }
+.crm .engagement-state .plain-points li {
+  padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px;
+  background: white; font-size: 0.9rem; overflow-wrap: anywhere;
+}
 
 .crm .record-form { display: grid; gap: 16px; border: 1px solid var(--line); border-radius: 12px; padding: 20px; background: var(--warm); }
 .crm .record-form .record-title { margin: 0; font-size: 1rem; text-transform: none; letter-spacing: 0; opacity: 1; }
@@ -673,10 +722,14 @@
  * ------------------------------------------------------------------------- */
 .crm .two-up > div { display: flex; flex-direction: column; }
 .crm .two-up > div > h3 { margin-top: 0; }
-.crm .two-up .empty-note { min-height: 4.6rem; margin: 0; }
+.crm .two-up .empty-note { min-height: 0; margin: 0; padding: 0.85rem 1rem; font-size: 0.9rem; }
+.crm .engagement-detail > .empty-note { padding: 0.85rem 1rem; font-size: 0.9rem; }
 .crm .two-up .quick-add { margin-top: auto; padding-top: 14px; }
 
-.crm .engagement-head-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.crm .engagement-head-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+/* Pushes archive and delete away from the actions people take every day. */
+.crm .engagement-head-actions .action-split { flex: 1 1 12px; min-width: 12px; }
+@media (max-width: 720px) { .crm .engagement-head-actions .action-split { flex-basis: 100%; height: 1px; background: var(--line); margin: 4px 0; } }
 .crm .outreach-form { display: grid; gap: 12px; }
 /* The grid gap alone spaces these rows: the stock label/fieldset margins would
    stack on top of it and double the rhythm. */

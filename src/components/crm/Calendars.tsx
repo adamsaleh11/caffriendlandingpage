@@ -171,32 +171,42 @@ export default function Calendars({workspaceId}:{workspaceId:string}) {
             <button className="secondary" onClick={()=>setConfirming(undefined)}>Keep permission</button>
           </div>}
         {live.length===0&&<p>Not connected.</p>}
-        {live.map(connection=><div key={connection.id} className="connection-detail">
-          <dl>
-            <dt>Account</dt><dd>{connection.accountIdentifier || 'Account identifier unavailable'}</dd>
-            <dt>Calendar</dt><dd>{connection.status==='RECONNECT_REQUIRED'?'Reconnect required':connection.status==='SELECT_CALENDAR'?'Selection needed':connection.calendarName || connection.calendarId || 'Selection needed'}</dd>
-            {/* Granted scopes are a pending backend projection addition. */}
-            <dt>Granted access</dt><dd>{connection.scopes?.length?connection.scopes.join(', '):'Granted access unavailable'}</dd>
-            <dt>Last error</dt><dd>{connection.errorCode?`${connection.errorCode} — reconnect to resolve this.`:'No error reported. This does not confirm overall provider health.'}</dd>
-          </dl>
-          {connection.status==='RECONNECT_REQUIRED'&&<button disabled={!configured||busy===provider} onClick={()=>connect(provider)}>{busy===provider?'Opening…':'Reconnect calendar'}</button>}
-          {connection.status==='SELECT_CALENDAR'&&(
-            calendars[connection.id]===undefined
-              ? <button onClick={()=>loadCalendars(connection)}>Choose a calendar</button>
-              : calendars[connection.id]==='error'
-                ? <p role="alert">Unable to load calendars. <button className="secondary" onClick={()=>loadCalendars(connection)}>Try again</button></p>
-                : <form onSubmit={async event=>{ event.preventDefault();
-                    const calendarId=String(new FormData(event.currentTarget).get('calendarId')||'');
-                    await act(connection.id,()=>api<CalendarConnection[]>(`workspaces/${workspaceId}/calendar-connections/${connection.id}/select`,{method:'POST',body:JSON.stringify({calendarId}),headers:{'X-Idempotency-Key':keyFor(`select:${connection.id}:${calendarId}`)}}));
-                  }}>
-                    <div className="field">
-                      <span className="field-label">Calendar to use</span>
-                      <FormSelect name="calendarId" required aria-label="Calendar to use" placeholder="Select a calendar" options={(calendars[connection.id] as CalendarOption[]).filter(item=>item.writable!==false).map(item=>({value:item.id,label:item.name||item.id}))} />
-                    </div>
-                    <button disabled={busy===connection.id}>{busy===connection.id?'Saving…':'Save calendar'}</button>
-                  </form>
-          )}
-        </div>)}
+        {live.map(connection=>{
+          const needsReconnect=connection.status==='RECONNECT_REQUIRED';
+          const calendar=connection.calendarName || connection.calendarId;
+          const picking=calendars[connection.id]!==undefined;
+          return <div key={connection.id} className="connection-detail">
+            {/* One line, and only what someone can act on. A calendar is chosen
+                automatically when the account is connected, so the common case
+                has nothing to report beyond which calendar is in use. */}
+            <p className={`connection-line ${needsReconnect?'warn':''}`}>
+              <span className="connection-dot" aria-hidden="true" />
+              {needsReconnect
+                ? <>Access to this calendar expired. Reconnect to start adding meetings again.</>
+                : <>Meetings are added to <strong>{calendar||'your default calendar'}</strong>{connection.accountIdentifier?<> · {connection.accountIdentifier}</>:null}</>}
+            </p>
+            {needsReconnect
+              ? <button disabled={!configured||busy===provider} onClick={()=>connect(provider)}>{busy===provider?'Opening…':'Reconnect calendar'}</button>
+              : picking
+                ? calendars[connection.id]==='error'
+                  ? <p role="alert">Unable to load your calendars. <button className="secondary" onClick={()=>loadCalendars(connection)}>Try again</button></p>
+                  : <form onSubmit={async event=>{ event.preventDefault();
+                      const calendarId=String(new FormData(event.currentTarget).get('calendarId')||'');
+                      await act(connection.id,()=>api<CalendarConnection[]>(`workspaces/${workspaceId}/calendar-connections/${connection.id}/select`,{method:'POST',body:JSON.stringify({calendarId}),headers:{'X-Idempotency-Key':keyFor(`select:${connection.id}:${calendarId}`)}}));
+                      setCalendars(current=>{const next={...current};delete next[connection.id];return next;});
+                    }}>
+                      <div className="field">
+                        <span className="field-label">Calendar to use</span>
+                        <FormSelect name="calendarId" required aria-label="Calendar to use" placeholder="Select a calendar" options={(calendars[connection.id] as CalendarOption[]).filter(item=>item.writable!==false).map(item=>({value:item.id,label:item.name||item.id}))} />
+                      </div>
+                      <button disabled={busy===connection.id}>{busy===connection.id?'Saving…':'Use this calendar'}</button>
+                      <button type="button" className="secondary" onClick={()=>setCalendars(current=>{const next={...current};delete next[connection.id];return next;})}>Cancel</button>
+                    </form>
+                  // Changing the calendar is a rare correction, not a step in
+                  // setting one up, so it is offered quietly rather than asked.
+                  : <button className="link-button" onClick={()=>loadCalendars(connection)}>Use a different calendar</button>}
+          </div>;
+        })}
       </article>;
     })}
   </section>;
