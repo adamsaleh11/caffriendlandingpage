@@ -226,27 +226,68 @@ export function Connections() {
 
 export function Calls() {
   const {data, error, reload} = useApp<AppCall[]>('calls?type=1');
-  const columns: Column<AppCall>[] = [
-    {key:'time', header:'When', sort: row => row.startDate,
-      cell: row => row.startDate
-        ? `${new Date(row.startDate).toLocaleString()}${row.endDate ? ` – ${new Date(row.endDate).toLocaleTimeString()}` : ''}`
-        : 'Not scheduled'},
-    {key:'who', header:'With', sort: row => row.counterpart, cell: row => row.counterpart || '—'},
-    {key:'format', header:'Venue', sort: row => row.venue || row.format, cell: row => row.venue === 'CAFFRIEND_LIVEKIT' ? 'Caffriend call' : row.venue === 'PROVIDER_CONFERENCE' ? 'Google Meet' : row.physicalLocation || row.format || 'Not specified'},
-    {key:'notes', header:'Notes', cell: row => row.notes || '—'},
-  ];
+  const sorted = data ? [...data].sort((a, b) => (Date.parse(a.startDate ?? '') || 0) - (Date.parse(b.startDate ?? '') || 0)) : undefined;
   return <>
     <h1>Upcoming calls</h1>
     <p className="intro">Coffee chats you have agreed to.</p>
-    <section className="card">
-      <Table caption="Upcoming calls" columns={columns} rows={data} error={error} onRetry={reload}
-        empty="Nothing scheduled. Arrange a coffee chat from Connections."
-        action={row => row.needsPayment
-          ? <span className="small">Payment required</span>
-          : row.joinUrl ? <a href={row.joinUrl} target={row.venue==='PROVIDER_CONFERENCE'?'_blank':undefined} rel={row.venue==='PROVIDER_CONFERENCE'?'noreferrer noopener':undefined}>Join</a>
-          : <span className="small">Join link pending</span>} />
+    <section className="card app-call-card">
+      {error ? <><p role="alert">{error}</p><button className="secondary" onClick={reload}>Try again</button></>
+        : !sorted ? <ul className="app-call-list" aria-label="Upcoming calls" aria-busy="true">
+            {[0,1,2].map(item => <li className="app-call app-call-loading" key={item}>
+              <span className="avatar initials" aria-hidden="true" />
+              <div><span /><span /><span /></div>
+            </li>)}
+          </ul>
+        : sorted.length === 0 ? <div className="empty">
+            <span className="empty-symbol" aria-hidden="true">◎</span>
+            <h2>No calls scheduled</h2>
+            <p>Arrange a coffee chat from Connections, then it will appear here.</p>
+          </div>
+        : <ul className="app-call-list" aria-label="Upcoming calls">
+            {sorted.map(call => <CallRow key={call.id} call={call} />)}
+          </ul>}
     </section>
   </>;
+}
+
+const callVenue = (call: AppCall) =>
+  call.venue === 'CAFFRIEND_LIVEKIT' ? 'Caffriend call'
+    : call.venue === 'PROVIDER_CONFERENCE' ? 'Google Meet'
+    : call.physicalLocation || call.format || 'Not specified';
+
+const callWhen = (call: AppCall) => {
+  if (!call.startDate) return {day:'Not scheduled', time:'Time pending'};
+  const start = new Date(call.startDate);
+  return {
+    day: start.toLocaleDateString(undefined, {weekday:'short', month:'short', day:'numeric'}),
+    time: `${start.toLocaleTimeString(undefined, {hour:'numeric', minute:'2-digit'})}${call.endDate ? ` - ${new Date(call.endDate).toLocaleTimeString(undefined, {hour:'numeric', minute:'2-digit'})}` : ''}`,
+  };
+};
+
+function CallRow({call}:{call:AppCall}) {
+  const when = callWhen(call);
+  const person = {name: call.counterpart || 'Coffee chat', image: call.image};
+  const title = call.purpose || call.counterpart || 'Coffee chat';
+  return <li className="app-call">
+    <Face person={person} />
+    <div className="app-call-main">
+      <div className="app-call-title">
+        <h2>{title}</h2>
+        {call.status && <span>{call.status.toLowerCase().replaceAll('_', ' ')}</span>}
+      </div>
+      <p>{call.counterpart || 'Counterpart pending'}</p>
+      <dl>
+        <div><dt>When</dt><dd>{when.day} · {when.time}</dd></div>
+        <div><dt>Where</dt><dd>{callVenue(call)}</dd></div>
+        {call.notes && <div><dt>Notes</dt><dd>{call.notes}</dd></div>}
+      </dl>
+    </div>
+    <div className="app-call-action">
+      {call.needsPayment ? <span className="small">Payment required</span>
+        : call.joinUrl ? <a className="button" href={call.joinUrl} target={call.venue==='PROVIDER_CONFERENCE'?'_blank':undefined} rel={call.venue==='PROVIDER_CONFERENCE'?'noreferrer noopener':undefined}>Join</a>
+        : <span className="small">Join link pending</span>}
+    </div>
+  </li>;
 }
 
 export function Leaderboard({meId}:{meId?: string}) {

@@ -48,6 +48,65 @@ test.describe('people and organizations', () => {
     await expect(page.getByText('Design Lead · Northwind Labs')).toBeVisible();
   });
 
+  test('imports contacts from a file through review and per-row results', async ({page, request}) => {
+    await enter(page, 'people');
+
+    await page.getByRole('button', {name:'Import contacts'}).click();
+    await page.getByLabel('Contact file').setInputFiles({
+      name: 'connections.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from('Full Name,Company\nPriya Shah,Northwind\nNo Name Co,\n'),
+    });
+    await page.getByRole('button', {name:'Review contacts'}).click();
+
+    await expect(page.getByRole('heading', {name:'Review contacts'})).toBeVisible();
+    await expect(page.locator('input[value="Priya Shah"]')).toBeVisible();
+    await expect(page.locator('input[value="Northwind"]')).toBeVisible();
+    await page.getByLabel('Name for row 1').fill('Priya Shah Edited');
+    await page.getByLabel('Email for row 1').fill('priya@example.com');
+    await page.getByRole('checkbox', {name:/Import Jordan Lee/}).uncheck();
+
+    await page.getByRole('button', {name:/Skipped rows/}).click();
+    await expect(page.getByText('Missing a name')).toBeVisible();
+
+    await page.getByRole('button', {name:'Import selected'}).click();
+    await expect(page.getByRole('heading', {name:'Import results'})).toBeVisible();
+    await expect(page.getByText('Priya Shah Edited')).toBeVisible();
+    await expect(page.getByText('Added')).toBeVisible();
+    await expect(page.getByText('Jordan Lee')).toBeVisible();
+    await expect(page.getByText('Not imported')).toBeVisible();
+
+    const stateBody = await (await request.get(state)).json();
+    const imports = stateBody.calls.filter((call: {path: string}) => call.path.endsWith('/crm/prospects/ingest'));
+    expect(imports).toHaveLength(1);
+    expect(imports[0].body).toMatchObject({displayName:'Priya Shah Edited', email:'priya@example.com', organizationName:'Northwind', sourceCategory:'IMPORTED'});
+  });
+
+  test('keeps import errors visible and lets the user continue', async ({page, request}) => {
+    await request.post(state, {data:{parseFails:true}});
+    await enter(page, 'people');
+
+    await page.getByRole('button', {name:'Import contacts'}).click();
+    await page.getByLabel('Contact file').setInputFiles({
+      name: 'connections.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from('Full Name,Company\nPriya Shah,Northwind\n'),
+    });
+    await page.getByRole('button', {name:'Review contacts'}).click();
+    await expect(page.getByRole('dialog').getByRole('alert')).toContainText('Could not read that file');
+
+    await request.post(state, {data:{ingestFails:true, importParse:{
+      people: [{displayName:'Priya Shah', title:'Investor', organizationName:'Northwind', email:null, phone:null, location:null, sourceUrl:null, discoveryReason:'Met through LinkedIn export', sourceCategory:'IMPORTED'}],
+      skipped: [],
+    }}});
+    await page.getByRole('button', {name:'Review contacts'}).click();
+    await page.getByRole('button', {name:'Import selected'}).click();
+
+    await expect(page.getByRole('heading', {name:'Import results'})).toBeVisible();
+    await expect(page.getByText('Priya Shah')).toBeVisible();
+    await expect(page.getByText('That contact could not be imported')).toBeVisible();
+  });
+
   test('never renders backend fields outside the CRM-safe projection', async ({page}) => {
     await enter(page, 'people');
     await expect(page.getByRole('link', {name:'Alex Rivera'})).toBeVisible();
@@ -249,7 +308,7 @@ test.describe('calendar and meetings', () => {
   test('reads busy time only, never what the events are', async ({page, request}) => {
     await request.post(state, {data:{connections:[{id:'33333333-3333-4333-8333-333333333333', provider:'GOOGLE', status:'CONNECTED', accountIdentifier:'alex@example.com', calendarId:'primary', calendarName:'Alex — Work'}]}});
     await enter(page, 'calendar');
-    await chooseDate(page.getByLabel('Date'), '2026-09-12');
+    await chooseDate(page.getByLabel('Date'), '2027-09-12');
     await expect(page.getByRole('status').filter({hasText:'busy period'})).toBeVisible();
     expect(await page.content()).not.toContain('PRIVATE_CRM_SENTINEL');
   });

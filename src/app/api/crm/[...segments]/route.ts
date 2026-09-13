@@ -36,15 +36,41 @@ const idempotent = (request: Request) => {
   return key && uuidPattern.test(key) ? key : null;
 };
 
+function connectionProjection(row: Record<string, unknown>): CalendarConnection | null {
+  const id = typeof row.id === 'string' ? row.id : '';
+  const provider = providers.includes(row.provider as Provider) ? row.provider as Provider : null;
+  if (!id || !provider) return null;
+  const rawStatus = typeof row.status === 'string' ? row.status : '';
+  const status = rawStatus === 'CONNECTED' ? 'ACTIVE'
+    : rawStatus === 'ERROR' ? 'RECONNECT_REQUIRED'
+    : ['ACTIVE','SELECT_CALENDAR','RECONNECT_REQUIRED','DISCONNECTED'].includes(rawStatus) ? rawStatus as CalendarConnection['status']
+    : 'RECONNECT_REQUIRED';
+  const optional = (value: unknown) => typeof value === 'string' && value.trim() ? value.trim() : null;
+  return {
+    id,
+    provider,
+    status,
+    accountIdentifier: optional(row.accountIdentifier),
+    calendarId: optional(row.calendarId),
+    calendarName: optional(row.calendarName),
+    scopes: Array.isArray(row.scopes) ? row.scopes.filter((scope): scope is string => typeof scope === 'string') : null,
+    errorCode: optional(row.errorCode),
+  };
+}
+
 /** Follows every page so existing connections are never silently omitted. */
 async function allConnections(path: string, token: string) {
   const rows: CalendarConnection[] = [];
+  const seen = new Set<string>();
   let cursor: string | null = null;
   for (let request = 0; request < 20; request++) {
     const query = new URLSearchParams({limit:'100'});
     if (cursor) query.set('cursor', cursor);
     const body = await backend<{items:CalendarConnection[];nextCursor:string|null}>(`${path}?${query.toString()}`, {token});
-    rows.push(...(body.items ?? []));
+    for (const row of body.items ?? []) {
+      const projected = connectionProjection(row as Record<string, unknown>);
+      if (projected && !seen.has(projected.id)) { seen.add(projected.id); rows.push(projected); }
+    }
     cursor = body.nextCursor ?? null;
     if (!cursor) break;
   }
@@ -186,8 +212,15 @@ export async function POST(request: Request, {params}:{params:Promise<{segments:
   const path = segments.join('/');
   const workspace = workspacePath(segments);
   const key = request.headers.get('x-idempotency-key');
-  const body = await request.json().catch(() => ({})) as Record<string, unknown>;
   try {
+    if (workspace && segments[2] === 'crm' && segments.length === 6 && segments[3] === 'prospects' && segments[4] === 'import' && segments[5] === 'parse') {
+      if (!key || !uuidPattern.test(key)) return json({error:'Request not allowed'}, 400);
+      const form = await request.formData();
+      const file = form.get('file');
+      if (!(file instanceof File)) return json({error:'Choose a CSV or Excel file.'}, 400);
+      return json(await backend(`${workspace}/crm/prospects/import/parse`, {token:session.token, method:'POST', body:form, key}));
+    }
+    const body = await request.json().catch(() => ({})) as Record<string, unknown>;
     if (path === 'workspaces') {
       const name = body.name;
       if (typeof name !== 'string' || !name.trim() || name.length > 200) return json({error:'Enter a workspace name of up to 200 characters.'}, 400);
@@ -260,6 +293,10 @@ export async function POST(request: Request, {params}:{params:Promise<{segments:
     if (workspace && segments[2] === 'crm' && segments.length >= 4) {
       if (!key) return json({error:'Request not allowed'}, 400);
       const resource = segments[3];
+      if (resource === 'prospects' && segments.length === 5 && segments[4] === 'ingest') {
+        if (!uuidPattern.test(key)) return json({error:'Request not allowed'}, 400);
+        return json(await backend(`${workspace}/crm/prospects/ingest`, {token:session.token, method:'POST', body, key}));
+      }
       // Proposals are how an agent asks; they are never applied by this call.
       if (resource === 'proposals' && segments.length === 5 && (approvalActions as readonly string[]).includes(segments[4]))
         return json(await backend(`${workspace}/crm/proposals/${segments[4]}`, {token:session.token, method:'POST', body, key}));
@@ -307,6 +344,10 @@ export async function POST(request: Request, {params}:{params:Promise<{segments:
     }
     return json({error:'Not found'}, 404);
   } catch (error) {
+    if (error instanceof BackendError && path.includes('crm/prospects/')) {
+      const message = typeof error.body?.message === 'string' ? error.body.message : 'That contact import did not complete.';
+      return json({error:message}, error.status);
+    }
     if (error instanceof BackendError && path.includes('meeting-outreach')) {
       const code = typeof error.body?.code === 'string' ? error.body.code : undefined;
       const message = typeof error.body?.message === 'string' ? error.body.message : 'The invitation was not sent.';
@@ -336,10 +377,6 @@ async function connect(token: string, workspaceId: string, provider: string) {
   const flows = [...existing.filter(flow => flow.created > cutoff), {provider, workspaceId, stateHash: await hashState(state), created: Date.now()}].slice(-5);
   await setSealed(pendingCookie, {flows}, fiveMinutes);
   return json({redirect: redirect.toString()});
-}
-
-function calendarCallback(provider: string) {
-  return new URL(`/crm-calendar/callback/${provider}`, webOrigin()).toString();
 }
 
 function normalizeProviderCallback(value: string | null, expectedPath: string) {

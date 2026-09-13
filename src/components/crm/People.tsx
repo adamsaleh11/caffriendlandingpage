@@ -7,6 +7,7 @@ import { live } from './record-actions';
 import { completeness } from './person-profile';
 import Modal from './Modal';
 import { AddPersonForm } from './PersonForm';
+import ImportContacts from './ImportContacts';
 import {FormSelect} from '@/components/ui/form-select';
 
 const initials = (name: string) => name.trim().split(/\s+/).slice(0, 2).map(part => part[0]?.toUpperCase() ?? '').join('');
@@ -17,6 +18,7 @@ export default function People({workspaceId}:{workspaceId:string}) {
   const [query, setQuery] = useState('');
   const [organizationId, setOrganizationId] = useState('');
   const [adding, setAdding] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [notice, setNotice] = useState('');
 
   const people = useList<Person>(`workspaces/${workspaceId}/crm/people${query ? `?search=${encodeURIComponent(query)}` : ''}`);
@@ -44,6 +46,7 @@ export default function People({workspaceId}:{workspaceId:string}) {
           <button className="secondary">Search</button>
           {(query || organizationId) && <button type="button" className="secondary" onClick={() => { setSearch(''); setQuery(''); setOrganizationId(''); }}>Clear</button>}
         </form>
+        <button className="secondary" onClick={() => { setImporting(true); setNotice(''); }}>Import contacts</button>
         <button onClick={() => { setAdding(true); setNotice(''); }}>Add a person</button>
       </div>
 
@@ -85,6 +88,10 @@ export default function People({workspaceId}:{workspaceId:string}) {
       <AddPersonForm workspaceId={workspaceId} organizations={live(organizations.rows)}
         onCancel={() => setAdding(false)}
         onCreated={person => { setAdding(false); setNotice(`${person.displayName} was added.`); people.reload(); organizations.reload(); }} />
+    </Modal>}
+    {importing && <Modal title="Import contacts" description="Upload a CSV or Excel export, review what Caffriend understood, then choose who to add."
+      onClose={() => setImporting(false)} wide>
+      <ImportContacts workspaceId={workspaceId} onFinished={() => { people.reload(); organizations.reload(); }} />
     </Modal>}
   </>;
 }

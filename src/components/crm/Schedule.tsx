@@ -13,6 +13,16 @@ import {TimePicker} from '@/components/ui/time-picker';
 
 type Busy = { busy: {start:string; end:string}[] };
 const hour = 3600000;
+const calendarLabel = (connection?: CalendarConnection) =>
+  connection?.calendarName || connection?.calendarId || connection?.accountIdentifier || 'Default calendar';
+const accountLabel = (connection?: CalendarConnection) =>
+  connection?.accountIdentifier || (connection ? providerNames[connection.provider] : 'Calendar account');
+const venueLabel = (call: AppCall) =>
+  call.venue === 'CAFFRIEND_LIVEKIT' ? 'Caffriend call'
+    : call.venue === 'PROVIDER_CONFERENCE' ? 'Google Meet'
+    : call.physicalLocation || call.format || 'In person';
+const meetingTimeLabel = (start?: string | null, end?: string | null) =>
+  start ? `${new Date(start).toLocaleDateString(undefined, {weekday:'short', month:'short', day:'numeric'})} · ${new Date(start).toLocaleTimeString(undefined, {hour:'numeric', minute:'2-digit'})}${end ? ` - ${new Date(end).toLocaleTimeString(undefined, {hour:'numeric', minute:'2-digit'})}` : ''}` : 'Not scheduled';
 
 /** The viewer's own zone is the honest default; every other IANA zone stays selectable. */
 const zones = (): string[] => {
@@ -122,13 +132,16 @@ export default function Schedule({workspaceId}:{workspaceId:string}) {
       {!calls.rows && !calls.error && <p role="status">Loading meetings…</p>}
       {calls.error && <p role="alert">Meetings could not be loaded. <button className="secondary" onClick={calls.reload}>Try again</button></p>}
       {calls.rows?.length===0&&<Empty>No meetings yet.</Empty>}
-      <ul className="meetings">{(calls.rows??[]).map(call=><li key={call.id}>
-        <h3>{call.purpose||'Coffee chat'}</h3><dl>
-          <dt>When</dt><dd>{call.startDate?`${new Date(call.startDate).toLocaleString()}${call.endDate?` – ${new Date(call.endDate).toLocaleTimeString()}`:''}`:'Not scheduled'}{call.timezone?` (${Intl.DateTimeFormat().resolvedOptions().timeZone})`:''}</dd>
-          <dt>With</dt><dd className="counterpart">{call.image&&<Image className="avatar" src={call.image} alt="" width={32} height={32} unoptimized/>}{call.counterpart||'Guest recipient'}</dd>
-          <dt>Venue</dt><dd>{call.venue==='CAFFRIEND_LIVEKIT'?'Caffriend call':call.venue==='PROVIDER_CONFERENCE'?'Google Meet':call.physicalLocation||'In person'}</dd>
-          {call.status&&<><dt>Status</dt><dd>{call.status.replace(/_/g,' ').toLowerCase()}</dd></>}
-        </dl>{call.joinUrl&&<a className="button" href={call.joinUrl} target={call.venue==='PROVIDER_CONFERENCE'?'_blank':undefined} rel={call.venue==='PROVIDER_CONFERENCE'?'noreferrer noopener':undefined}>Join</a>}
+      <ul className="workspace-meeting-list">{(calls.rows??[]).map(call=><li className="workspace-meeting" key={call.id}>
+        <div className="workspace-meeting-avatar">
+          {call.image?<Image className="avatar" src={call.image} alt="" width={40} height={40} unoptimized/>:<span className="avatar initials" aria-hidden="true">{(call.counterpart||'Guest').split(' ').filter(Boolean).slice(0,2).map(part=>part[0]).join('').toUpperCase()}</span>}
+        </div>
+        <div className="workspace-meeting-main">
+          <div className="workspace-meeting-title"><h3>{call.purpose||'Coffee chat'}</h3>{call.status&&<span>{call.status.replace(/_/g,' ').toLowerCase()}</span>}</div>
+          <p>{call.counterpart||'Guest recipient'}</p>
+          <dl><div><dt>When</dt><dd>{meetingTimeLabel(call.startDate, call.endDate)}</dd></div><div><dt>Where</dt><dd>{venueLabel(call)}</dd></div></dl>
+        </div>
+        <div className="workspace-meeting-actions">{call.joinUrl&&<a className="button" href={call.joinUrl} target={call.venue==='PROVIDER_CONFERENCE'?'_blank':undefined} rel={call.venue==='PROVIDER_CONFERENCE'?'noreferrer noopener':undefined}>Join</a>}</div>
       </li>)}</ul>
     </Section>
 
@@ -136,16 +149,17 @@ export default function Schedule({workspaceId}:{workspaceId:string}) {
       {notice && <p role="status" className="notice">{notice}</p>}
       {problem && <p role="alert">{problem}</p>}
       {(meetings.rows?.length ?? 0) === 0 && <Empty>No calendar delivery records.</Empty>}
-      <ul className="meetings">{(meetings.rows ?? []).map(meeting => <li key={meeting.id}>
-        <h3><Link href={`/app/${workspaceId}/meetings/${meeting.id}`}>{meeting.purpose}</Link></h3>
-        <dl>
-          <dt>When</dt><dd>{new Date(meeting.startsAt).toLocaleString()} – {new Date(meeting.endsAt).toLocaleTimeString()} ({meeting.timezone})</dd>
-          <dt>With</dt><dd>{personName(meeting.engagementId) ?? 'Linked to an engagement'}</dd>
-          <dt>Status</dt><dd>{statusLabels[meeting.status]}{meeting.errorCode ? ` — ${meeting.errorCode}` : ''}</dd>
-          <dt>Where</dt><dd>{meeting.joinUrl
-            ? <a href={meeting.joinUrl} target="_blank" rel="noreferrer noopener">Join link</a>
-            : meeting.physicalLocation || 'No location recorded'}</dd>
-        </dl>
+      <ul className="workspace-meeting-list">{(meetings.rows ?? []).map(meeting => <li className="workspace-meeting delivery" key={meeting.id}>
+        <div className="workspace-meeting-main">
+          <div className="workspace-meeting-title"><h3><Link href={`/app/${workspaceId}/meetings/${meeting.id}`}>{meeting.purpose}</Link></h3><span>{statusLabels[meeting.status]}</span></div>
+          <p>{personName(meeting.engagementId) ?? 'Linked to an engagement'}</p>
+          <dl>
+            <div><dt>When</dt><dd>{meetingTimeLabel(meeting.startsAt, meeting.endsAt)} · {meeting.timezone}</dd></div>
+            <div><dt>Where</dt><dd>{meeting.joinUrl ? <a href={meeting.joinUrl} target="_blank" rel="noreferrer noopener">Join link</a> : meeting.physicalLocation || 'No location recorded'}</dd></div>
+            {meeting.errorCode&&<div><dt>Issue</dt><dd>{meeting.errorCode}</dd></div>}
+          </dl>
+        </div>
+        <div className="workspace-meeting-actions">
         {(meeting.status === 'FAILED' || meeting.status === 'CANCEL_FAILED') && <button disabled={!!working} onClick={() => act(meeting, 'retry')}>{working === meeting.id ? 'Retrying…' : 'Try again'}</button>}
         {['CONFIRMED','PENDING','LOCAL'].includes(meeting.status) && (cancelling === meeting.id
           ? <div role="group" aria-label="Confirm cancellation" className="confirm">
@@ -154,12 +168,13 @@ export default function Schedule({workspaceId}:{workspaceId:string}) {
               <button className="secondary" onClick={() => setCancelling(undefined)}>Keep it</button>
             </div>
           : <button className="secondary" onClick={() => setCancelling(meeting.id)}>Cancel meeting</button>)}
+        </div>
       </li>)}</ul>
       <More state={meetings} />
     </Section>
 
-    <section className="card">
-      <h2>Schedule a meeting</h2>
+    <section className="card schedule-panel">
+      <div className="card-head"><div><h2>Schedule a meeting</h2><p className="small">Choose the relationship, time, attendees and provider account before anything is sent.</p></div></div>
       {!connections.rows && <p role="status">Checking your calendar connections…</p>}
       {connections.rows && usable.length === 0 && <p role="note">
         No calendar is connected, so meetings cannot be scheduled. Everything else in this workspace still works.{' '}
@@ -180,7 +195,7 @@ export default function Schedule({workspaceId}:{workspaceId:string}) {
         <div className="field">
           <span className="field-label">Calendar to use</span>
           <FormSelect aria-label="Calendar to use" value={connection?.id ?? ''} onValueChange={setConnectionId}
-            options={usable.map(row => ({value:row.id,label:`${providerNames[row.provider]} — ${row.calendarName || row.calendarId}`}))} />
+            options={usable.map(row => ({value:row.id,label:`${providerNames[row.provider]} - ${calendarLabel(row)}`}))} />
         </div>
         <div className="field">
           <span className="field-label">Engagement</span>
@@ -222,8 +237,8 @@ export default function Schedule({workspaceId}:{workspaceId:string}) {
       {draft && <div role="group" aria-label="Confirm this meeting" className="confirm">
         <h3>Send this invitation?</h3>
         <dl>
-          <dt>Account</dt><dd>{connection?.accountIdentifier || 'Account identifier unavailable'}</dd>
-          <dt>Calendar</dt><dd>{connection?.calendarName || connection?.calendarId} ({connection ? providerNames[connection.provider] : ''})</dd>
+          <dt>Account</dt><dd>{accountLabel(connection)}</dd>
+          <dt>Calendar</dt><dd>{calendarLabel(connection)}{connection ? ` (${providerNames[connection.provider]})` : ''}</dd>
           <dt>Purpose</dt><dd>{draft.purpose}</dd>
           <dt>When</dt><dd>{new Date(draft.startsAt).toLocaleString()} – {new Date(draft.endsAt).toLocaleTimeString()}</dd>
           <dt>Timezone</dt><dd>{draft.timezone}</dd>
