@@ -1,6 +1,7 @@
 'use client';
 import {useEffect,useMemo,useState} from 'react';
 import {api,ApiError,startCrmOAuth} from '@/lib/api';
+import { isLiveConnection } from '@/lib/contracts';
 import type {CalendarConnection,Person} from '@/lib/contracts';
 import Modal from './Modal';
 import {DatePicker} from '@/components/ui/date-picker';
@@ -19,13 +20,13 @@ export default function OutreachComposer({workspaceId,engagementId,person,initia
  const [connectionId,setConnectionId]=useState('');const [recipientEmail,setRecipientEmail]=useState(person?.email??'');const [purpose,setPurpose]=useState(initialPurpose);const [message,setMessage]=useState('');const [timezone,setTimezone]=useState(zones()[0]);const [venue,setVenue]=useState<Draft['venue']>('CAFFRIEND_LIVEKIT');const [slots,setSlots]=useState<SlotDraft[]>([blankSlot()]);
  const [preview,setPreview]=useState<Preview>();const [problem,setProblem]=useState('');const [busy,setBusy]=useState<'preview'|'send'|'connect'|'revoke'>();const [sent,setSent]=useState(false);
  const [timelineWarning,setTimelineWarning]=useState(false);
- useEffect(()=>{let active=true;(async()=>{try{const rows=await api<CalendarConnection[]>(`workspaces/${workspaceId}/calendar-connections`);if(!active)return;setConnections(rows);const states=await Promise.all(rows.filter(row=>row.status==='CONNECTED'||row.status==='SELECT_CALENDAR').map(row=>api<MailStatus>(`workspaces/${workspaceId}/mail-connections/${row.id}`).catch(()=>({connectionId:row.id,provider:row.provider,canSend:false,mailStatus:'UNAVAILABLE'} as MailStatus))));if(!active)return;setMails(states);const activeMail=states.filter(row=>row.canSend);setConnectionId(activeMail.length===1?activeMail[0].connectionId:'');}catch(error){if(active)setProblem(error instanceof ApiError?error.message:'Connections could not be loaded.');}finally{if(active)setLoading(false);}})();return()=>{active=false};},[workspaceId]);
+ useEffect(()=>{let active=true;(async()=>{try{const rows=await api<CalendarConnection[]>(`workspaces/${workspaceId}/calendar-connections`);if(!active)return;setConnections(rows);const states=await Promise.all(rows.filter(row=>isLiveConnection(row.status)).map(row=>api<MailStatus>(`workspaces/${workspaceId}/mail-connections/${row.id}`).catch(()=>({connectionId:row.id,provider:row.provider,canSend:false,mailStatus:'UNAVAILABLE'} as MailStatus))));if(!active)return;setMails(states);const activeMail=states.filter(row=>row.canSend);setConnectionId(activeMail.length===1?activeMail[0].connectionId:'');}catch(error){if(active)setProblem(error instanceof ApiError?error.message:'Connections could not be loaded.');}finally{if(active)setLoading(false);}})();return()=>{active=false};},[workspaceId]);
  const invalidate=()=>setPreview(undefined);
- const selected=connections?.find(row=>row.id===connectionId);const mail=mails.find(row=>row.connectionId===connectionId);const activeMails=mails.filter(row=>row.canSend);const googleConnections=(connections??[]).filter(row=>row.provider==='GOOGLE'&&row.status==='CONNECTED');
+ const selected=connections?.find(row=>row.id===connectionId);const mail=mails.find(row=>row.connectionId===connectionId);const activeMails=mails.filter(row=>row.canSend);const googleConnections=(connections??[]).filter(row=>row.provider==='GOOGLE'&&isLiveConnection(row.status));
  // The mail grant is its own consent round trip and the backend accepts it for any
  // live connection — a calendar still waiting to be chosen included. Filtering this
  // to CONNECTED left the gate with no button at all and no way forward.
- const mailable=(connections??[]).filter(row=>row.status==='CONNECTED'||row.status==='SELECT_CALENDAR');
+ const mailable=(connections??[]).filter(row=>isLiveConnection(row.status));
  const pendingCalendars=(connections??[]).filter(row=>row.status==='SELECT_CALENDAR');
  const draft=useMemo<Draft|null>(()=>{const parsed=slots.map(slot=>{const start=new Date(`${slot.date}T${slot.time}`);const end=new Date(start.getTime()+Number(slot.duration)*60000);return Number.isFinite(start.getTime())?{startsAt:start.toISOString(),endsAt:end.toISOString()}:null;});if(!connectionId||!recipientEmail||!purpose.trim()||!message.trim()||parsed.some(slot=>!slot))return null;return{engagementId,connectionId,recipientEmail:recipientEmail.trim(),purpose:purpose.trim(),message:message.trim(),timezone,venue,slots:parsed as Draft['slots']};},[connectionId,recipientEmail,purpose,message,timezone,venue,slots,engagementId]);
  const changeSlot=(index:number,patch:Partial<SlotDraft>)=>{setSlots(current=>current.map((slot,i)=>i===index?{...slot,...patch}:slot));invalidate();};

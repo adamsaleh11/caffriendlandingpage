@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { api, ApiError } from '@/lib/api';
-import { providerNames, statusLabels, type CalendarConnection, type CalendarOption, type Engagement, type Meeting, type Person } from '@/lib/contracts';
+import { isLiveConnection, providerNames, statusLabels, type CalendarConnection, type CalendarOption, type Engagement, type Meeting, type Person } from '@/lib/contracts';
 import { useKeys, useList, useRows, Section, Empty, More } from './common';
 import { useLiveRows } from './record-actions';
 import type { AppCall } from '@/lib/app-projection';
@@ -42,7 +42,7 @@ export default function Schedule({workspaceId}:{workspaceId:string}) {
   const [meetingTime, setMeetingTime] = useState('');
   const keyFor = useKeys();
 
-  const usable = (connections.rows ?? []).filter(row => row.status === 'CONNECTED');
+  const usable = (connections.rows ?? []).filter(row => isLiveConnection(row.status));
   const connection = usable.find(row => row.id === connectionId) ?? usable[0];
   const calendar = calendars !== 'error' ? (calendars ?? []).find(row => row.id === connection?.calendarId) : undefined;
   const canConference = calendar?.supportsConference === true;

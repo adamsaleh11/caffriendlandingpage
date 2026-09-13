@@ -61,12 +61,11 @@ export type ProviderStatus = { configured: boolean; errorCode?: string | null };
 export type CalendarConnection = {
   id: string;
   provider: Provider;
-  status:
-    | 'SELECT_CALENDAR'
-    | 'CONNECTED'
-    | 'RECONNECT_REQUIRED'
-    | 'ERROR'
-    | 'DISCONNECTED';
+  // The four the backend actually writes. It has never emitted 'CONNECTED' or
+  // 'ERROR'; both were invented here, and every comparison against them was
+  // dead — silently, because a filter that matches nothing looks like "not
+  // connected yet" rather than a bug.
+  status: 'ACTIVE' | 'SELECT_CALENDAR' | 'RECONNECT_REQUIRED' | 'DISCONNECTED';
   accountIdentifier?: string | null;
   calendarId?: string | null;
   calendarName?: string | null;
@@ -74,6 +73,19 @@ export type CalendarConnection = {
   scopes?: string[] | null;
   errorCode?: string | null;
 };
+
+/**
+ * A connection Caffriend can still act through.
+ *
+ * ACTIVE is the settled state. SELECT_CALENDAR is a working credential whose
+ * calendar is chosen on first use, so it can send mail and book exactly like an
+ * ACTIVE one; treating it as unusable strands people who connected an account
+ * and never picked a calendar. The other two are dead: DISCONNECTED was taken
+ * away, RECONNECT_REQUIRED needs consent again.
+ */
+export const isLiveConnection = (status: CalendarConnection['status']) =>
+  status === 'ACTIVE' || status === 'SELECT_CALENDAR';
+
 export type CalendarOption = { id: string; name?: string | null; writable?: boolean; /** Whether this calendar can create a Meet or Teams conference. */ supportsConference?: boolean };
 export type ConsentDetails = {
   // `client` is the required additive backend follow-up; Allow fails closed while it is absent.
