@@ -75,9 +75,12 @@ test('a connection whose profile fails to load still lists', async ({page, reque
 test('Upcoming calls shows the counterpart, not the viewer', async ({page}) => {
   await enter(page, 'calls');
   await expect(page.getByRole('heading', {name:'Upcoming calls'})).toBeVisible();
-  // 'When' is the row header here, so the person is a plain cell.
-  await expect(page.getByRole('cell', {name:/Jordan Patel/})).toBeVisible();
-  await expect(page.getByRole('cell', {name:'Video call'})).toBeVisible();
+  const call = page.getByRole('listitem').filter({hasText:'Coffee with Jordan'});
+  await expect(call).toContainText('Jordan Patel');
+  await expect(call).toContainText('Caffriend call');
+  await expect(call).toContainText('booked');
+  await expect(call.getByRole('link', {name:'Join'})).toBeVisible();
+  await expect(page.getByRole('cell', {name:/Jordan Patel/})).toHaveCount(0);
 });
 
 test('Leaderboard marks the signed-in person and sorts', async ({page}) => {

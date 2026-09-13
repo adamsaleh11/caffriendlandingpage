@@ -173,6 +173,130 @@
 .crm .profile-card .headline { opacity: 0.8; }
 .crm a.button { display: inline-block; text-decoration: none; }
 
+.crm .app-call-card { overflow: visible; }
+.crm .app-call-list { list-style: none; padding: 0; margin: 0; display: grid; gap: .85rem; }
+.crm .app-call {
+  display: grid;
+  grid-template-columns: 2.75rem minmax(0, 1fr) auto;
+  gap: .85rem;
+  align-items: center;
+  min-height: 5.75rem;
+  padding: .95rem 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.crm .app-call:last-child { border-bottom: 0; }
+.crm .app-call > .avatar { width: 2.75rem; height: 2.75rem; }
+.crm .app-call-main { min-width: 0; display: grid; gap: .32rem; }
+.crm .app-call-title { display: flex; align-items: center; gap: .55rem; min-width: 0; }
+.crm .app-call-title h2 { margin: 0; overflow-wrap: anywhere; }
+.crm .app-call-title span {
+  flex: none;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: .12rem .5rem;
+  color: var(--muted);
+  font-size: .72rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+.crm .app-call-main p { margin: 0; color: var(--ink); font-weight: 600; }
+.crm .app-call dl { display: flex; flex-wrap: wrap; gap: .25rem 1rem; margin: 0; color: var(--muted); }
+.crm .app-call dl div { display: inline-flex; gap: .3rem; min-width: 0; }
+.crm .app-call dt { font-weight: 600; color: var(--ink); }
+.crm .app-call dd { margin: 0; overflow-wrap: anywhere; }
+.crm .app-call-action { justify-self: end; display: flex; align-items: center; }
+.crm .app-call-action .button { min-width: 4.25rem; text-align: center; }
+.crm .app-call-loading .avatar,
+.crm .app-call-loading span {
+  display: block;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #f4eee8, #fff9f5, #f4eee8);
+  background-size: 200% 100%;
+  animation: app-call-pulse 1.2s ease-in-out infinite;
+}
+.crm .app-call-loading div { display: grid; gap: .5rem; }
+.crm .app-call-loading div span:nth-child(1) { width: min(16rem, 70%); height: .95rem; }
+.crm .app-call-loading div span:nth-child(2) { width: min(12rem, 55%); height: .75rem; }
+.crm .app-call-loading div span:nth-child(3) { width: min(20rem, 80%); height: .75rem; }
+@keyframes app-call-pulse { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+@media (max-width: 44rem) {
+  .crm .app-call { grid-template-columns: 2.5rem minmax(0, 1fr); align-items: start; }
+  .crm .app-call > .avatar { width: 2.5rem; height: 2.5rem; }
+  .crm .app-call-title { align-items: flex-start; flex-direction: column; gap: .35rem; }
+  .crm .app-call-action { grid-column: 2; justify-self: start; margin-top: .35rem; }
+}
+
+.crm .workspace-meeting-list { list-style: none; padding: 0; margin: .75rem 0 0; display: grid; gap: .75rem; }
+.crm .workspace-meeting {
+  display: grid;
+  grid-template-columns: 2.75rem minmax(0, 1fr) auto;
+  gap: .85rem;
+  align-items: center;
+  padding: .9rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+}
+.crm .workspace-meeting.delivery { grid-template-columns: minmax(0, 1fr) auto; }
+.crm .workspace-meeting-avatar .avatar { width: 2.5rem; height: 2.5rem; }
+.crm .workspace-meeting-main { display: grid; gap: .35rem; min-width: 0; }
+.crm .workspace-meeting-title { display: flex; align-items: flex-start; gap: .55rem; min-width: 0; }
+.crm .workspace-meeting-title h3 { margin: 0; overflow-wrap: anywhere; }
+.crm .workspace-meeting-title span {
+  flex: none;
+  max-width: 16rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: .12rem .5rem;
+  color: var(--muted);
+  font-size: .72rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.crm .workspace-meeting-main p { margin: 0; color: var(--ink); font-weight: 600; }
+.crm .workspace-meeting dl { display: flex; flex-wrap: wrap; gap: .25rem 1rem; margin: 0; color: var(--muted); }
+.crm .workspace-meeting dl div { display: inline-flex; gap: .3rem; min-width: 0; }
+.crm .workspace-meeting dt { font-weight: 600; color: var(--ink); }
+.crm .workspace-meeting dd { margin: 0; overflow-wrap: anywhere; }
+.crm .workspace-meeting-actions { justify-self: end; display: flex; align-items: center; gap: .5rem; }
+.crm .workspace-meeting-actions .confirm { margin: 0; max-width: 24rem; }
+.crm .schedule-panel .card-head { margin-bottom: .75rem; }
+.crm .schedule-panel .card-head p { margin: .25rem 0 0; }
+.crm .schedule-panel form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .2rem 1rem;
+}
+.crm .schedule-panel form > label,
+.crm .schedule-panel form > .field,
+.crm .schedule-panel form > fieldset,
+.crm .schedule-panel form > p,
+.crm .schedule-panel form > button { grid-column: span 2; }
+.crm .schedule-panel form > .field:nth-of-type(3),
+.crm .schedule-panel form > .field:nth-of-type(4),
+.crm .schedule-panel form > .field:nth-of-type(5),
+.crm .schedule-panel form > .field:nth-of-type(6) { grid-column: span 1; }
+
+@media (max-width: 44rem) {
+  .crm .workspace-meeting,
+  .crm .workspace-meeting.delivery { grid-template-columns: minmax(0, 1fr); }
+  .crm .workspace-meeting-title { flex-direction: column; gap: .35rem; }
+  .crm .workspace-meeting-actions { justify-self: start; width: 100%; }
+  .crm .workspace-meeting-actions .confirm { max-width: none; }
+  .crm .schedule-panel form,
+  .crm .schedule-panel form > .field:nth-of-type(3),
+  .crm .schedule-panel form > .field:nth-of-type(4),
+  .crm .schedule-panel form > .field:nth-of-type(5),
+  .crm .schedule-panel form > .field:nth-of-type(6) { grid-template-columns: 1fr; grid-column: span 1; }
+  .crm .schedule-panel form > label,
+  .crm .schedule-panel form > .field,
+  .crm .schedule-panel form > fieldset,
+  .crm .schedule-panel form > p,
+  .crm .schedule-panel form > button { grid-column: span 1; }
+}
+
 
 
 /* ---------------------------------------------------------------------------

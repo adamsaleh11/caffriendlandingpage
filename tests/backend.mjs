@@ -73,7 +73,8 @@ const defaultStatus = () => state.status ?? {GOOGLE:{configured:true},MICROSOFT:
 http.createServer(async (req,res) => {
   const url = new URL(req.url, 'http://localhost');
   let raw = ''; for await (const chunk of req) raw += chunk;
-  const body = raw ? JSON.parse(raw) : {};
+  const multipart = String(req.headers['content-type'] ?? '').includes('multipart/form-data');
+  const body = raw && !multipart ? JSON.parse(raw) : {};
   const send = (data,status=200) => {res.writeHead(status, {'Content-Type':'application/json'});res.end(JSON.stringify(data));};
   const path = url.pathname;
   if(path === '/__state') { if(req.method==='POST'){state=clone(body);state.calls=[];} return send(state); }
@@ -101,6 +102,7 @@ http.createServer(async (req,res) => {
   if(path === '/meeting-invitations/decide') {
     if(body.token !== inviteToken) return send({message:'Invitation unavailable'},404);
     if(body.decision==='ACCEPTED'&&!body.slotId)return send({message:'Invalid slotId'},400);
+    if(body.decision==='ACCEPTED'&&body.calendarUpdateRecipients!=='ALL')return send({message:'Calendar updates must be sent to both participants'},400);
     state.outreachDecision=body.decision;
     if(body.decision==='ACCEPTED') {
       state.crm ??= crmDefaults();
@@ -324,6 +326,29 @@ http.createServer(async (req,res) => {
 
   if(path === `${crmBase}/people/${personId}/permissions`)
     return send(state.permissions ?? {id:personId, permittedUses:['OUTREACH'], blocked:false});
+
+  if(path === `${crmBase}/prospects/import/parse`) {
+    if(state.parseFails) return send({message:'Could not read that file'},400);
+    return send(state.importParse ?? {
+      people: [
+        {displayName:'Priya Shah', title:'Investor', organizationName:'Northwind', email:null, phone:null, location:'Toronto', sourceUrl:'https://linkedin.com/in/priya', discoveryReason:'Met through LinkedIn export', sourceCategory:'IMPORTED'},
+        {displayName:'Jordan Lee', title:'Founder', organizationName:'Beta Labs', email:'jordan@example.com', phone:null, location:null, sourceUrl:null, discoveryReason:'Spreadsheet row', sourceCategory:'IMPORTED'},
+      ],
+      skipped: [{row:4, reason:'Missing a name'}],
+    });
+  }
+
+  if(path === `${crmBase}/prospects/ingest`) {
+    if(!req.headers['idempotency-key']) return send({message:'Idempotency-Key required'},400);
+    if(state.ingestFails) return send({message:'That contact could not be imported'},503);
+    const existing = state.crm.people.find(row =>
+      (body.email && row.email === body.email) ||
+      (!body.email && row.displayName === body.displayName && body.organizationName && row.organizationName === body.organizationName));
+    if(existing) return send({status:'already_in_network', person:existing});
+    const row = {id:uid(), workspaceId:workspace.id, archivedAt:null, ...stamp, ...body};
+    state.crm.people.push(row);
+    return send({status:'added', person:row});
+  }
 
   if(path === `${crmBase}/approvals/${approvalId}/review`) {
     if(!req.headers['idempotency-key']) return send({message:'Idempotency-Key required'},400);

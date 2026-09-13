@@ -62,21 +62,35 @@ test('google connect, callback, calendar selection and disconnect', async ({page
   // The authorization code never reaches the web app's URL or its rendered page.
   expect(page.url()).not.toContain('provider-code');
   await expect(page.getByText('Connected. Choose the calendar Caffriend should use.')).toBeVisible();
-  await expect(page.locator('dd').filter({hasText:'alex@example.com'})).toBeVisible();
-  await expect(page.getByText('Granted access unavailable')).toBeVisible();
+  await expect(page.getByText(/Meetings are added to/)).toBeVisible();
+  await expect(page.getByText('alex@example.com').first()).toBeVisible();
 
-  await page.getByRole('button',{name:'Choose a calendar'}).click();
+  await page.getByRole('button',{name:'Use a different calendar'}).click();
   const select = page.getByLabel('Calendar to use');
   const calendars = await openSelect(select);
   await expect(calendars.getByRole('option',{name:'Holidays'})).toHaveCount(0);
   await calendars.getByRole('option',{name:'Alex — Work',exact:true}).click();
-  await page.getByRole('button',{name:'Save calendar'}).click();
+  await page.getByRole('button',{name:'Use this calendar'}).click();
   await expect(page.getByText('Alex — Work').first()).toBeVisible();
 
   await page.getByRole('switch',{name:'Google Calendar calendar'}).click();
   await expect(page.getByText(/Meetings already recorded stay in your workspace/)).toBeVisible();
   await page.getByRole('button',{name:'Yes, disconnect'}).click();
   await expect(page.getByRole('switch',{name:'Google Calendar calendar'})).toHaveAttribute('aria-checked','false');
+});
+
+test('settings shows one calendar state per provider instead of repeated stale rows', async ({page, request}) => {
+  await request.post(backend,{data:{connections:[
+    {id:'33333333-3333-4333-8333-333333333331',provider:'GOOGLE',status:'RECONNECT_REQUIRED',accountIdentifier:'alex@example.com'},
+    {id:'33333333-3333-4333-8333-333333333332',provider:'GOOGLE',status:'RECONNECT_REQUIRED',accountIdentifier:'alex@example.com'},
+    {id:'33333333-3333-4333-8333-333333333333',provider:'GOOGLE',status:'RECONNECT_REQUIRED',accountIdentifier:'alex@example.com'},
+    {id:'33333333-3333-4333-8333-333333333334',provider:'GOOGLE',status:'RECONNECT_REQUIRED',accountIdentifier:'alex@example.com'},
+  ]}});
+  await signedIn(page);
+  await expect(page.getByText('Access to this calendar expired. Reconnect to start adding meetings again.')).toHaveCount(1);
+  await expect(page.getByRole('button',{name:'Reconnect calendar'})).toHaveCount(1);
+  await expect(page.getByText('3 older Google Calendar connections are hidden here')).toBeVisible();
+  await expect(page.getByText(/undefined/i)).toHaveCount(0);
 });
 
 test('the mailbox grant returns to settings, never to the API\'s raw response', async ({page,request}) => {
@@ -115,7 +129,7 @@ test('a cancelled mailbox grant says so in settings instead of failing silently'
 test('provider cancellation reports honestly and performs no exchange', async ({page,request}) => {
   await signedIn(page);
   await stubProvider(page,'error=access_denied');
-  await page.getByRole('switch',{name:'Outlook Calendar calendar'}).click();
+  await page.getByRole('switch',{name:'Google Calendar calendar'}).click();
   await expect(page).toHaveURL(settings);
   await expect(page.getByText(/You cancelled the connection/)).toBeVisible();
   const state = await (await request.get(backend)).json();
@@ -189,7 +203,7 @@ test('unconfigured provider is disabled with actionable feedback and the CRM sta
   await signedIn(page);
   await expect(page.getByRole('switch',{name:'Google Calendar calendar'})).toBeDisabled();
   await expect(page.getByText(/Google Calendar is not configured/)).toBeVisible();
-  await expect(page.getByRole('switch',{name:'Outlook Calendar calendar'})).toBeEnabled();
+  await expect(page.getByRole('switch',{name:'Outlook Calendar calendar'})).toHaveCount(0);
   await page.getByRole('navigation',{name:'Workspace navigation'}).getByRole('link',{name:'People',exact:true}).click();
   await expect(page.getByRole('heading',{name:'People',exact:true})).toBeVisible();
 });
@@ -201,6 +215,6 @@ test('existing connections on later pages are not silently omitted', async ({pag
   ]}});
   await signedIn(page);
   await expect(page.getByText('Alex — Work')).toBeVisible();
-  await expect(page.getByText('opaque-account-id')).toBeVisible();
-  await expect(page.getByText(/TOKEN_EXPIRED/)).toBeVisible();
+  await expect(page.getByText('opaque-account-id')).toHaveCount(0);
+  await expect(page.getByText(/TOKEN_EXPIRED/)).toHaveCount(0);
 });
