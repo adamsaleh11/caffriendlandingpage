@@ -50,6 +50,7 @@ export default function Pipeline({workspaceId}:{workspaceId:string}) {
   const [moving, setMoving] = useState<string>();
   const [building, setBuilding] = useState('');
   const [inviting, setInviting] = useState<Engagement>();
+  const [focusedStageId, setFocusedStageId] = useState<string>();
   /** The engagement whose optional last step is being written, if any. */
   const [addingFinal, setAddingFinal] = useState<string>();
   const keyFor = useKeys();
@@ -196,8 +197,11 @@ export default function Pipeline({workspaceId}:{workspaceId:string}) {
     </ul>
   </section>;
 
-  const cards = engagements.rows ?? [];
-  const nothingYet = !!engagements.rows && cards.length === 0;
+  const allCards = engagements.rows ?? [];
+  const visibleCards = focusedStageId ? allCards.filter(row => targetStageId(row) === focusedStageId) : allCards;
+  const focusedStage = flow.find(stage => stage.id === focusedStageId) ?? terminal.find(stage => stage.id === focusedStageId);
+  const cards = visibleCards;
+  const nothingYet = !!engagements.rows && allCards.length === 0;
 
   /** The shared pipeline steps, marked against where this one engagement stands. */
   const journey = (engagement: Engagement): FlowStep[] => {
@@ -388,14 +392,21 @@ export default function Pipeline({workspaceId}:{workspaceId:string}) {
       {/* The pipeline itself, drawn as the run it is. Each bubble carries how many people stand there. */}
       {flow.length > 0 && engagements.rows && <StepFlow label={`Steps in ${pipeline?.name ?? 'this pipeline'}`}
         steps={flow.map(stage => {
-          const count = cards.filter(row => targetStageId(row) === stage.id).length;
+          const count = allCards.filter(row => targetStageId(row) === stage.id).length;
+          const selected = focusedStageId === stage.id;
           return {
             key: stage.id, label: stage.name, icon: iconFor(stage.name),
             sub: count === 1 ? '1 person' : `${count} people`,
-            state: count > 0 ? 'done' : 'todo',
-            hint: `${stage.name} — ${count === 1 ? '1 person' : `${count} people`}`,
+            state: selected ? 'current' : count > 0 ? 'done' : 'todo',
+            hint: `${stage.name} — ${count === 1 ? '1 person' : `${count} people`}. Show only this step.`,
+            onSelect: () => setFocusedStageId(selected ? undefined : stage.id),
           } as FlowStep;
         })} />}
+
+      {focusedStage && <p className="small pipeline-filter" role="status">
+        Showing {cards.length === 1 ? '1 person' : `${cards.length} people`} in {focusedStage.name}.{' '}
+        <button type="button" className="small-button" onClick={() => setFocusedStageId(undefined)}>Show everyone</button>
+      </p>}
 
       {notice && <p role="status" className="notice">{notice}</p>}
       {problem && <p role="alert">{problem}</p>}
@@ -429,7 +440,7 @@ export default function Pipeline({workspaceId}:{workspaceId:string}) {
               : <>
                   {board(flow, 'Active pipeline')}
                   {terminal.length > 0 && <details className="closed-stages">
-                    <summary>Finished ({terminal.reduce((total, stage) => total + cards.filter(row => row.stageId === stage.id).length, 0)})</summary>
+                    <summary>Finished ({terminal.reduce((total, stage) => total + allCards.filter(row => row.stageId === stage.id).length, 0)})</summary>
                     {board(terminal, 'Finished engagements')}
                   </details>}
                 </>)}

@@ -200,7 +200,10 @@ http.createServer(async (req,res) => {
   }
   const mailBase=`/workspaces/${workspace.id}/mail-connections`;
   if(path===`${mailBase}/${connectionId}`) return send({connectionId,provider:'GOOGLE',canSend:state.mailConnected!==false,senderAddress:state.mailConnected===false?undefined:'alex@example.com',grantedScopes:state.mailConnected===false?[]:['https://www.googleapis.com/auth/gmail.send'],mailStatus:state.mailConnected===false?'NOT_CONNECTED':'ACTIVE'});
-  if(path===`${mailBase}/${connectionId}/connect`) return send({redirect:'https://accounts.google.com/o/oauth2/v2/auth?client_id=test&state=state-GOOGLE-MAIL&redirect_uri=http%3A%2F%2Flocalhost%3A3100%2Fcrm-mail%2Fcallback%2FGOOGLE'});
+  if(path===`${mailBase}/${connectionId}/connect`) {
+    const redirectUri = state.mailRedirectUri ?? 'http://localhost:3100/crm-mail/callback/GOOGLE';
+    return send({redirect:`https://accounts.google.com/o/oauth2/v2/auth?client_id=test&state=state-GOOGLE-MAIL&redirect_uri=${encodeURIComponent(redirectUri)}`});
+  }
   if(path===`${mailBase}/${connectionId}/revoke`){state.mailConnected=false;return send({connectionId,canSend:false,mailStatus:'REVOKED'});}
   if(path==='/crm-outreach/mail-callback/GOOGLE'){state.mailConnected=true;return send({connectionId,provider:'GOOGLE',canSend:true,senderAddress:'alex@example.com',grantedScopes:['https://www.googleapis.com/auth/gmail.send'],mailStatus:'ACTIVE'});}
   const outreachBase=`/workspaces/${workspace.id}/meeting-outreach`;

@@ -232,6 +232,9 @@ export async function POST(request: Request, {params}:{params:Promise<{segments:
         const state = redirect.searchParams.get('state');
         if (redirect.protocol !== 'https:' || !['accounts.google.com','login.microsoftonline.com'].includes(redirect.hostname) || !state)
           return json({error:'Mailbox authorization is unavailable right now.'}, 502);
+        const callback = normalizeProviderCallback(redirect.searchParams.get('redirect_uri'), '/crm-mail/callback/GOOGLE');
+        if (!callback) return json({error:'Mailbox authorization is unavailable right now.'}, 502);
+        redirect.searchParams.set('redirect_uri', callback);
         // Remembered for the same reason the calendar flow remembers its own: the
         // callback has to know which workspace to return the person to, and a
         // replayed state must find nothing waiting for it.
@@ -323,8 +326,9 @@ async function connect(token: string, workspaceId: string, provider: string) {
   try { redirect = new URL(result.redirect ?? ''); } catch { return json({error:'This provider is unavailable right now.'}, 502); }
   const expected = provider === 'GOOGLE' ? 'accounts.google.com' : 'login.microsoftonline.com';
   const state = redirect.searchParams.get('state');
-  const callback = redirect.searchParams.get('redirect_uri');
-  if (redirect.protocol !== 'https:' || redirect.hostname !== expected || !state || callback !== calendarCallback(provider)) return json({error:'This provider is unavailable right now.'}, 502);
+  const callback = normalizeProviderCallback(redirect.searchParams.get('redirect_uri'), `/crm-calendar/callback/${provider}`);
+  if (redirect.protocol !== 'https:' || redirect.hostname !== expected || !state || !callback) return json({error:'This provider is unavailable right now.'}, 502);
+  redirect.searchParams.set('redirect_uri', callback);
   const existing = (await readSealed<PendingFlows>(pendingCookie))?.flows ?? [];
   const cutoff = Date.now() - fiveMinutes * 1000;
   const flows = [...existing.filter(flow => flow.created > cutoff), {provider, workspaceId, stateHash: await hashState(state), created: Date.now()}].slice(-5);
@@ -334,6 +338,20 @@ async function connect(token: string, workspaceId: string, provider: string) {
 
 function calendarCallback(provider: string) {
   return new URL(`/crm-calendar/callback/${provider}`, webOrigin()).toString();
+}
+
+function normalizeProviderCallback(value: string | null, expectedPath: string) {
+  if (!value) return null;
+  let callback: URL;
+  try { callback = new URL(value); } catch { return null; }
+  const frontend = new URL(expectedPath, webOrigin());
+  if (callback.toString() === frontend.toString()) return frontend.toString();
+
+  let apiOrigin: string;
+  try { apiOrigin = new URL(process.env.CAFFRIEND_API_ORIGIN ?? '').origin; } catch { return null; }
+  if (callback.origin !== apiOrigin || callback.pathname !== expectedPath || callback.search || callback.hash || callback.username || callback.password)
+    return null;
+  return frontend.toString();
 }
 
 /** Shared preamble for every mutating verb below. */

@@ -42,11 +42,33 @@ async function sha256(value:string) {
 export async function startCrmOAuth(path:string, provider:string, workspaceId:string):Promise<string> {
   const token=await sessionToken();
   const {redirect}=await crmBackendApi<{redirect:string}>(path,{method:'POST',headers:{Authorization:`Bearer ${token}`}});
-  const state=new URL(redirect).searchParams.get('state');
+  const target=new URL(redirect);
+  // The backend hands back its own callback URL. Both the calendar and the mail
+  // flow are completed by this app's own callback routes, which is where the
+  // pending flow and the settings destination live, so the provider has to send
+  // the person back here rather than to the API origin.
+  const callbackPath=provider==='GOOGLE_MAIL'?'/crm-mail/callback/GOOGLE':`/crm-calendar/callback/${provider}`;
+  // The backend's own mail callback lives under a different path than this app's,
+  // so both spellings have to be recognised as the backend's before rewriting.
+  const backendPaths=provider==='GOOGLE_MAIL'
+    ? ['/crm-mail/callback/GOOGLE','/crm-outreach/mail-callback/GOOGLE']
+    : [`/crm-calendar/callback/${provider}`];
+  const expectedCallback=new URL(callbackPath,window.location.origin).toString();
+  const callback=target.searchParams.get('redirect_uri');
+  if(callback && callback!==expectedCallback) {
+    // Only the backend's own matching callback is rewritten; anything else means
+    // the redirect did not come from where it should have.
+    let supplied:URL;
+    try{ supplied=new URL(callback); }catch{ throw new ApiError(502,'This provider is unavailable right now.'); }
+    if(supplied.origin!==new URL(crmBackendOrigin).origin || !backendPaths.includes(supplied.pathname) || supplied.search || supplied.hash)
+      throw new ApiError(502,`OAuth is misconfigured: Google is being sent ${callback}, but Caffriend must use ${expectedCallback}. Update the backend redirect URI and Google OAuth client, then try again.`);
+    target.searchParams.set('redirect_uri',expectedCallback);
+  }
+  const state=target.searchParams.get('state');
   if(state){
     const flow={provider,workspaceId,stateHash:await sha256(state),created:Date.now()};
     const secure=window.location.protocol==='https:'?'; Secure':'';
     document.cookie=`${directPendingCookie}=${encodeURIComponent(JSON.stringify({flows:[flow]}))}; Max-Age=300; Path=/; SameSite=Lax${secure}`;
   }
-  return redirect;
+  return target.toString();
 }

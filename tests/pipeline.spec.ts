@@ -35,6 +35,23 @@ test('cards lead with the person and move a step at a time', async ({page}) => {
   await expect(page.getByRole('status').filter({hasText:'Moved to Contacted'})).toBeVisible();
 });
 
+test('clicking a pipeline icon empties every step but the chosen one', async ({page}) => {
+  await enter(page);
+  const board = page.getByRole('list', {name:'Active pipeline'});
+  await expect(board.locator(':scope > li')).toHaveCount(4);
+
+  await page.getByRole('button', {name:/Contacted .* Show only this step/}).click();
+  await expect(page.getByRole('status').filter({hasText:'Showing 0 people in Contacted'})).toBeVisible();
+  // The run of steps stays whole — only the people inside the other steps go away.
+  await expect(board.locator(':scope > li')).toHaveCount(4);
+  await expect(page.getByRole('heading', {name:/^Contacted/})).toBeVisible();
+  await expect(page.locator('.engagement')).toHaveCount(0);
+
+  await page.getByRole('button', {name:'Show everyone'}).click();
+  await expect(board.locator(':scope > li')).toHaveCount(4);
+  await expect(page.locator('.engagement')).toHaveCount(1);
+});
+
 test('pipeline exposes five stable booking-aware steps without customization',async({page})=>{
  await enter(page);
  const board=page.getByRole('list',{name:'Active pipeline'});

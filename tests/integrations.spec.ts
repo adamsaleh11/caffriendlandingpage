@@ -148,13 +148,38 @@ test('a callback for a different provider than the pending flow is refused', asy
   expect((backendState.calls ?? []).some((call:{path:string})=>call.path.startsWith('/crm-calendar/callback/MICROSOFT'))).toBe(false);
 });
 
-test('calendar connect follows the backend redirect directly', async ({page,request}) => {
+test('a backend redirect using the wrong calendar callback is refused before Google', async ({page,request}) => {
   await request.post(backend,{data:{calendarRedirectUri:'http://localhost:4000/crm-calendar/callback/GOOGLE'}});
   await signedIn(page);
   await page.getByRole('switch',{name:'Google Calendar calendar'}).click();
-  await expect(page).toHaveURL(/accounts\.google\.com|google\.com/);
+  await expect(page).toHaveURL(settings);
+  await expect(page.getByText(/OAuth is misconfigured/)).toBeVisible();
   const backendState = await (await request.get(backend)).json();
   expect((backendState.calls ?? []).some((call:{path:string})=>call.path.startsWith('/crm-calendar/callback'))).toBe(false);
+});
+
+test('backend-host calendar and mailbox callbacks are rewritten back to settings', async ({page,request}) => {
+  await request.post(backend,{data:{
+    calendarRedirectUri:'http://127.0.0.1:4100/crm-calendar/callback/GOOGLE',
+    // The backend registers its mail callback under its outreach path, so the
+    // rewrite has to recognise that spelling as well as its own.
+    mailRedirectUri:'http://127.0.0.1:4100/crm-outreach/mail-callback/GOOGLE',
+    mailConnected:false,
+  }});
+  await signedIn(page);
+  await stubProvider(page,'code=provider-code');
+
+  await page.getByRole('switch',{name:'Google Calendar calendar'}).click();
+  await expect(page).toHaveURL(settings);
+  expect(page.url()).not.toContain('provider-code');
+  await expect(page.getByText('Connected. Choose the calendar Caffriend should use.')).toBeVisible();
+
+  const grant = page.getByRole('switch',{name:'Send mail from my Gmail address'});
+  await expect(grant).toBeEnabled();
+  await grant.click();
+  await expect(page).toHaveURL(settings);
+  expect(page.url()).not.toContain('provider-code');
+  await expect(page.getByText(/Caffriend can now send invitations from your address/)).toBeVisible();
 });
 
 test('unconfigured provider is disabled with actionable feedback and the CRM stays usable', async ({page,request}) => {

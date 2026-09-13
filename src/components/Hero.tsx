@@ -5,6 +5,8 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 
+const APP_STORE_URL = "https://apps.apple.com/us/app/caffriend/id6755127408";
+
 async function submitEarlyAccess(email: string) {
   const res = await fetch("/api/early-access", {
     method: "POST",
@@ -101,7 +103,7 @@ export default function Hero() {
   const [emailDesktop, setEmailDesktop] = useState("");
   const [loadingMobile, setLoadingMobile] = useState(false);
   const [loadingDesktop, setLoadingDesktop] = useState(false);
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
 
   const handleSubmitMobile = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -226,13 +228,15 @@ export default function Hero() {
                       height={40}
                       className="cursor-pointer"
                     />
-                    <Image
-                      src="/apple.png"
-                      alt="Download on the App Store"
-                      width={135}
-                      height={40}
-                      className="cursor-pointer"
-                    />
+                    <Link href={APP_STORE_URL} target="_blank" rel="noopener noreferrer" aria-label="Download Caffriend on the App Store">
+                      <Image
+                        src="/apple.png"
+                        alt="Download on the App Store"
+                        width={135}
+                        height={40}
+                        className="cursor-pointer"
+                      />
+                    </Link>
                   </div>
                 </div>
               </div>
@@ -274,13 +278,15 @@ export default function Hero() {
                     height={59}
                     className="cursor-pointer"
                   />
-                  <Image
-                    src="/apple.png"
-                    alt="Download on the App Store"
-                    width={203.95}
-                    height={59}
-                    className="cursor-pointer"
-                  />
+                  <Link href={APP_STORE_URL} target="_blank" rel="noopener noreferrer" aria-label="Download Caffriend on the App Store">
+                    <Image
+                      src="/apple.png"
+                      alt="Download on the App Store"
+                      width={203.95}
+                      height={59}
+                      className="cursor-pointer"
+                    />
+                  </Link>
                 </div>
               </div>
             </div>

@@ -1137,3 +1137,8 @@
   border-top: 1px solid var(--line-soft); padding-top: .55rem; margin-top: .3rem;
 }
 .crm .engagement .card-actions .small-button { padding: .3rem .7rem; }
+
+/* The line that says which step the board is narrowed to. It reads at full
+   strength — it is a live state and a live way out, not a footnote. */
+.crm .pipeline-filter { color: var(--ink); }
+.crm .pipeline-filter button { vertical-align: baseline; }
