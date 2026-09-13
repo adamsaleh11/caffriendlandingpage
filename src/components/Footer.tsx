@@ -181,6 +181,12 @@ export default function FooterCta() {
           >
             Privacy Policy
           </Link>
+          <Link
+            href="/terms"
+            className="text-[#1F150F] hover:text-[#FA6404] hover:underline text-sm"
+          >
+            Terms &amp; Conditions
+          </Link>
           <a
             href="mailto:info@caffriend.com"
             className="text-[#FA6404] hover:underline text-sm"

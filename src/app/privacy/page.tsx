@@ -14,7 +14,6 @@ const sections = [
   { id: "where-this-applies", label: "Where This Privacy Policy Applies" },
   { id: "data-we-collect", label: "Data We Collect" },
   { id: "how-we-use-data", label: "How We Use Data" },
-  { id: "free-vs-paid", label: "Free vs. Paid User Data Use" },
   { id: "how-we-share-data", label: "How We Share Data" },
   { id: "third-party-services", label: "Third-Party Services & SDKs" },
   { id: "messaging-video", label: "Messaging & Video Chats" },
@@ -214,27 +213,7 @@ export default function PrivacyPolicyPage() {
           ]}
         />
 
-        <H2 id="free-vs-paid">5. Free vs. Paid User Data Use</H2>
-        <P>Caffriend offers both free and paid subscription tiers.</P>
-        <UL
-          items={[
-            <>
-              <strong>Free users:</strong> Certain behavioral data (such as likes and
-              swipe activity) may be visible or surfaced to paid users to support
-              discovery and matching features.
-            </>,
-            <>
-              <strong>Paid users:</strong> Gain enhanced visibility, filtering, and
-              insights based on additional data processing.
-            </>,
-          ]}
-        />
-        <P>
-          All data use is limited to what is necessary to operate and improve the
-          Services.
-        </P>
-
-        <H2 id="how-we-share-data">6. How We Share Data</H2>
+        <H2 id="how-we-share-data">5. How We Share Data</H2>
         <P>
           We do <strong>not sell your personal information</strong>.
         </P>
@@ -248,7 +227,7 @@ export default function PrivacyPolicyPage() {
           ]}
         />
 
-        <H2 id="third-party-services">7. Third-Party Services &amp; SDKs</H2>
+        <H2 id="third-party-services">6. Third-Party Services &amp; SDKs</H2>
         <P>Caffriend integrates the following third-party services:</P>
         <H3>Stripe (Payments)</H3>
         <UL
@@ -269,42 +248,31 @@ export default function PrivacyPolicyPage() {
           they provide.
         </P>
 
-        <H2 id="messaging-video">8. Messaging &amp; Video Chats</H2>
+        <H2 id="messaging-video">7. Messaging &amp; Video Chats</H2>
         <UL
           items={[
-            "All in-app messaging is private and not SMS-based",
             <>
               Video chats are <strong>live only</strong> and are{" "}
               <strong>not recorded or stored</strong> after the session ends
             </>,
             "We do not publicly display private communications",
-            <>
-              Messages and profiles may be reviewed through{" "}
-              <strong>manual moderation</strong> to prevent bots, abuse, or violations
-              of our community guidelines
-            </>,
-            "Communications may be temporarily processed to enable delivery, moderation, security, or abuse prevention",
           ]}
         />
+        <P>
+          Messaging and moderation rules are set out in our{" "}
+          <Link href="/terms#messaging-moderation" className="text-[#FA6404] hover:underline">
+            Terms &amp; Conditions
+          </Link>
+          .
+        </P>
 
-        <H2 id="retention">9. How Long We Retain Your Data</H2>
+        <H2 id="retention">8. How Long We Retain Your Data</H2>
         <P>
           We want the professional connections you make through Caffriend to be
           meaningful and long-lasting. However, we retain your personal data{" "}
           <strong>only for as long as necessary</strong> to provide the Services, for
           legitimate business purposes (as described in this Privacy Policy), and as
           permitted or required by applicable law.
-        </P>
-        <H3>Account Closure and Inactivity</H3>
-        <P>
-          If you choose to stop using Caffriend, you may delete your account at any time
-          through the app. Once your account is deleted, your profile will no longer be
-          visible to other users.
-        </P>
-        <P>
-          We may also automatically deactivate or close accounts that have been{" "}
-          <strong>inactive for an extended period</strong>, in accordance with our
-          internal policies.
         </P>
         <H3>Data Retention After Account Deletion</H3>
         <P>
@@ -369,7 +337,7 @@ export default function PrivacyPolicyPage() {
           safety, and create new features and technologies.
         </P>
 
-        <H2 id="your-rights">10. Your Rights</H2>
+        <H2 id="your-rights">9. Your Rights</H2>
         <P>
           We want you to be in control of your data. Below we outline the rights,
           options, and tools available to you regarding your personal information.
@@ -458,12 +426,14 @@ export default function PrivacyPolicyPage() {
           privacy requests.
         </P>
 
-        <H2 id="childrens-privacy">11. Children&rsquo;s Privacy</H2>
+        <H2 id="childrens-privacy">10. Children&rsquo;s Privacy</H2>
         <P>
-          Caffriend is intended{" "}
-          <strong>only for individuals who are 18 years of age or older</strong>. We do
-          not permit individuals under the age of 18 to create accounts or use the
-          Services.
+          Caffriend is intended only for individuals who are 18 years of age or older,
+          as set out in our{" "}
+          <Link href="/terms#eligibility" className="text-[#FA6404] hover:underline">
+            Terms &amp; Conditions
+          </Link>
+          .
         </P>
         <P>
           We do not knowingly collect, solicit, or maintain personal information from
@@ -471,13 +441,8 @@ export default function PrivacyPolicyPage() {
           data from an individual under 18, we will take steps to promptly delete such
           information and terminate the associated account.
         </P>
-        <P>
-          If you believe that a minor may have provided us with personal information or is
-          using the Services in violation of this policy, please contact us so we can
-          investigate and take appropriate action.
-        </P>
 
-        <H2 id="cross-border">12. Cross-Border Data Transfers</H2>
+        <H2 id="cross-border">11. Cross-Border Data Transfers</H2>
         <P>
           Caffriend is currently available only to users located in{" "}
           <strong>Canada and the United States of America</strong>. As a result, any
@@ -491,13 +456,13 @@ export default function PrivacyPolicyPage() {
           personal information during processing and storage.
         </P>
 
-        <H2 id="changes">13. Privacy Policy Changes</H2>
+        <H2 id="changes">12. Privacy Policy Changes</H2>
         <P>
           We may update this Privacy Policy from time to time. Material changes will be
           communicated through the app or website.
         </P>
 
-        <H2 id="contact">14. How To Contact Us</H2>
+        <H2 id="contact">13. How To Contact Us</H2>
         <P>
           If you have questions or requests regarding this Privacy Policy, contact us at:
         </P>
@@ -517,9 +482,15 @@ export default function PrivacyPolicyPage() {
           requirements and industry standards.
         </p>
 
-        <div className="mt-12">
+        <div className="mt-12 flex flex-wrap gap-6">
           <Link href="/" className="text-[#FA6404] hover:underline font-semibold">
             &larr; Back to home
+          </Link>
+          <Link
+            href="/terms"
+            className="text-[#FA6404] hover:underline font-semibold"
+          >
+            Terms &amp; Conditions
           </Link>
         </div>
       </div>
