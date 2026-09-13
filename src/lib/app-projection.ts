@@ -117,6 +117,8 @@ export type AppCall = {
   physicalLocation: string | null; joinUrl: string | null; meetingType: string | null;
   status: string | null; timezone: string | null; purpose: string | null;
   meetingId: string | null; workspaceId: string | null; engagementId: string | null;
+  /** The collaboration room this call is held in; null for an in-person meeting. */
+  groupCallId: string | null;
 };
 export function projectCall(input: unknown, currentUserId: string): AppCall {
   const row = (input ?? {}) as Row;
@@ -126,6 +128,7 @@ export function projectCall(input: unknown, currentUserId: string): AppCall {
   const date = (value: unknown) => value instanceof Date ? value.toISOString() : text(value);
   return {
     id: String(row.id ?? ''),
+    groupCallId: text(row.groupCallId),
     startDate: date(row.startDate),
     endDate: date(row.endDate),
     counterpartId: text(other.id),

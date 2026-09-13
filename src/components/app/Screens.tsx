@@ -284,6 +284,10 @@ function CallRow({call}:{call:AppCall}) {
     </div>
     <div className="app-call-action">
       {call.needsPayment ? <span className="small">Payment required</span>
+        /* A Caffriend call has a collaboration room of its own. It is the same address
+           before, during and after the call, so the chat, notes, commitments and agenda
+           stay reachable once the call itself is over. */
+        : call.groupCallId ? <a className="button" href={`/calls/${call.groupCallId}`}>Join</a>
         : call.joinUrl ? <a className="button" href={call.joinUrl} target={call.venue==='PROVIDER_CONFERENCE'?'_blank':undefined} rel={call.venue==='PROVIDER_CONFERENCE'?'noreferrer noopener':undefined}>Join</a>
         : <span className="small">Join link pending</span>}
     </div>

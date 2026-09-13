@@ -95,6 +95,7 @@ function meetingProjection(row: Record<string, unknown>): Meeting {
     agenda: optional(row.agenda),
     errorCode: optional(row.errorCode),
     engagementId: optional(row.engagementId),
+    groupCallId: optional(row.groupCallId),
   };
 }
 
@@ -261,14 +262,15 @@ export async function POST(request: Request, {params}:{params:Promise<{segments:
     }
     if (workspace && segments[2] === 'mail-connections' && segments.length === 5 && uuidPattern.test(segments[3])) {
       if (segments[4] === 'connect') {
-        const result = await backend<{redirect?:string}>(`${workspace}/mail-connections/${segments[3]}/connect`, {token:session.token, method:'POST', body:{}});
+        const result = await backend<Record<string, unknown>>(`${workspace}/mail-connections/${segments[3]}/connect`, {token:session.token, method:'POST', body:{}});
+        const target = oauthRedirectValue(result);
         let redirect: URL;
-        try { redirect = new URL(result.redirect ?? ''); } catch { return json({error:'Mailbox authorization is unavailable right now.'}, 502); }
+        try { redirect = new URL(target ?? ''); } catch { return mailUnavailable('invalid_redirect_body', result); }
         const state = redirect.searchParams.get('state');
         if (redirect.protocol !== 'https:' || !['accounts.google.com','login.microsoftonline.com'].includes(redirect.hostname) || !state)
-          return json({error:'Mailbox authorization is unavailable right now.'}, 502);
+          return mailUnavailable('invalid_provider_redirect', {protocol:redirect.protocol, hostname:redirect.hostname, hasState:!!state});
         const callback = normalizeProviderCallback(redirect.searchParams.get('redirect_uri'), '/crm-mail/callback/GOOGLE');
-        if (!callback) return json({error:'Mailbox authorization is unavailable right now.'}, 502);
+        if (!callback) return mailUnavailable('invalid_callback_redirect', {redirectUri:redirect.searchParams.get('redirect_uri')});
         redirect.searchParams.set('redirect_uri', callback);
         // Remembered for the same reason the calendar flow remembers its own: the
         // callback has to know which workspace to return the person to, and a
@@ -361,6 +363,19 @@ export async function POST(request: Request, {params}:{params:Promise<{segments:
   }
 }
 
+function oauthRedirectValue(result: Record<string, unknown>) {
+  for (const key of ['redirect', 'url', 'authorizationUrl', 'authorization_url', 'authUrl', 'auth_url']) {
+    const value = result[key];
+    if (typeof value === 'string' && value) return value;
+  }
+  return null;
+}
+
+function mailUnavailable(reason: string, detail?: unknown) {
+  if (process.env.NODE_ENV !== 'production') console.warn('[crm-mail-connect]', reason, detail);
+  return json({error:'Mailbox authorization is unavailable right now.', ...(process.env.NODE_ENV !== 'production' ? {reason} : {})}, 502);
+}
+
 /** Records a bounded pending flow per state so parallel tabs cannot be confused for one another. */
 async function connect(token: string, workspaceId: string, provider: string) {
   if (!providers.includes(provider as Provider)) return json({error:'Not found'}, 404);
@@ -386,18 +401,43 @@ function normalizeProviderCallback(value: string | null, expectedPath: string) {
   const frontend = new URL(expectedPath, webOrigin());
   if (callback.toString() === frontend.toString()) return frontend.toString();
 
-  let apiOrigin: string;
-  try { apiOrigin = new URL(process.env.CAFFRIEND_API_ORIGIN ?? '').origin; } catch { return null; }
   // The backend registers its mail callback under its own outreach path, which
   // is spelled differently from the one this app answers on. Both name the same
   // backend-owned callback, so both are recognised before rewriting; anything
-  // else is not the backend's redirect and is refused.
+  // else is not the backend's redirect and is refused. The backend builds that
+  // callback against the web origin (so Google/Microsoft land the user back on
+  // this app), not against its own API origin, so both origins are accepted.
   const backendPaths = expectedPath === '/crm-mail/callback/GOOGLE'
     ? [expectedPath, '/crm-outreach/mail-callback/GOOGLE']
     : [expectedPath];
-  if (callback.origin !== apiOrigin || !backendPaths.includes(callback.pathname) || callback.search || callback.hash || callback.username || callback.password)
+  if (![...backendCallbackOrigins(), frontend.origin].includes(callback.origin) || !sameProviderCallbackPath(callback.pathname, backendPaths) || callback.hash || callback.username || callback.password)
     return null;
   return frontend.toString();
+}
+
+function sameProviderCallbackPath(actual: string, allowed: string[]) {
+  const normalise = (path: string) => {
+    const pieces = path.split('/');
+    const provider = pieces.at(-1);
+    if (provider) pieces[pieces.length - 1] = provider.toUpperCase();
+    return pieces.join('/');
+  };
+  return allowed.includes(normalise(actual));
+}
+
+function backendCallbackOrigins() {
+  const origins = new Set<string>();
+  for (const value of [process.env.CAFFRIEND_API_ORIGIN, 'https://api.caffriend.com']) {
+    try {
+      if (!value) continue;
+      const origin = new URL(value);
+      origins.add(origin.origin);
+      if (origin.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(origin.hostname)) {
+        origins.add(new URL(`http://${origin.hostname === 'localhost' ? '127.0.0.1' : 'localhost'}${origin.port ? `:${origin.port}` : ''}`).origin);
+      }
+    } catch {}
+  }
+  return [...origins];
 }
 
 /** Shared preamble for every mutating verb below. */

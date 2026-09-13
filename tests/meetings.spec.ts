@@ -69,6 +69,23 @@ test('the call has camera, microphone, device and participant controls while con
   await expect(page.getByRole('heading', { name: 'You left the call' })).toBeVisible();
 });
 
+test('a booked meeting link backed by a group call opens the full call design', async ({ page, request }) => {
+  await request.post('http://127.0.0.1:4100/__state', { data: { meetingGroupCall: true } });
+  await page.route('https://livekit.test/**', route => route.abort());
+  await page.routeWebSocket('wss://livekit.test/**', () => {});
+  await page.goto(`/meet/${invite}`);
+  await page.getByLabel('Your display name').fill('Jordan');
+  await page.getByLabel('I accept the meeting and privacy terms').check();
+  await page.getByRole('button', { name: 'Join on web', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Breaking into product analytics' })).toBeVisible({timeout: 15000});
+  await expect(page.getByRole('region', { name: 'Call stage' })).toBeVisible();
+  for (const tab of ['People', 'Chat', 'Notes', 'Actions', 'Agenda']) {
+    await expect(page.getByRole('tab', { name: tab })).toBeVisible();
+  }
+  await expect(page.getByRole('button', { name: 'Reactions' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Picture in picture' })).toBeVisible();
+});
+
 test('an unavailable invitation is safe, a failing resolve leaks nothing, and retry recovers', async ({ page, request }) => {
   await request.post('http://127.0.0.1:4100/__state', { data: { invitationUnavailable: true } });
   await page.goto(`/meet/${invite}`);

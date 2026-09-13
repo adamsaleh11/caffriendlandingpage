@@ -198,6 +198,57 @@ test('backend-host calendar and mailbox callbacks are rewritten back to settings
   await expect(page.getByText(/Caffriend can now send invitations from your address/)).toBeVisible();
 });
 
+test('production backend mailbox callback is rewritten before provider authorization', async ({page,request}) => {
+  await request.post(backend,{data:{
+    mailRedirectUri:'https://api.caffriend.com/crm-outreach/mail-callback/GOOGLE',
+    mailConnected:false,
+  }});
+  await signedIn(page);
+  await stubProvider(page,'code=provider-code');
+
+  await page.getByRole('switch',{name:'Google Calendar calendar'}).click();
+  await expect(page).toHaveURL(settings);
+  const grant = page.getByRole('switch',{name:'Send mail from my Gmail address'});
+  await expect(grant).toBeEnabled();
+  await grant.click();
+  await expect(page).toHaveURL(settings);
+  await expect(page.getByText(/Caffriend can now send invitations from your address/)).toBeVisible();
+});
+
+test('local backend mailbox callback accepts loopback hostname aliases', async ({page,request}) => {
+  await request.post(backend,{data:{
+    mailRedirectUri:'http://localhost:4100/crm-outreach/mail-callback/google?connectionId=33333333-3333-4333-8333-333333333333',
+    mailConnected:false,
+  }});
+  await signedIn(page);
+  await stubProvider(page,'code=provider-code');
+
+  await page.getByRole('switch',{name:'Google Calendar calendar'}).click();
+  await expect(page).toHaveURL(settings);
+  const grant = page.getByRole('switch',{name:'Send mail from my Gmail address'});
+  await expect(grant).toBeEnabled();
+  await grant.click();
+  await expect(page).toHaveURL(settings);
+  await expect(page.getByText(/Caffriend can now send invitations from your address/)).toBeVisible();
+});
+
+test('mailbox connect accepts backend url response alias', async ({page,request}) => {
+  await request.post(backend,{data:{
+    mailConnected:false,
+    mailRedirectField:'url',
+  }});
+  await signedIn(page);
+  await stubProvider(page,'code=provider-code');
+
+  await page.getByRole('switch',{name:'Google Calendar calendar'}).click();
+  await expect(page).toHaveURL(settings);
+  const grant = page.getByRole('switch',{name:'Send mail from my Gmail address'});
+  await expect(grant).toBeEnabled();
+  await grant.click();
+  await expect(page).toHaveURL(settings);
+  await expect(page.getByText(/Caffriend can now send invitations from your address/)).toBeVisible();
+});
+
 test('unconfigured provider is disabled with actionable feedback and the CRM stays usable', async ({page,request}) => {
   await request.post(backend,{data:{status:{GOOGLE:{configured:false},MICROSOFT:{configured:true}}}});
   await signedIn(page);
