@@ -1525,3 +1525,8 @@
 
 /* Accept and decline sit side by side, and never wrap mid-word in a narrow cell. */
 .crm table.records .row-buttons { display: inline-flex; gap: .5rem; white-space: nowrap; }
+
+.crm .call-detail-identity { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; }
+.crm .call-detail-identity > .avatar { width: 2.75rem; height: 2.75rem; flex: none; }
+.crm .call-detail-identity p { margin: 0; }
+.crm .call-detail-who { font-weight: 700; color: var(--ink); overflow-wrap: anywhere; }

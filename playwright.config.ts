@@ -5,6 +5,6 @@ export default defineConfig({
   webServer: [
     { command: 'node tests/backend.mjs', port: 4100, reuseExistingServer: false },
     { command: 'npm run dev -- --port 3100', port: 3100, reuseExistingServer: false,
-      env: { CAFFRIEND_API_ORIGIN: 'http://127.0.0.1:4100', NEXT_PUBLIC_CAFFRIEND_API_ORIGIN: 'http://127.0.0.1:4100', CAFFRIEND_WEB_ORIGIN: 'http://localhost:3100', CAFFRIEND_SESSION_SECRET: 'test-only-session-key-at-least-32-characters-long', EARLY_ACCESS_TRANSPORT: 'inert', GOOGLE_CLIENT_ID: 'test-google-client' } }
+      env: { CAFFRIEND_API_ORIGIN: 'http://127.0.0.1:4100', NEXT_DIST_DIR: '.next-test', NEXT_PUBLIC_CAFFRIEND_API_ORIGIN: 'http://127.0.0.1:4100', CAFFRIEND_WEB_ORIGIN: 'http://localhost:3100', CAFFRIEND_SESSION_SECRET: 'test-only-session-key-at-least-32-characters-long', EARLY_ACCESS_TRANSPORT: 'inert', GOOGLE_CLIENT_ID: 'test-google-client' } }
   ]
 });

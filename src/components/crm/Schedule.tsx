@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useList, useRows, Section, Empty } from './common';
 import Modal from './Modal';
+import Face from '@/components/app/Face';
 import type { AppCall } from '@/lib/app-projection';
 import type { Meeting } from '@/lib/contracts';
 import { fromCall, mergeMeetings, stillAhead, type UpcomingMeeting } from '@/lib/upcoming';
@@ -53,7 +54,18 @@ const minutesBetween = (from?: string | null, to?: string | null) => {
 function CallDetail({call, workspaceId, past, onClose}:{
   call: UpcomingMeeting; workspaceId: string; past: boolean; onClose: () => void;
 }) {
+  const minutes = minutesBetween(call.startsAt, call.endsAt);
   return <Modal title={call.title} description={call.counterpart ?? undefined} onClose={onClose}>
+    {/* The same face and heading the card in the list carries, so opening one from the
+        month grid lands somewhere recognisable. */}
+    <div className="call-detail-identity">
+      <Face person={{name: call.counterpart || call.title, image: call.image}} />
+      <div>
+        <p className="call-detail-who">{call.counterpart || call.title}</p>
+        <p className="small">{past ? 'This call has finished' : 'Still to come'}
+          {minutes ? ` · ${minutes} min` : ''}</p>
+      </div>
+    </div>
     <dl className="call-detail">
       <div><dt>When</dt><dd>
         {dayLabel(call.startsAt)}
@@ -66,13 +78,13 @@ function CallDetail({call, workspaceId, past, onClose}:{
       {call.notes && <div><dt>Agenda</dt><dd>{call.notes}</dd></div>}
     </dl>
     <div className="call-detail-actions">
+      {/* Whichever the call needs is the primary: joining one that is ahead, reading
+          what a finished one produced. Notes is a page, never the live call surface. */}
       {!past && call.href && (call.external
         ? <a className="button" href={call.href} target="_blank" rel="noreferrer noopener">Join</a>
         : <Link className="button" href={call.href}>Join</Link>)}
-      {/* The collaboration room is the same address before, during and after the call,
-          so its notes, chat and commitments are reachable whether or not it has run. */}
-      {call.groupCallId &&
-        <Link className="text-link" href={`/calls/${call.groupCallId}`}>{past ? 'Open notes' : 'Open the call room'}</Link>}
+      {call.groupCallId && <Link className={past ? 'button' : 'text-link'}
+        href={`/app/${workspaceId}/calls/${call.groupCallId}`}>Call notes</Link>}
       {call.meetingId &&
         <Link className="text-link" href={`/app/${workspaceId}/meetings/${call.meetingId}`}>Meeting details</Link>}
       {!call.groupCallId && !call.meetingId && !call.href &&
@@ -166,9 +178,12 @@ export default function Schedule({workspaceId}:{workspaceId:string}) {
   const meetings = useList<Meeting>(`workspaces/${workspaceId}/meetings`);
   const history = useRows<MyCall>('mine', 'call');
   /**
-   * The accepted coffee chats that have already happened. Only needed to say who each
-   * finished call was with: `/group-calls/mine` carries a title and nothing else, and
-   * fetching every call's roster to label a list would be one request per row.
+   * The accepted coffee chats that have already happened.
+   *
+   * `upcoming-calls` is the backend's type 1, which holds only what is still ahead, so a
+   * chat dropped off the calendar the moment it finished — the day it happened on went
+   * blank. The history feed is what keeps it on the month, and it is also the only place
+   * a finished call is told who it was with.
    */
   const pastEvents = useRows<AppCall>(`workspaces/${workspaceId}/past-calls`);
   // Recomputed on the minute so a meeting drops off the list once it has ended.
@@ -182,9 +197,29 @@ export default function Schedule({workspaceId}:{workspaceId:string}) {
    * Filtering the grid to the future too emptied today's cell the moment a meeting
    * ended — including a stuck one the Inbox was still asking someone to deal with.
    */
-  const booked = useMemo(
-    () => mergeMeetings(calls.rows ?? [], meetings.rows ?? []),
-    [calls.rows, meetings.rows]);
+  const booked = useMemo(() => {
+    const rows = mergeMeetings([...(calls.rows ?? []), ...(pastEvents.rows ?? [])], meetings.rows ?? []);
+    /**
+     * A call that ran but never showed up in either calendar feed — an instant coffee,
+     * or one whose accepted event has aged out — still happened on a day, so it belongs
+     * on the month. Its room is the only thing it carries, and that is enough to open.
+     */
+    const seen = new Set(rows.flatMap(row => [row.groupCallId, row.meetingId].filter(Boolean) as string[]));
+    const orphans = (history.rows ?? [])
+      .filter(row => row.startsAt && !seen.has(row.id) && !(row.meetingId && seen.has(row.meetingId)))
+      .map(row => ({
+        key: `room:${row.id}`,
+        title: row.title || 'Coffee chat',
+        counterpart: null, image: null,
+        startsAt: row.startsAt, endsAt: row.endedAt,
+        where: row.kind === 'EVENT' ? 'Group call' : 'Caffriend call',
+        status: null, notes: null,
+        href: null, external: false, needsPayment: false,
+        groupCallId: row.id, meetingId: row.meetingId,
+      } satisfies UpcomingMeeting));
+    return [...rows, ...orphans]
+      .sort((a, b) => (Date.parse(a.startsAt ?? '') || 0) - (Date.parse(b.startsAt ?? '') || 0));
+  }, [calls.rows, pastEvents.rows, meetings.rows, history.rows]);
   const upcoming = useMemo(() => booked.filter(row => stillAhead(row, tick)), [booked, tick]);
 
   /**
@@ -221,13 +256,21 @@ export default function Schedule({workspaceId}:{workspaceId:string}) {
   }, [pastEvents.rows, calls.rows]);
   const whoWasOn = (call: MyCall) => byCall.get(call.id) ?? (call.meetingId ? byCall.get(call.meetingId) : undefined);
 
+  /**
+   * The month draws as soon as any one feed answers. Waiting for all four would hold an
+   * otherwise complete calendar behind whichever is slowest, and one that never answers
+   * would hold it forever.
+   */
+  const ready = Boolean(calls.rows || meetings.rows || pastEvents.rows || history.rows);
+
   return <>
-    <Section title="Upcoming calls" intro="Everything you have booked, on a calendar. Join one from the list below it." state={calls}>
+    <Section title="Meetings" intro="Every call you have booked or held, on a calendar. Open one to join it or read what it produced." state={calls}>
       {calls.error && <p role="alert">Calls could not be loaded. <button className="secondary" onClick={calls.reload}>Try again</button></p>}
       {meetings.error && <p role="alert">Meetings booked from invitations could not be loaded. <button className="secondary" onClick={meetings.reload}>Try again</button></p>}
-      {!calls.rows && !meetings.rows && !calls.error && <p role="status">Loading your calendar…</p>}
-      {(calls.rows || meetings.rows) && <CallCalendar calls={booked} now={tick} workspaceId={workspaceId} />}
-      {(calls.rows || meetings.rows) && booked.length === 0 && <Empty>Nothing booked yet.</Empty>}
+      {pastEvents.error && <p role="alert">Calls that have already happened could not be loaded. <button className="secondary" onClick={pastEvents.reload}>Try again</button></p>}
+      {ready && <CallCalendar calls={booked} now={tick} workspaceId={workspaceId} />}
+      {!ready && !calls.error && <p role="status">Loading your calendar…</p>}
+      {ready && booked.length === 0 && <Empty>Nothing booked yet.</Empty>}
       {upcoming.length > 0 && <UpcomingMeetings meetings={upcoming} label="Upcoming meetings" />}
     </Section>
 

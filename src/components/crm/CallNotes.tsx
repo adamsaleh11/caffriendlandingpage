@@ -86,8 +86,14 @@ export default function CallNotes({workspaceId, callId}:{workspaceId:string; cal
   const row = (mine.rows ?? []).find(call => call.id === callId);
   const booking = (pastEvents.rows ?? []).map(fromCall)
     .find(event => event.groupCallId === callId || (row?.meetingId && event.meetingId === row.meetingId));
-  const counterpart = booking?.counterpart
-    ?? (detail.participants.find(person => person.userId !== me && me)?.displayName ?? null);
+  /**
+   * Who it was with. The roster is who actually sat in the room, so it wins over the
+   * booking, which only says who it was arranged with — a substitute, a no-show or an
+   * extra person makes those two different, and the roster is the honest answer. The
+   * booking still fills in when the viewer is not yet known or it was not one-to-one.
+   */
+  const others = me ? detail.participants.filter(person => person.userId !== me) : [];
+  const counterpart = (others.length === 1 ? others[0].displayName : null) ?? booking?.counterpart ?? null;
 
   const generic = !row?.title || row.title.toLowerCase() === 'coffee chat';
   const title = generic && counterpart ? `Coffee chat with ${counterpart}` : row?.title || 'Coffee chat';
@@ -102,7 +108,7 @@ export default function CallNotes({workspaceId, callId}:{workspaceId:string; cal
   return <>
     <section className="card call-notes-head">
       <div className="call-notes-identity">
-        {booking?.image
+        {booking?.image && counterpart === booking.counterpart
           // eslint-disable-next-line @next/next/no-img-element -- provider-hosted avatars are not a configured Next image domain
           ? <img className="avatar large" src={booking.image} alt="" width={72} height={72} />
           : <span className="avatar large" aria-hidden="true">{initials(counterpart || title)}</span>}
@@ -137,7 +143,7 @@ export default function CallNotes({workspaceId, callId}:{workspaceId:string; cal
             </li>)}
           </ul>}
       {/* One-to-one: the person is worth keeping hold of, so their record is one click. */}
-      {detail.participants.length === 2 && counterpart &&
+      {others.length === 1 && counterpart &&
         <Link className="text-link" href="/connections">See {counterpart} in Connections</Link>}
     </Section>
 
