@@ -13,8 +13,18 @@ function Status() {
 function DeviceControls() {
   const connection = useConnectionState();
   const [deviceError, setDeviceError] = useState(false);
+  const [handRaised, setHandRaised] = useState(false);
   const failure = () => setDeviceError(true);
-  return <><RoomAudioRenderer /><StartAudio label="Enable call audio" /><div className="meeting-controls"><TrackToggle source={Track.Source.Microphone} onDeviceError={failure} aria-label="Microphone">Microphone</TrackToggle><TrackToggle source={Track.Source.Camera} onDeviceError={failure} aria-label="Camera">Camera</TrackToggle></div><div className="device-controls"><fieldset><legend>Microphone devices</legend><MediaDeviceSelect kind="audioinput" onError={failure} /></fieldset><fieldset><legend>Camera devices</legend><MediaDeviceSelect kind="videoinput" onError={failure} /></fieldset></div>{deviceError && connection !== 'disconnected' && <p role="alert">Unable to use that device. Check browser site settings and try another device.</p>}</>;
+  return <><RoomAudioRenderer /><StartAudio label="Enable call audio" />
+    <div className="meeting-dock" role="group" aria-label="Call controls">
+      <TrackToggle source={Track.Source.Microphone} onDeviceError={failure} className="meeting-dock-button" aria-label="Toggle microphone">Microphone</TrackToggle>
+      <TrackToggle source={Track.Source.Camera} onDeviceError={failure} className="meeting-dock-button" aria-label="Toggle camera">Camera</TrackToggle>
+      <TrackToggle source={Track.Source.ScreenShare} onDeviceError={failure} className="meeting-dock-button" aria-label="Share screen">Share screen</TrackToggle>
+      <button className="meeting-dock-button" data-on={handRaised ? 'true' : undefined} onClick={() => setHandRaised(!handRaised)}>
+        {handRaised ? 'Lower hand' : 'Raise hand'}
+      </button>
+    </div>
+    <div className="device-controls"><fieldset><legend>Microphone devices</legend><MediaDeviceSelect kind="audioinput" onError={failure} /></fieldset><fieldset><legend>Camera devices</legend><MediaDeviceSelect kind="videoinput" onError={failure} /></fieldset></div>{deviceError && connection !== 'disconnected' && <p role="alert">Unable to use that device. Check browser site settings and try another device.</p>}</>;
 }
 function Controls() {
   const participants = useParticipants();

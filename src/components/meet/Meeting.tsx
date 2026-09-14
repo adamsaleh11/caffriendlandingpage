@@ -65,16 +65,23 @@ export default function Meeting({ inviteToken, viewerName = null }: { inviteToke
     } catch (error) { setJoinError(error instanceof TypeError ? 'You may be offline. Check your connection and try again.' : (error as Error).message); }
     finally { setJoining(false); }
   }
+  if (callJoin) {
+    return <CallScreen groupCallId={callJoin.groupCallId}
+      me={callJoin.anonymousInstallId} guestJoin={callJoin}
+      onLeave={() => { setCallJoin(undefined); setLeft(true); }} />;
+  }
+
   return <main className="meeting-page">
     {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- a full load drops the LiveKit styles and call state, leaving the landing page untouched */}
-    <a href="/" className="meeting-brand">caffriend</a>
+    <a href="/" className="meeting-brand">
+      {/* eslint-disable-next-line @next/next/no-img-element -- the lobby shares the call wordmark, which is a static public asset */}
+      <img src="/brand/logo-wordmark-dark.png" alt="Caffriend" />
+    </a>
     <section className="meeting-card">
       <p className="meeting-eyebrow">YOUR COFFEE CHAT</p>
       {left ? <><h1>You left the call</h1><p>Your camera and microphone are off.</p>
       {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- a full load guarantees the call page and its media context are gone */}
-      <a href="/">Back to Caffriend</a></> : callJoin ? <CallScreen groupCallId={callJoin.groupCallId}
-        me={callJoin.anonymousInstallId} guestJoin={callJoin}
-        onLeave={() => { setCallJoin(undefined); setLeft(true); }} />
+      <a href="/">Back to Caffriend</a></>
         : credentials ? <><h1>{details?.purpose}</h1><Call {...credentials} devices={devices} leave={() => { setCredentials(undefined); setLeft(true); }} /></> : error ? <><h1>Invitation unavailable</h1><p role="alert">{error}</p><button onClick={() => setAttempt(value => value + 1)}>Try again</button></>
         : !details ? <p role="status">Loading invitation…</p>
         : !details.platformSupported ? <><h1>{details.purpose}</h1><p>This invitation opens on desktop.</p></>
@@ -85,7 +92,7 @@ export default function Meeting({ inviteToken, viewerName = null }: { inviteToke
         <p className="meeting-fineprint">Your display name and enabled microphone or camera are shared with the other call participants. Leaving stops your media.</p>
         <label className="meeting-terms"><input type="checkbox" checked={terms} onChange={event => setTerms(event.target.checked)} />I accept the meeting and privacy terms</label>
         {joinError && <p role="alert">{joinError}</p>}
-        <button disabled={!name.trim() || !terms || joining} onClick={join}>{joining ? 'Joining…' : 'Join on web'}</button></>}
+        <button className="meeting-join" disabled={!name.trim() || !terms || joining} onClick={join}>{joining ? 'Joining…' : 'Join on web'}</button></>}
     </section>
   </main>;
 }
