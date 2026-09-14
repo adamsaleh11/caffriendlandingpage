@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import {FormSelect} from '@/components/ui/form-select';
+import { Icon } from '@/components/call/Icon';
 
 export type Devices = { audioInput: string; videoInput: string };
 
@@ -12,6 +13,8 @@ export default function Preview({ devices, onDevices }: { devices: Devices; onDe
   const [pending, setPending] = useState(false);
   const [granted, setGranted] = useState(false);
   const [available, setAvailable] = useState<MediaDeviceInfo[]>([]);
+  const [micOn, setMicOn] = useState(false);
+  const [cameraOn, setCameraOn] = useState(false);
   const stop = () => { stream.current?.getTracks().forEach(track => track.stop()); stream.current = null; };
   useEffect(() => () => { generation.current++; stop(); }, []);
 
@@ -27,6 +30,8 @@ export default function Preview({ devices, onDevices }: { devices: Devices; onDe
       stream.current = media;
       if (video.current) video.current.srcObject = media;
       setGranted(true);
+      setCameraOn(true);
+      setMicOn(true);
       // Labels are only populated once permission has been granted.
       try { setAvailable(await navigator.mediaDevices.enumerateDevices()); } catch { setAvailable([]); }
     } catch {
@@ -41,10 +46,43 @@ export default function Preview({ devices, onDevices }: { devices: Devices; onDe
   };
   const options = (kind: MediaDeviceKind) => available.filter(device => device.kind === kind);
 
-  return <section aria-label="Device preview">
-    <video ref={video} muted autoPlay playsInline aria-label="Your camera preview" />
-    <p>You will join with camera and microphone off. Turn them on inside the call when ready.</p>
-    <button disabled={pending} onClick={() => open(devices)}>{pending ? 'Opening devices…' : 'Preview camera and microphone'}</button>
+  const toggleMic = () => {
+    if (stream.current) {
+      const audioTrack = stream.current.getAudioTracks()[0];
+      if (audioTrack) {
+        audioTrack.enabled = !audioTrack.enabled;
+        setMicOn(audioTrack.enabled);
+      }
+    }
+  };
+
+  const toggleCamera = () => {
+    if (stream.current) {
+      const videoTrack = stream.current.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.enabled = !videoTrack.enabled;
+        setCameraOn(videoTrack.enabled);
+      }
+    }
+  };
+
+  return <section className="meeting-preview" aria-label="Device preview">
+    <div className="meeting-preview-frame">
+      <video ref={video} muted autoPlay playsInline aria-label="Your camera preview" />
+      {!granted && !pending && <span className="meeting-preview-placeholder" aria-hidden="true">Your camera</span>}
+    </div>
+    {!granted && <p>You will join with camera and microphone off. Turn them on inside the call when ready.</p>}
+    {!granted && <button className="meeting-preview-action" disabled={pending} onClick={() => open(devices)}>{pending ? 'Opening devices…' : 'Opening devices…'}</button>}
+    {granted && <div className="meeting-preview-controls" role="group" aria-label="Preview controls">
+      <button className="preview-control-button" data-on={!micOn ? 'true' : undefined} onClick={toggleMic} title={micOn ? 'Mute microphone' : 'Unmute microphone'}>
+        <Icon name={micOn ? 'mic-fill' : 'mic-mute-fill'} size={20} />
+        <span className="preview-control-label">{micOn ? 'Mute' : 'Unmute'}</span>
+      </button>
+      <button className="preview-control-button" data-on={!cameraOn ? 'true' : undefined} onClick={toggleCamera} title={cameraOn ? 'Turn camera off' : 'Turn camera on'}>
+        <Icon name={cameraOn ? 'camera-video-fill' : 'camera-video-off-fill'} size={20} />
+        <span className="preview-control-label">{cameraOn ? 'Camera off' : 'Camera on'}</span>
+      </button>
+    </div>}
     {granted && <>
       <div className="field"><span className="field-label">Microphone</span>
         <FormSelect aria-label="Microphone" value={devices.audioInput} onValueChange={value => choose('audioInput', value)}

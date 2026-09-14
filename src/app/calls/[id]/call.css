@@ -187,15 +187,14 @@
   display: grid;
   gap: 10px;
 }
-/* Speaker view: the lead fills the stage, everyone else runs down a 176px strip. */
-.call-stage-grid[data-layout="speaker"] { gap: 10px; }
+/* Speaker view: the lead fills the stage, everyone else runs down a wider strip. */
+.call-stage-grid[data-layout="speaker"] { gap: 14px; }
 .call-stage-grid[data-layout="speaker"] .call-tiles { grid-template-columns: 1fr; position: relative; }
 /* The strip is a column of thumbnails, not a second stage. Rows are sized by the tile's
-   own 4:3 rather than by `1fr`, which stretched a lone strip tile into a full-height
-   column beside the lead; they stack from the top and the strip scrolls once a busy
+   own 16:9 aspect ratio; they stack from the top and the strip scrolls once a busy
    room runs past the bottom of the stage. */
 .call-strip {
-  width: 176px;
+  width: 280px;
   flex-shrink: 0;
   margin: 0;
   padding: 0;
@@ -203,15 +202,22 @@
   display: grid;
   grid-auto-rows: max-content;
   align-content: start;
-  gap: 10px;
+  gap: 12px;
   min-height: 0;
   overflow-y: auto;
   scrollbar-width: thin;
 }
-.call-strip .call-tile { aspect-ratio: 4 / 3; }
+.call-strip .call-tile { aspect-ratio: 16 / 9; }
+/* Grid view: tiles fill available height and maintain aspect ratio. Uses auto-fill to 
+   handle varying participant counts - 1-2 people get larger tiles, 3+ get standard grid. */
 .call-stage-grid[data-layout="grid"] .call-tiles {
-  grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: repeat(2, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr));
+  grid-auto-rows: 1fr;
+  align-content: start;
+}
+/* Tiles maintain 16:9 ratio in grid view */
+.call-stage-grid[data-layout="grid"] .call-tile {
+  aspect-ratio: 16 / 9;
 }
 
 .call-tile {
@@ -271,23 +277,23 @@
 /* The self-view sits over the lead tile, as a picture in picture. */
 .call-selfview {
   position: absolute;
-  right: 16px;
-  bottom: 16px;
-  width: 168px;
-  height: 116px;
+  right: 20px;
+  bottom: 20px;
+  width: 240px;
+  height: 135px;
   border-radius: 16px;
   overflow: hidden;
   background: var(--caf-espresso);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.18), inset 0 0 0 2px var(--caf-white);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.24), inset 0 0 0 2px var(--caf-white);
 }
-.call-selfview .call-tile-avatar { font-size: 28px; }
+.call-selfview .call-tile-avatar { font-size: 36px; }
 .call-selfview-name {
   position: absolute;
-  left: 10px;
-  bottom: 8px;
-  font: 700 11px/16px var(--font-core);
+  left: 12px;
+  bottom: 10px;
+  font: 700 13px/18px var(--font-core);
   color: var(--caf-white);
-  text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+  text-shadow: 0 1px 4px rgba(0,0,0,0.6);
 }
 .call-tile[data-lead="true"] .call-tile-name { font-size: 15px; }
 
@@ -325,8 +331,8 @@
 }
 .call-tile:hover .call-tile-pin, .call-tile-pin:focus-visible, .call-tile-pin[data-pinned="true"] { opacity: 1; }
 /* The self-view sits in the lead tile's bottom-right corner, so the lead's pin steps
-   left of it — 168px of inset plus its margins — rather than hiding underneath. */
-.call-tile[data-lead="true"] .call-tile-pin { right: 200px; }
+   left of it — 240px of inset plus its margins — rather than hiding underneath. */
+.call-tile[data-lead="true"] .call-tile-pin { right: 280px; }
 .call-tile-pin[data-pinned="true"] { background: var(--caf-orange); color: var(--caf-white); }
 
 /* ---------- Dock ---------- */

@@ -173,10 +173,23 @@ test('the stage shows a tile for everyone and switches between speaker and grid'
   // Speaker view leads with whoever is speaking.
   await expect(stage.getByRole('listitem').first()).toContainText('Sarah Chen');
   await expect(stage.getByRole('listitem').first()).toContainText('Speaking');
+  const lead = await stage.locator('.call-tile').first().boundingBox();
+  expect(lead?.height ?? 0).toBeGreaterThan(280);
   await page.getByRole('button', {name:'Grid view'}).click();
   await expect(stage).toHaveAttribute('data-layout', 'grid');
   await page.getByRole('button', {name:'Speaker view'}).click();
   await expect(stage).toHaveAttribute('data-layout', 'speaker');
+});
+
+test('people in the room are roster rows, not filled action buttons', async ({page}) => {
+  await enterCall(page);
+  const roster = page.getByRole('list', {name:'In the room'});
+  const sarah = roster.getByRole('listitem').filter({hasText:'Sarah Chen'});
+  await expect(sarah.getByText('Senior Product Manager · Notion')).toBeVisible();
+  const rowColor = await sarah.getByRole('button').evaluate(el => getComputedStyle(el).backgroundColor);
+  expect(rowColor === 'rgba(0, 0, 0, 0)' || rowColor === 'transparent' || rowColor === 'rgb(255, 255, 255)').toBe(true);
+  const invite = page.getByRole('button', {name:'Copy invite link'});
+  expect(await invite.evaluate(el => getComputedStyle(el).backgroundColor)).toBe('rgb(255, 255, 255)');
 });
 
 test('pinning someone leads the stage with them', async ({page}) => {

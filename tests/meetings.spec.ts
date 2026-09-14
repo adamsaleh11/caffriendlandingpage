@@ -82,10 +82,27 @@ test('a booked meeting link backed by a group call opens the full call design', 
   for (const tab of ['People', 'Chat', 'Notes', 'Actions', 'Agenda']) {
     await expect(page.getByRole('tab', { name: tab })).toBeVisible();
   }
+  // Joining from /meet used to leave the call inside the lobby card, which painted
+  // every roster control orange. The call is its own surface, matching /calls/:id.
+  const inviteLink = page.getByRole('button', { name: 'Copy invite link' });
+  expect(await inviteLink.evaluate(el => getComputedStyle(el).backgroundColor)).toBe('rgb(255, 255, 255)');
+  const lead = await page.getByRole('region', { name: 'Call stage' }).locator('.call-tile').first().boundingBox();
+  expect(lead?.height ?? 0).toBeGreaterThan(280);
   // Every dock control does something: the mic, camera, share and hand go to the call,
   // and picture in picture goes to the browser. Nothing is shown that has nowhere to go.
   await expect(page.getByRole('button', { name: 'Reactions' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Raise hand' })).toBeVisible();
+});
+
+test('the device preview uses the same cream page and orange join control as the rest of the product', async ({ page, request }) => {
+  await request.post('http://127.0.0.1:4100/__state', { data: {} });
+  await page.goto(`/meet/${invite}`);
+  const pageColor = await page.locator('.meeting-page').evaluate(el => getComputedStyle(el).backgroundColor);
+  expect(pageColor).toBe('rgb(255, 251, 249)');
+  const join = page.getByRole('button', { name: 'Join on web', exact: true });
+  expect(await join.evaluate(el => getComputedStyle(el).color)).toBe('rgb(255, 255, 255)');
+  expect(await join.evaluate(el => getComputedStyle(el).backgroundColor)).toBe('rgb(250, 100, 4)');
+  await expect(page.getByRole('region', { name: 'Device preview' })).toBeVisible();
 });
 
 test('an unavailable invitation is safe, a failing resolve leaks nothing, and retry recovers', async ({ page, request }) => {

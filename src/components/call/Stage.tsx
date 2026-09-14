@@ -13,15 +13,22 @@ export type Layout = 'speaker' | 'grid';
  * instead of appearing and disappearing as tracks come and go. Video is attached
  * over the top of a tile when there is a track for that person.
  */
+function Seat({person, name, video}:{person: CallParticipant; name: string; video?: React.ReactNode}) {
+  if (person.cameraOn && video) return <div className="call-tile-video">{video}</div>;
+  if (person.image) {
+    // eslint-disable-next-line @next/next/no-img-element -- participant photos are provider-hosted
+    return <img className="call-tile-photo" src={person.image} alt="" />;
+  }
+  return <div className="call-tile-avatar" aria-hidden="true">{name.slice(0, 1).toUpperCase()}</div>;
+}
+
 function Tile({person, me, lead, pinned, onPin, video}:{
   person: CallParticipant; me: string; lead?: boolean; pinned: boolean;
   onPin: (id: string | null) => void; video?: React.ReactNode;
 }) {
   const name = participantName(person, me);
   return <li className="call-tile" data-lead={lead ? 'true' : undefined} data-speaking={person.activeSpeaker ? 'true' : undefined}>
-    {person.cameraOn && video
-      ? <div className="call-tile-video">{video}</div>
-      : <div className="call-tile-avatar" aria-hidden="true">{name.slice(0, 1).toUpperCase()}</div>}
+    <Seat person={person} name={name} video={video} />
     <div className="call-tile-chip">
       <span className="call-tile-name">{name}</span>
       {person.role === 'host' && <span className="call-tile-role">Host</span>}
@@ -70,9 +77,7 @@ export function Stage({participants, me, layout, pinnedId, onPin, videoFor, invi
       <ul className="call-tiles">
         <Tile person={lead} me={me} lead pinned={lead.id === pinnedId} onPin={onPin} video={videoFor?.(lead)} />
         {self && self.id !== lead.id && <li className="call-selfview">
-          {self.cameraOn && videoFor?.(self)
-            ? <div className="call-tile-video">{videoFor(self)}</div>
-            : <div className="call-tile-avatar" aria-hidden="true">{'You'.slice(0, 1)}</div>}
+          <Seat person={self} name="You" video={videoFor?.(self)} />
           <span className="call-selfview-name">You</span>
           {!self.micOn && <Hidden>Muted</Hidden>}
           {self.screenShareOn && <Hidden>Sharing</Hidden>}

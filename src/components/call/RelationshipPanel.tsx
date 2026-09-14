@@ -119,12 +119,22 @@ function People({state, me, inviteUrl}:{state:CallState; me:string; inviteUrl:st
   return <>
     <h2 id="call-roster-heading">In the room · {state.participants.length}</h2>
     <ul className="call-roster" aria-labelledby="call-roster-heading">
-      {state.participants.map(person => <li key={person.id}>
+      {state.participants.map(person => {
+        const name = participantName(person, me);
+        return <li key={person.id}>
         <button className="call-roster-open" onClick={() => setPeek(person)}>
-          <span className="call-roster-name">{participantName(person, me)}</span>
-          {person.role === 'host' && <span className="call-roster-role">Host</span>}
-          {person.role === 'co_host' && <span className="call-roster-role">Co-host</span>}
-          <span className="call-roster-detail">{[person.jobTitle, person.company].filter(Boolean).join(' · ')}</span>
+          {person.image
+            // eslint-disable-next-line @next/next/no-img-element -- participant photos are provider-hosted
+            ? <img className="call-roster-face" src={person.image} alt="" />
+            : <span className="call-roster-face call-roster-face-empty" aria-hidden="true">{name.slice(0, 1).toUpperCase()}</span>}
+          <span className="call-roster-copy">
+            <span className="call-roster-line">
+              <span className="call-roster-name">{name}</span>
+              {person.role === 'host' && <span className="call-roster-role">Host</span>}
+              {person.role === 'co_host' && <span className="call-roster-role">Co-host</span>}
+            </span>
+            <span className="call-roster-detail">{[person.jobTitle, person.company].filter(Boolean).join(' · ')}</span>
+          </span>
           <span className="call-roster-icons">
             {person.handRaised && <><Icon name="hand-index-thumb" size={15} color="var(--caf-orange)" /><Hidden>Hand raised</Hidden></>}
             {!person.micOn && <><Icon name="mic-mute" size={15} /><Hidden>Muted</Hidden></>}
@@ -133,7 +143,8 @@ function People({state, me, inviteUrl}:{state:CallState; me:string; inviteUrl:st
             <Icon name="chevron-right" size={13} />
           </span>
         </button>
-      </li>)}
+      </li>;
+      })}
     </ul>
     <button className="call-invite" onClick={copy}><Icon name="link-45deg" size={16} />Copy invite link</button>
     {copied && <p role="status">Invite link copied</p>}
