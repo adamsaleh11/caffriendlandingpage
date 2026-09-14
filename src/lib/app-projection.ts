@@ -140,24 +140,87 @@ export type AppCall = {
   /** The collaboration room this call is held in; null for an in-person meeting. */
   groupCallId: string | null;
 };
-export function projectCall(input: unknown, currentUserId: string): AppCall {
-  const row = (input ?? {}) as Row;
+/**
+ * Resolve the other participant for an accepted event.
+ *
+ * Caffriend-booked calls carry `booker` + `targetUser` user objects. Email-invite
+ * calls (booked externally and imported via calendar sync) arrive with those fields
+ * absent or empty and expose the attendees in an `attendees`, `invitees`, or
+ * `participants` array instead. Each item in that array may be a full user record
+ * or a simple `{name, email, displayName}` shape — whichever has a non-current id
+ * or a non-current email is the counterpart.
+ */
+function resolveOtherParticipant(
+  row: Row,
+  currentUserId: string,
+): { name: string | null; id: string | null; image: string | null } {
   const booker = (row.booker ?? {}) as Row;
   const target = (row.targetUser ?? {}) as Row;
-  const other = String(target.id ?? '') === currentUserId ? booker : target;
+
+  // --- Caffriend-booked path: one of the two user objects is the other person ---
+  const primaryOther: Row =
+    String(target.id ?? '') === currentUserId ? booker : target;
+  if (Object.keys(primaryOther).length) {
+    const name = fullName(primaryOther);
+    // fullName returns 'Unnamed' when neither firstName nor lastName is present;
+    // treat that as absent so we fall through to the attendees path below.
+    if (name !== 'Unnamed') {
+      return {
+        name,
+        id: text(primaryOther.id),
+        image: image(primaryOther.image_url) ?? image(primaryOther.imageUrl) ?? firstMedia(primaryOther.media),
+      };
+    }
+  }
+
+  // --- Email-invite / externally-imported path: look in the attendee list ---
+  const attendeeFields = ['attendees', 'invitees', 'participants'] as const;
+  for (const field of attendeeFields) {
+    const attendees = list(row[field]);
+    if (!attendees.length) continue;
+    for (const item of attendees) {
+      // Skip the current user — matched by id or email.
+      const itemId = text(item.id) ?? text(item.userId);
+      if (itemId && itemId === currentUserId) continue;
+      const itemEmail = text(item.email);
+      const currentEmail = text(row.currentUserEmail); // not always present; best-effort
+      if (itemEmail && currentEmail && itemEmail === currentEmail) continue;
+      // Accept the first non-self attendee.
+      const rawName =
+        text(item.displayName) ??
+        ([text(item.firstName), text(item.lastName)].filter(Boolean).join(' ') || null) ??
+        text(item.name) ??
+        text(item.email);
+      if (rawName) {
+        return {
+          name: rawName,
+          id: itemId,
+          image: image(item.image_url) ?? image(item.imageUrl) ?? image(item.avatarUrl) ?? null,
+        };
+      }
+    }
+  }
+
+  return { name: null, id: null, image: null };
+}
+
+export function projectCall(input: unknown, currentUserId: string): AppCall {
+  const row = (input ?? {}) as Row;
+  const other = resolveOtherParticipant(row, currentUserId);
   const date = (value: unknown) => value instanceof Date ? value.toISOString() : text(value);
   return {
     id: String(row.id ?? ''),
     groupCallId: text(row.groupCallId),
     startDate: date(row.startDate),
     endDate: date(row.endDate),
-    counterpartId: text(other.id),
-    counterpart: Object.keys(other).length ? fullName(other) : null,
-    image: image(other.image_url) ?? image(other.imageUrl) ?? firstMedia(other.media),
+    counterpartId: other.id,
+    counterpart: other.name,
+    image: other.image,
     format: text(row.format),
     notes: text(row.notes),
     // Matches the native rule: the target owes payment when the booking is unpaid and priced.
-    needsPayment: String(target.id ?? '') === currentUserId && row.isPaid !== true && Number(row.amount ?? 0) > 0,
+    // For Caffriend-booked calls the `targetUser.id` field identifies who is the payee.
+    needsPayment: String((row.targetUser as Row | undefined)?.id ?? '') === currentUserId && row.isPaid !== true && Number(row.amount ?? 0) > 0,
     threadId: text(row.messageThreadId),
     source: row.source === 'CAFFRIEND' || row.source === 'CRM' ? row.source : null,
     venue: ['CAFFRIEND_LIVEKIT','PROVIDER_CONFERENCE','IN_PERSON'].includes(String(row.venue)) ? row.venue as AppCall['venue'] : null,
