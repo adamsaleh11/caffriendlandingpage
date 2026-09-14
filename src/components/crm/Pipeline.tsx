@@ -1,11 +1,12 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Trash2 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import type { Engagement, Pipeline as PipelineRecord, Stage, Task } from '@/lib/contracts';
 import { canonicalPipeline, guidanceFor, isCanonical } from '@/lib/lifecycle';
 import { useKeys, useRows, Section, Empty, More } from './common';
+import type { SentInvite } from './SentInvites';
 import { lastActivity, provenanceFor, timelineFor, useWorkspaceData } from './workspace-data';
 import EngagementForm from './EngagementForm';
 import OutreachComposer from './OutreachComposer';
@@ -62,9 +63,14 @@ export default function Pipeline({workspaceId}:{workspaceId:string}) {
 
   const stages = useRows<Stage>(pipelineId ? `workspaces/${workspaceId}/pipelines/${pipelineId}/stages` : null);
   const data = useWorkspaceData(workspaceId, pipelineId);
+  const invites = useRows<SentInvite>(`workspaces/${workspaceId}/meeting-outreach`);
+  useEffect(() => {
+    if (data.people.more && !data.people.loadingMore) data.people.loadMore();
+  }, [data.people.more, data.people.loadingMore]);
   const engagements = data.engagements;
   const people = new Map((data.people.rows ?? []).map(row => [row.id, row]));
   const organizations = new Map((data.organizations.rows ?? []).map(row => [row.id, row]));
+  const inviteByEngagement = new Map((invites.rows ?? []).filter(row => row.engagementId).map(row => [row.engagementId!, row]));
 
   const stageNames = new Set(canonicalPipeline.stages.map(stage => stage.name.toLowerCase()));
   const openStages = (stages.rows ?? []).filter(stage => {
@@ -169,11 +175,12 @@ export default function Pipeline({workspaceId}:{workspaceId:string}) {
   /** Everything one card needs, assembled from records the workspace already has. */
   function context(engagement: Engagement) {
     const person = engagement.personId ? people.get(engagement.personId) : undefined;
+    const invite = inviteByEngagement.get(engagement.id);
     const organization = (engagement.organizationId && organizations.get(engagement.organizationId))
       || (person?.organizationId ? organizations.get(person.organizationId) : undefined);
     const provenance = person ? provenanceFor(person.id, data) : null;
     const activity = person ? lastActivity(timelineFor(person.id, new Set([engagement.id]), data)) : null;
-    return {person, organization, provenance, activity};
+    return {person, organization, provenance, activity, invite};
   }
 
   // ---- First run: no pipeline yet ----
@@ -248,13 +255,13 @@ export default function Pipeline({workspaceId}:{workspaceId:string}) {
   };
 
   const card = (engagement: Engagement, column: number, all: Stage[]) => {
-    const {person, organization, provenance, activity} = context(engagement);
+    const {person, organization, provenance, activity, invite} = context(engagement);
     const busy = moving === engagement.id;
     return <li key={engagement.id} className="engagement">
       {/* The person leads: that is who you are actually tracking. */}
-      <p className="who">{engagement.personId
-        ? <Link href={`/app/${workspaceId}/people/${engagement.personId}`}>{person?.displayName ?? 'Person unavailable'}</Link>
-        : 'No person linked'}</p>
+      <p className="who">{person
+        ? <Link href={`/app/${workspaceId}/people/${person.id}`}>{person.displayName}</Link>
+        : invite?.recipientName || invite?.recipientEmail || 'No person linked'}</p>
       {role(person, organization) && <p className="small role">{role(person, organization)}</p>}
       <p className="objective">{engagement.objective}</p>
 
@@ -346,12 +353,12 @@ export default function Pipeline({workspaceId}:{workspaceId:string}) {
     </tr></thead>
     <tbody>
       {cards.map(engagement => {
-        const {person, organization, provenance, activity} = context(engagement);
+        const {person, organization, provenance, activity, invite} = context(engagement);
         const stage = openStages.find(row => row.id === targetStageId(engagement));
         return <tr key={engagement.id}>
-          <th scope="row">{engagement.personId
-            ? <Link href={`/app/${workspaceId}/people/${engagement.personId}`}>{person?.displayName ?? 'Person unavailable'}</Link>
-            : 'No person linked'}
+          <th scope="row">{person
+            ? <Link href={`/app/${workspaceId}/people/${person.id}`}>{person.displayName}</Link>
+            : invite?.recipientName || invite?.recipientEmail || 'No person linked'}
             <span className="small quiet"> {engagement.objective}</span></th>
           <td>{[person?.title, organization?.name, person?.location].filter(Boolean).join(' · ') || '—'}</td>
           <td>

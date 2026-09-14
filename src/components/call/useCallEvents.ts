@@ -12,7 +12,7 @@ import { applyCallEvent, callEvents, type CallState } from '@/lib/call';
  * token are fetched from `/api/call/realtime` and used for the handshake only. Neither is
  * put in a URL, where they would reach logs and referrers.
  */
-export function useCallEvents(groupCallId: string, me: string, onEvent: (patch: (state: CallState) => CallState) => void, callSessionToken?: string | null) {
+export function useCallEvents(groupCallId: string, me: string, onEvent: (patch: (state: CallState) => CallState) => void, callSessionToken?: string | null, participantId?: string | null) {
   useEffect(() => {
     let socket: Socket | undefined;
     let live = true;
@@ -28,7 +28,7 @@ export function useCallEvents(groupCallId: string, me: string, onEvent: (patch: 
         .catch((): Realtime => ({}));
       if (!live || !origin || (!token && !sessionToken)) return;
       socket = io(`${origin}/calls`, {auth:{token, callSessionToken:sessionToken}, transports:['websocket'], withCredentials:true});
-      socket.on('connect', () => socket?.emit('subscribeCallRoom', {groupCallId}));
+      socket.on('connect', () => socket?.emit('subscribeCallRoom', {groupCallId, participantId}));
       for (const event of callEvents) {
         socket.on(event, (payload: Record<string, unknown>) =>
           onEvent(state => applyCallEvent(state, event, payload ?? {}, me)));
@@ -36,5 +36,5 @@ export function useCallEvents(groupCallId: string, me: string, onEvent: (patch: 
     })();
 
     return () => { live = false; socket?.close(); };
-  }, [groupCallId, me, onEvent, callSessionToken]);
+  }, [groupCallId, me, onEvent, callSessionToken, participantId]);
 }

@@ -43,9 +43,22 @@ const authFor = async (request: Request) => {
 };
 
 export async function GET(request: Request, {params}:{params:Promise<{segments:string[]}>}) {
+  const segments = (await params).segments;
+  // Resolution is public; guests prove access on the subsequent invitation-token join.
+  if (segments.length === 2 && segments[1] === 'resolve' && /^[0-9a-f-]{36}$/i.test(segments[0])) {
+    try {
+      const session = await getSession();
+      return json(await backend(`/group-calls/${encodeURIComponent(segments[0])}/resolve`, {
+        token:session?.token,
+        headers:{'x-caffriend-platform':'desktop'},
+      }));
+    } catch (error) {
+      const {status, body} = failure(error);
+      return json(body, status);
+    }
+  }
   const auth = await authFor(request);
   if (!auth) return json({error:'Sign in required'}, 401);
-  const segments = (await params).segments;
   try {
     /**
      * Every call the caller was in. Declared before the `:id` routes for the same reason
