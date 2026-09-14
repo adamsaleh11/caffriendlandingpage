@@ -26,8 +26,8 @@ type JoinAccess = {
   callSessionToken?: string | null;
 };
 
-export function CallScreen({groupCallId, me, guestJoin, onLeave}:{
-  groupCallId:string; me:string; guestJoin?: GuestCallJoin; onLeave?: () => void;
+export function CallScreen({groupCallId, me, displayName, guestJoin, onLeave}:{
+  groupCallId:string; me:string; displayName?: string; guestJoin?: GuestCallJoin; onLeave?: () => void;
 }) {
   const router = useRouter();
   const [state, setState] = useState<CallState>();
@@ -85,12 +85,12 @@ export function CallScreen({groupCallId, me, guestJoin, onLeave}:{
           if (!live) return;
           setState(value);
           const ended = value.room.status !== 'OPEN' || Boolean(value.room.endedAt);
-          if (!ended) return join({}).then(joined => { if (live) setAccess(joined); });
+          if (!ended) return join({displayName: displayName ?? ''}).then(joined => { if (live) setAccess(joined); });
         })
         .catch(fail);
     }
     return () => { live = false; };
-  }, [groupCallId, guestJoin]);
+  }, [groupCallId, guestJoin, displayName]);
 
   const applyEvent = useCallback((patch: (value: CallState) => CallState) =>
     setState(current => current && patch(current)), []);

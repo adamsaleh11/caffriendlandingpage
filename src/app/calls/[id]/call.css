@@ -189,7 +189,7 @@
 }
 /* Speaker view: the lead fills the stage, everyone else runs down a wider strip. */
 .call-stage-grid[data-layout="speaker"] { gap: 14px; }
-.call-stage-grid[data-layout="speaker"] .call-tiles { grid-template-columns: 1fr; position: relative; }
+.call-stage-grid[data-layout="speaker"] .call-tiles { grid-template-columns: 1fr; grid-template-rows: 1fr; position: relative; }
 /* The strip is a column of thumbnails, not a second stage. Rows are sized by the tile's
    own 16:9 aspect ratio; they stack from the top and the strip scrolls once a busy
    room runs past the bottom of the stage. */

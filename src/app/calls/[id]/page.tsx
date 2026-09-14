@@ -10,5 +10,5 @@ export default async function Page({params}:{params:Promise<{id:string}>}) {
   // mid-way through joining does not land you somewhere you have to navigate out of.
   const session = await getSession();
   if (!session) redirect(`/login?returnTo=${encodeURIComponent(safeReturn(`/calls/${id}`))}`);
-  return <CallScreen groupCallId={id} me={session.user.id} />;
+  return <CallScreen groupCallId={id} me={session.user.id} displayName={session.user.name} />;
 }
