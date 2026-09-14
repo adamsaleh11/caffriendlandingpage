@@ -78,11 +78,35 @@ const firstName = (name: string) => name.trim().split(/\s+/)[0] || name;
 
 const sentence = (value: string) => value.toLowerCase().replaceAll('_', ' ');
 
+/**
+ * Build the display title for a call.
+ *
+ * When the event carries a purpose (e.g. "Coffee chat") that does NOT already
+ * mention the other person's name, append "with [Name]" so the card heading is
+ * "Coffee chat with Alice" instead of just "Coffee chat". If the purpose already
+ * contains the name, or there is no counterpart to add, use the purpose as-is.
+ * When there is no purpose at all, fall back to "Meeting with [Name]".
+ */
+function callTitle(call: AppCall): string {
+  const purpose = call.purpose;
+  const name = call.counterpart ? firstName(call.counterpart) : null;
+
+  if (!purpose) return name ? `Meeting with ${name}` : 'Coffee chat';
+
+  // Already personalised ("Coffee chat with Alice" or "Meeting with Bob").
+  if (name && purpose.toLowerCase().includes(name.toLowerCase())) return purpose;
+
+  // Generic purpose + known counterpart → personalise it.
+  if (name) return `${purpose} with ${name}`;
+
+  return purpose;
+}
+
 /** An accepted coffee chat, as it comes back from `/calendar/accepted-events`. */
 export function fromCall(call: AppCall): UpcomingMeeting {
   return {
     key: call.meetingId || `call:${call.id}`,
-    title: call.purpose || (call.counterpart ? `Meeting with ${firstName(call.counterpart)}` : 'Coffee chat'),
+    title: callTitle(call),
     counterpart: call.counterpart,
     image: call.image,
     startsAt: call.startDate,
