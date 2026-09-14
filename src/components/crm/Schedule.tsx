@@ -1,10 +1,13 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { api } from '@/lib/api';
-import { useRows, Section, Empty } from './common';
+import { useList, useRows, Section, Empty } from './common';
+import Modal from './Modal';
 import type { AppCall } from '@/lib/app-projection';
-import { callFinished, participantName, type CallState, type MyCall } from '@/lib/call';
+import type { Meeting } from '@/lib/contracts';
+import { fromCall, mergeMeetings, stillAhead, type UpcomingMeeting } from '@/lib/upcoming';
+import UpcomingMeetings, { MeetingCard, type MeetingLine } from '@/components/app/UpcomingMeetings';
+import { callFinished, type MyCall } from '@/lib/call';
 
 /**
  * Calls, as a calendar.
@@ -39,7 +42,47 @@ const minutesBetween = (from?: string | null, to?: string | null) => {
   return Number.isFinite(span) && span > 0 ? span : null;
 };
 
-function CallCalendar({calls}:{calls: AppCall[]}) {
+/**
+ * What one call on the calendar actually is, opened in place.
+ *
+ * A day square is too small to say anything useful, and one that navigated straight
+ * into a LiveKit room was a trap: joining was the only thing it could do, so the notes,
+ * the chat and the meeting record were unreachable from the calendar — and a square
+ * with no join link at all did nothing when clicked. Every square opens this instead.
+ */
+function CallDetail({call, workspaceId, past, onClose}:{
+  call: UpcomingMeeting; workspaceId: string; past: boolean; onClose: () => void;
+}) {
+  return <Modal title={call.title} description={call.counterpart ?? undefined} onClose={onClose}>
+    <dl className="call-detail">
+      <div><dt>When</dt><dd>
+        {dayLabel(call.startsAt)}
+        {call.startsAt && ` · ${timeLabel(call.startsAt)}`}
+        {call.endsAt && ` - ${timeLabel(call.endsAt)}`}
+      </dd></div>
+      <div><dt>Where</dt><dd>{call.where || 'Not specified'}</dd></div>
+      {call.status && <div><dt>Status</dt><dd>{call.status}</dd></div>}
+      {call.counterpart && <div><dt>With</dt><dd>{call.counterpart}</dd></div>}
+      {call.notes && <div><dt>Agenda</dt><dd>{call.notes}</dd></div>}
+    </dl>
+    <div className="call-detail-actions">
+      {!past && call.href && (call.external
+        ? <a className="button" href={call.href} target="_blank" rel="noreferrer noopener">Join</a>
+        : <Link className="button" href={call.href}>Join</Link>)}
+      {/* The collaboration room is the same address before, during and after the call,
+          so its notes, chat and commitments are reachable whether or not it has run. */}
+      {call.groupCallId &&
+        <Link className="text-link" href={`/calls/${call.groupCallId}`}>{past ? 'Open notes' : 'Open the call room'}</Link>}
+      {call.meetingId &&
+        <Link className="text-link" href={`/app/${workspaceId}/meetings/${call.meetingId}`}>Meeting details</Link>}
+      {!call.groupCallId && !call.meetingId && !call.href &&
+        <p className="small">This call has no room or join link yet.</p>}
+    </div>
+  </Modal>;
+}
+
+function CallCalendar({calls, now, workspaceId}:{calls: UpcomingMeeting[]; now: number; workspaceId: string}) {
+  const [open, setOpen] = useState<UpcomingMeeting>();
   const [month, setMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const today = new Date();
   const days = useMemo(() => monthGrid(month), [month]);
@@ -47,7 +90,7 @@ function CallCalendar({calls}:{calls: AppCall[]}) {
   const move = (by: number) => setMonth(current => new Date(current.getFullYear(), current.getMonth() + by, 1));
 
   const forDay = (day: Date) => calls.filter(call =>
-    call.startDate && sameDay(new Date(call.startDate), day));
+    call.startsAt && sameDay(new Date(call.startsAt), day));
 
   return <div className="cal">
     <div className="cal-head">
@@ -67,123 +110,133 @@ function CallCalendar({calls}:{calls: AppCall[]}) {
         return <div key={day.toISOString()} role="gridcell" className="cal-day"
           data-outside={outside ? 'true' : undefined} data-today={sameDay(day, today) ? 'true' : undefined}>
           <span className="cal-date">{day.getDate()}</span>
-          {onDay.map(call => <Link key={call.id} className="cal-event"
-            href={call.groupCallId ? `/calls/${call.groupCallId}` : (call.joinUrl ?? '#')}>
-            <span className="cal-event-time">{timeLabel(call.startDate)}</span>
-            <span className="cal-event-who">{call.counterpart || call.purpose || 'Coffee chat'}</span>
-          </Link>)}
+          {onDay.map(call => <button key={call.key} type="button" className="cal-event"
+            data-past={!stillAhead(call, now) ? 'true' : undefined}
+            onClick={() => setOpen(call)}>
+            <span className="cal-event-time">{timeLabel(call.startsAt)}</span>
+            <span className="cal-event-who">{call.counterpart || call.title}</span>
+          </button>)}
         </div>;
       })}
     </div>
+    {open && <CallDetail call={open} workspaceId={workspaceId} past={!stillAhead(open, now)}
+      onClose={() => setOpen(undefined)} />}
   </div>;
 }
 
-/**
- * One past call, opened in place.
- *
- * The listing endpoint gives the call but not who was in it, so the detail is fetched
- * once, when someone asks for it, rather than N times to render the list.
- */
-function PastCall({call, me}:{call: MyCall; me: string}) {
-  const [open, setOpen] = useState(false);
-  const [detail, setDetail] = useState<CallState>();
-  const [problem, setProblem] = useState('');
-
-  async function toggle() {
-    const next = !open;
-    setOpen(next);
-    if (!next || detail) return;
-    setProblem('');
-    try { setDetail(await api<CallState>(`${call.id}/call-state`, {}, 'call')); }
-    catch (failure) { setProblem(failure instanceof Error ? failure.message : 'That call could not be loaded.'); }
-  }
-
+/** One past call: the same card an upcoming one gets, with Notes in place of Join. */
+function PastCall({call, workspaceId, who}:{call: MyCall; workspaceId: string; who?: UpcomingMeeting}) {
   const minutes = minutesBetween(call.startsAt, call.endedAt);
-  const others = (detail?.participants ?? []).filter(row => row.userId !== me);
+  const counterpart = who?.counterpart ?? null;
+  /**
+   * Whose call it was, said in the title.
+   *
+   * `/group-calls/mine` titles a one-to-one chat "Coffee chat" and names nobody, so a
+   * history of them was a column of identical rows. The accepted-events feed knows the
+   * counterpart, so the person is put where the title and the avatar are.
+   */
+  const generic = !call.title || call.title.toLowerCase() === 'coffee chat';
+  const title = generic && counterpart
+    ? `Coffee chat with ${counterpart}`
+    : call.title || 'Coffee chat';
+  const lines: MeetingLine[] = [
+    {glyph:'▤', text: dayLabel(call.startsAt ?? call.createdAt)},
+    // Said plainly rather than shown as a duration of zero: nobody ended it.
+    {glyph:'◷', text: minutes ? `${minutes} min` : callFinished(call) ? 'Length unknown' : 'No recorded end'},
+    {glyph:'◉', text: call.kind === 'EVENT' ? 'Group call' : 'Coffee chat'},
+  ];
+  if (counterpart && !title.includes(counterpart)) lines.push({glyph:'◍', text: counterpart});
 
-  return <li className="past-call">
-    <div className="past-call-row">
-      <button className="past-call-open" aria-expanded={open} onClick={toggle}>
-        <span className="past-call-title">{call.title || 'Coffee chat'}</span>
-        <span className="past-call-meta">
-          {dayLabel(call.startsAt ?? call.createdAt)}
-          {minutes ? ` · ${minutes} min` : ''}
-          {call.kind === 'EVENT' ? ' · group call' : ' · coffee chat'}
-        </span>
-      </button>
-      {/* Read-only. Opening a finished call must never go through join, which would
-          provision a LiveKit room for a call that is over. */}
-      <Link className="button" href={`/calls/${call.id}`}>Open notes</Link>
-    </div>
-
-    {open && <div className="past-call-detail">
-      {problem && <p role="alert">{problem}</p>}
-      {!detail && !problem && <p role="status">Loading the call…</p>}
-      {detail && <>
-        <div className="past-call-people">
-          <h4>Who was there</h4>
-          <ul aria-label="People on this call">
-            {detail.participants.map(person => <li key={person.id}>
-              <span className="past-call-person">{participantName(person, me)}</span>
-              <span className="past-call-person-meta">
-                {[person.jobTitle, person.company].filter(Boolean).join(' · ')}
-                {person.role === 'host' ? ' · Host' : person.role === 'co_host' ? ' · Co-host' : ''}
-              </span>
-            </li>)}
-          </ul>
-          {others.length === 1 && others[0].userId &&
-            <Link className="past-call-profile" href={`/connections`}>See {others[0].displayName} in Connections</Link>}
-        </div>
-        <dl className="past-call-counts">
-          <div><dt>Notes</dt><dd>{detail.notes.length}</dd></div>
-          <div><dt>Commitments</dt><dd>{detail.actionItems.filter(item => !item.done).length} open</dd></div>
-          <div><dt>Messages</dt><dd>{detail.chat.messages.length}</dd></div>
-          <div><dt>Agenda</dt><dd>{detail.agendaBlocks.length} blocks</dd></div>
-        </dl>
-      </>}
-    </div>}
-  </li>;
+  return <MeetingCard person={{name: counterpart || title, image: who?.image ?? null}}
+    title={title} lines={lines}
+    /* Read-only, and a page of its own. Opening `/calls/:id` here would flash the live
+       call surface and go near join, which provisions a room for a call that is over. */
+    action={<Link className="up-join" href={`/app/${workspaceId}/calls/${call.id}`}>
+      <span className="up-join-inner"><span aria-hidden="true">▤</span>Notes</span>
+    </Link>} />;
 }
 
 export default function Schedule({workspaceId}:{workspaceId:string}) {
   const calls = useRows<AppCall>(`workspaces/${workspaceId}/upcoming-calls`);
+  /**
+   * A meeting booked from a CRM invitation is a `Meeting`, not an accepted calendar
+   * event, so reading only `upcoming-calls` left it off this page entirely — it could
+   * be neither seen on the calendar nor joined from it.
+   */
+  const meetings = useList<Meeting>(`workspaces/${workspaceId}/meetings`);
   const history = useRows<MyCall>('mine', 'call');
-  // Only used to name the viewer as "You" on a past call's roster.
-  const [me, setMe] = useState('');
+  /**
+   * The accepted coffee chats that have already happened. Only needed to say who each
+   * finished call was with: `/group-calls/mine` carries a title and nothing else, and
+   * fetching every call's roster to label a list would be one request per row.
+   */
+  const pastEvents = useRows<AppCall>(`workspaces/${workspaceId}/past-calls`);
+  // Recomputed on the minute so a meeting drops off the list once it has ended.
+  const [tick, setTick] = useState(() => Date.now());
   useEffect(() => {
-    let live = true;
-    api<{id?:string}>('me', {}, 'app')
-      .then(profile => { if (live && profile?.id) setMe(profile.id); })
-      .catch(() => {});
-    return () => { live = false; };
+    const timer = setInterval(() => setTick(Date.now()), 60000);
+    return () => clearInterval(timer);
   }, []);
-
-  const upcoming = (calls.rows ?? [])
-    .filter(row => row.startDate)
-    .sort((a, b) => (Date.parse(a.startDate ?? '') || 0) - (Date.parse(b.startDate ?? '') || 0));
+  /**
+   * The grid shows the whole month, the list below it only what can still be joined.
+   * Filtering the grid to the future too emptied today's cell the moment a meeting
+   * ended — including a stuck one the Inbox was still asking someone to deal with.
+   */
+  const booked = useMemo(
+    () => mergeMeetings(calls.rows ?? [], meetings.rows ?? []),
+    [calls.rows, meetings.rows]);
+  const upcoming = useMemo(() => booked.filter(row => stillAhead(row, tick)), [booked, tick]);
 
   /**
    * History comes from the call itself, never from the calendar: an accepted event is a
    * booking between two people against one availability slot, so it has no participants
    * and a group call never produces one.
    */
-  const past = (history.rows ?? []).filter(callFinished)
+  /**
+   * A call counts as past once it has been ended *or* its start has gone by.
+   *
+   * Only the host ending the structured portion sets `endedAt`, and plenty of calls
+   * simply run out — everyone leaves, nobody presses End. Those were being filtered out
+   * of this list entirely, so a call that had plainly happened was nowhere to be found
+   * and its notes were unreachable. A start in the past is enough to list it.
+   */
+  const past = (history.rows ?? [])
+    .filter(row => callFinished(row) || (row.startsAt ? Date.parse(row.startsAt) < tick : false))
     .sort((a, b) => (Date.parse(b.startsAt ?? b.createdAt ?? '') || 0) - (Date.parse(a.startsAt ?? a.createdAt ?? '') || 0));
 
+  /**
+   * Who each finished call was with, looked up by the room it was held in and, failing
+   * that, by the meeting it came from. Both the history feed and the upcoming one are
+   * searched: a call that has only just ended can still be sitting in either.
+   */
+  const byCall = useMemo(() => {
+    const rows = new Map<string, UpcomingMeeting>();
+    for (const event of [...(pastEvents.rows ?? []), ...(calls.rows ?? [])]) {
+      const row = fromCall(event);
+      if (!row.counterpart) continue;
+      if (event.groupCallId && !rows.has(event.groupCallId)) rows.set(event.groupCallId, row);
+      if (event.meetingId && !rows.has(event.meetingId)) rows.set(event.meetingId, row);
+    }
+    return rows;
+  }, [pastEvents.rows, calls.rows]);
+  const whoWasOn = (call: MyCall) => byCall.get(call.id) ?? (call.meetingId ? byCall.get(call.meetingId) : undefined);
+
   return <>
-    <Section title="Upcoming calls" intro="Everything you have booked, on a calendar. Open one to join it." state={calls}>
+    <Section title="Upcoming calls" intro="Everything you have booked, on a calendar. Join one from the list below it." state={calls}>
       {calls.error && <p role="alert">Calls could not be loaded. <button className="secondary" onClick={calls.reload}>Try again</button></p>}
-      {!calls.rows && !calls.error && <p role="status">Loading your calendar…</p>}
-      {calls.rows && <CallCalendar calls={upcoming} />}
-      {calls.rows && upcoming.length === 0 && <Empty>Nothing booked yet.</Empty>}
+      {meetings.error && <p role="alert">Meetings booked from invitations could not be loaded. <button className="secondary" onClick={meetings.reload}>Try again</button></p>}
+      {!calls.rows && !meetings.rows && !calls.error && <p role="status">Loading your calendar…</p>}
+      {(calls.rows || meetings.rows) && <CallCalendar calls={booked} now={tick} workspaceId={workspaceId} />}
+      {(calls.rows || meetings.rows) && booked.length === 0 && <Empty>Nothing booked yet.</Empty>}
+      {upcoming.length > 0 && <UpcomingMeetings meetings={upcoming} label="Upcoming meetings" />}
     </Section>
 
     <Section title="Past calls" intro="What each call produced — its notes, commitments and who was there." state={history}>
       {history.error && <p role="alert">Past calls could not be loaded. <button className="secondary" onClick={history.reload}>Try again</button></p>}
       {!history.rows && !history.error && <p role="status">Loading past calls…</p>}
       {history.rows && past.length === 0 && <Empty>No calls have finished yet.</Empty>}
-      {past.length > 0 && <ul className="past-call-list" aria-label="Past calls">
-        {past.map(call => <PastCall key={call.id} call={call} me={me} />)}
+      {past.length > 0 && <ul className="up-list" aria-label="Past calls">
+        {past.map(call => <PastCall key={call.id} call={call} workspaceId={workspaceId} who={whoWasOn(call)} />)}
       </ul>}
     </Section>
   </>;

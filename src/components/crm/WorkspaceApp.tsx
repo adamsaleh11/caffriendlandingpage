@@ -16,6 +16,7 @@ import Agents from './Agents';
 import Schedule from './Schedule';
 import Audit from './Audit';
 import MeetingPage from './MeetingPage';
+import CallNotes from './CallNotes';
 import InviteHub from './InviteHub';
 const descriptions: Record<Section,string> = {
   pipeline:'Where each person you are pursuing currently stands.',
@@ -73,6 +74,12 @@ export default function WorkspaceApp({segments,user}:{segments:string[];user:Use
   const workspace=workspaces.find(w=>w.id===segments[0]);
   if(workspace && segments.length===3 && segments[1]==='meetings' && uuidPattern.test(segments[2]))
     return <MeetingPage workspaceId={workspace.id} meetingId={segments[2]}/>;
+  // A finished call's notes are a page of their own, under the Meetings section that
+  // lists it — never the live call surface, which would start a room for a dead call.
+  if(workspace && segments.length===3 && segments[1]==='calls' && uuidPattern.test(segments[2]))
+    return <Shell workspaces={workspaces} workspace={workspace} section="calendar" user={user}>
+      <CallNotes workspaceId={workspace.id} callId={segments[2]}/>
+    </Shell>;
   const section=segments[1] as Section;
   const detailId=segments.length===3 && segments[1]==='people' && uuidPattern.test(segments[2]) ? segments[2] : null;
   if(!workspace || !(segments.length===2 || detailId) || !sections.includes(section))return <div className="crm center"><StateCard title="Page not found" message="This page is unavailable or you no longer have access."/></div>;

@@ -5,8 +5,11 @@ import { ApiError } from '@/lib/api';
 import type { AppCall, AppConnection, AppRank, AppSuggestion } from '@/lib/app-projection';
 import type { EventSummary } from '@/lib/events';
 import { eventsApi, problemMessage } from '@/components/events/client';
-import Table, { Modal, type Column } from './Table';
+import { mergeUpcoming } from '@/lib/upcoming';
+import Table, { type Column } from './Table';
 import PersonProfile from './PersonProfile';
+import Face, { type FacePerson } from './Face';
+import UpcomingMeetings from './UpcomingMeetings';
 
 /** Same-origin consumer fetch. The session cookie travels with it; no token is held here. */
 async function app<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -35,28 +38,10 @@ function useApp<T>(path: string) {
   return {data, error, reload: useCallback(() => setAttempt(v => v + 1), [])};
 }
 
-type FacePerson = { name: string; image: string | null };
-const initials = (name: string) => name.split(' ').filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase();
-function Face({person}:{person:FacePerson}) {
-  return person.image
-    // eslint-disable-next-line @next/next/no-img-element -- provider-hosted avatars are not a configured Next image domain
-    ? <img className="avatar" src={person.image} alt="" width={32} height={32} />
-    : <span className="avatar initials" aria-hidden="true">{initials(person.name)}</span>;
-}
 const nameColumn = <T extends FacePerson>(header: string): Column<T> => ({
   key:'name', header, sort: row => row.name,
   cell: row => <span className="person"><Face person={row} />{row.name}</span>,
 });
-
-function PersonCard({person, onClose, children}:{person:FacePerson; onClose:()=>void; children:React.ReactNode}) {
-  return <Modal title={person.name} onClose={onClose}>
-    <div className="profile-card">
-      <Face person={person} />
-      <h2>{person.name}</h2>
-      {children}
-    </div>
-  </Modal>;
-}
 
 /**
  * The Home categories. Events used to be a sidebar destination; it is a category
@@ -161,10 +146,20 @@ export function Home() {
     finally { setBusy(undefined); }
   }
 
+  /** Declining is local: the backend has no reject call, so the row simply leaves the queue. */
+  function decline(person: AppSuggestion) {
+    setActionError(undefined);
+    setRows(current => (current ?? []).filter(row => row.userId !== person.userId));
+    setNotice(`You passed on ${person.name}.`);
+  }
+
+  // The same columns Connections shows, so a person reads the same way on both screens.
   const columns: Column<AppSuggestion>[] = [
     nameColumn('Person'),
-    {key:'role', header:'Role', sort: row => row.role, cell: row => row.role || '—'},
-    {key:'rating', header:'Rating', sort: row => row.avgRating, cell: row => row.avgRating === null ? '—' : row.avgRating.toFixed(1)},
+    {key:'jobTitle', header:'Job title', sort: row => row.jobTitle ?? null, cell: row => row.jobTitle || '—'},
+    {key:'company', header:'Company', sort: row => row.company ?? null, cell: row => row.company || '—'},
+    {key:'industry', header:'Industry', sort: row => row.industry ?? null, cell: row => row.industry || '—'},
+    {key:'location', header:'Location', sort: row => row.location ?? null, cell: row => row.location || '—'},
     {key:'matches', header:'Matches', sort: row => row.matches, cell: row => row.matches ?? '—'},
   ];
 
@@ -183,18 +178,15 @@ export function Home() {
       <Table caption="Suggested people" columns={columns} rows={rows?.map(row => ({...row, id: row.userId}))}
         error={error} onRetry={() => setAttempt(v => v + 1)}
         onOpen={row => setOpen(row)} empty="No suggestions right now. Check back a little later."
-        action={row => <button disabled={busy === row.userId} onClick={() => accept(row)}>{busy === row.userId ? 'Accepting…' : 'Accept'}</button>} />
+        action={row => <span className="row-buttons">
+          <button disabled={busy === row.userId} onClick={() => accept(row)}>{busy === row.userId ? 'Accepting…' : 'Accept'}</button>
+          <button className="secondary" disabled={busy === row.userId} onClick={() => decline(row)}>Decline</button>
+        </span>} />
       {totalPages !== null && page < totalPages &&
         <button className="secondary" disabled={more} onClick={loadMore}>{more ? 'Loading…' : 'Load more'}</button>}
       </>}
     </section>
-    {open && <PersonCard person={open} onClose={() => setOpen(undefined)}>
-      <dl>
-        <dt>Role</dt><dd>{open.role || 'Not given'}</dd>
-        <dt>Rating</dt><dd>{open.avgRating === null ? 'No ratings yet' : open.avgRating.toFixed(1)}</dd>
-        <dt>Matches</dt><dd>{open.matches ?? '—'}</dd>
-      </dl>
-    </PersonCard>}
+    {open && <PersonProfile userId={open.userId} name={open.name} onClose={() => setOpen(undefined)} />}
   </>;
 }
 
@@ -226,72 +218,30 @@ export function Connections() {
 
 export function Calls() {
   const {data, error, reload} = useApp<AppCall[]>('calls?type=1');
-  const sorted = data ? [...data].sort((a, b) => (Date.parse(a.startDate ?? '') || 0) - (Date.parse(b.startDate ?? '') || 0)) : undefined;
+  // The consumer screen has no workspace, so there are no CRM meeting records to merge
+  // in here — the accepted calendar events are the whole list. It is still projected
+  // through `mergeUpcoming` so this screen and the Meetings page order, filter and
+  // render a booking identically.
+  const upcoming = data ? mergeUpcoming(data, [], Date.now()) : undefined;
   return <>
     <h1>Upcoming calls</h1>
     <p className="intro">Coffee chats you have agreed to.</p>
     <section className="card app-call-card">
       {error ? <><p role="alert">{error}</p><button className="secondary" onClick={reload}>Try again</button></>
-        : !sorted ? <ul className="app-call-list" aria-label="Upcoming calls" aria-busy="true">
-            {[0,1,2].map(item => <li className="app-call app-call-loading" key={item}>
+        : !upcoming ? <ul className="up-list" aria-label="Upcoming calls" aria-busy="true">
+            {[0,1,2].map(item => <li className="up-card up-loading" key={item}>
               <span className="avatar initials" aria-hidden="true" />
               <div><span /><span /><span /></div>
             </li>)}
           </ul>
-        : sorted.length === 0 ? <div className="empty">
+        : upcoming.length === 0 ? <div className="empty">
             <span className="empty-symbol" aria-hidden="true">◎</span>
             <h2>No calls scheduled</h2>
             <p>Arrange a coffee chat from Connections, then it will appear here.</p>
           </div>
-        : <ul className="app-call-list" aria-label="Upcoming calls">
-            {sorted.map(call => <CallRow key={call.id} call={call} />)}
-          </ul>}
+        : <UpcomingMeetings meetings={upcoming} label="Upcoming calls" />}
     </section>
   </>;
-}
-
-const callVenue = (call: AppCall) =>
-  call.venue === 'CAFFRIEND_LIVEKIT' ? 'Caffriend call'
-    : call.venue === 'PROVIDER_CONFERENCE' ? 'Google Meet'
-    : call.physicalLocation || call.format || 'Not specified';
-
-const callWhen = (call: AppCall) => {
-  if (!call.startDate) return {day:'Not scheduled', time:'Time pending'};
-  const start = new Date(call.startDate);
-  return {
-    day: start.toLocaleDateString(undefined, {weekday:'short', month:'short', day:'numeric'}),
-    time: `${start.toLocaleTimeString(undefined, {hour:'numeric', minute:'2-digit'})}${call.endDate ? ` - ${new Date(call.endDate).toLocaleTimeString(undefined, {hour:'numeric', minute:'2-digit'})}` : ''}`,
-  };
-};
-
-function CallRow({call}:{call:AppCall}) {
-  const when = callWhen(call);
-  const person = {name: call.counterpart || 'Coffee chat', image: call.image};
-  const title = call.purpose || call.counterpart || 'Coffee chat';
-  return <li className="app-call">
-    <Face person={person} />
-    <div className="app-call-main">
-      <div className="app-call-title">
-        <h2>{title}</h2>
-        {call.status && <span>{call.status.toLowerCase().replaceAll('_', ' ')}</span>}
-      </div>
-      <p>{call.counterpart || 'Counterpart pending'}</p>
-      <dl>
-        <div><dt>When</dt><dd>{when.day} · {when.time}</dd></div>
-        <div><dt>Where</dt><dd>{callVenue(call)}</dd></div>
-        {call.notes && <div><dt>Notes</dt><dd>{call.notes}</dd></div>}
-      </dl>
-    </div>
-    <div className="app-call-action">
-      {call.needsPayment ? <span className="small">Payment required</span>
-        /* A Caffriend call has a collaboration room of its own. It is the same address
-           before, during and after the call, so the chat, notes, commitments and agenda
-           stay reachable once the call itself is over. */
-        : call.groupCallId ? <a className="button" href={`/calls/${call.groupCallId}`}>Join</a>
-        : call.joinUrl ? <a className="button" href={call.joinUrl} target={call.venue==='PROVIDER_CONFERENCE'?'_blank':undefined} rel={call.venue==='PROVIDER_CONFERENCE'?'noreferrer noopener':undefined}>Join</a>
-        : <span className="small">Join link pending</span>}
-    </div>
-  </li>;
 }
 
 export function Leaderboard({meId}:{meId?: string}) {

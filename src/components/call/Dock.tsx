@@ -1,4 +1,5 @@
 'use client';
+import { useEffect, useState } from 'react';
 import type { CallParticipant } from '@/lib/call';
 import { Icon, Hidden } from './Icon';
 
@@ -19,7 +20,47 @@ function Round({icon, label, on, onClick}:{icon:string; label:string; on?:boolea
   </button>;
 }
 
+/**
+ * Picture in picture, against the browser's own API.
+ *
+ * There is nothing to ask a server for: the stage's lead video is already playing in
+ * this document, and `requestPictureInPicture` hands that same element to the browser's
+ * floating window. The control is only offered where the browser offers the feature —
+ * Firefox and iOS Safari do not expose it to script — rather than shown and inert.
+ */
+function usePictureInPicture() {
+  const [supported, setSupported] = useState(false);
+  const [on, setOn] = useState(false);
+
+  useEffect(() => {
+    setSupported(typeof document !== 'undefined' && document.pictureInPictureEnabled);
+    const sync = () => setOn(Boolean(document.pictureInPictureElement));
+    document.addEventListener('enterpictureinpicture', sync, true);
+    document.addEventListener('leavepictureinpicture', sync, true);
+    return () => {
+      document.removeEventListener('enterpictureinpicture', sync, true);
+      document.removeEventListener('leavepictureinpicture', sync, true);
+    };
+  }, []);
+
+  const toggle = async () => {
+    try {
+      if (document.pictureInPictureElement) { await document.exitPictureInPicture(); return; }
+      // The lead tile's video, which is the one the stage is already leading with.
+      const video = document.querySelector<HTMLVideoElement>('.call-tile[data-lead="true"] video')
+        ?? document.querySelector<HTMLVideoElement>('.call-tile video');
+      if (video) await video.requestPictureInPicture();
+    } catch {
+      // A browser that refuses (no user gesture credit, or a track that has gone) leaves
+      // the call exactly as it was; there is nothing to recover.
+    }
+  };
+
+  return {supported, on, toggle};
+}
+
 export function Dock({me, controls}:{me:CallParticipant | undefined; controls:SelfControls}) {
+  const pip = usePictureInPicture();
   if (!me) return null;
   return <div className="call-dock" role="group" aria-label="Call controls">
     <Round icon={me.micOn ? 'mic-fill' : 'mic-mute-fill'} on={!me.micOn}
@@ -31,11 +72,12 @@ export function Dock({me, controls}:{me:CallParticipant | undefined; controls:Se
     <Round icon="display" on={me.screenShareOn}
       label={me.screenShareOn ? 'Stop sharing your screen' : 'Share your screen'}
       onClick={() => controls.onToggle('screenShareOn', !me.screenShareOn)} />
-    <Round icon="emoji-smile" label="Reactions" onClick={() => undefined} />
     <Round icon="hand-index-thumb" on={me.handRaised}
       label={me.handRaised ? 'Lower hand' : 'Raise hand'}
       onClick={() => controls.onToggle('handRaised', !me.handRaised)} />
-    <Round icon="pip" label="Picture in picture" onClick={() => undefined} />
+    {pip.supported && <Round icon="pip" on={pip.on}
+      label={pip.on ? 'Leave picture in picture' : 'Picture in picture'}
+      onClick={() => void pip.toggle()} />}
     <span className="call-dock-rule" aria-hidden="true" />
     <button className="call-leave" onClick={controls.onLeave}>
       <Icon name="telephone-x-fill" size={18} />Leave

@@ -190,6 +190,10 @@
 /* Speaker view: the lead fills the stage, everyone else runs down a 176px strip. */
 .call-stage-grid[data-layout="speaker"] { gap: 10px; }
 .call-stage-grid[data-layout="speaker"] .call-tiles { grid-template-columns: 1fr; position: relative; }
+/* The strip is a column of thumbnails, not a second stage. Rows are sized by the tile's
+   own 4:3 rather than by `1fr`, which stretched a lone strip tile into a full-height
+   column beside the lead; they stack from the top and the strip scrolls once a busy
+   room runs past the bottom of the stage. */
 .call-strip {
   width: 176px;
   flex-shrink: 0;
@@ -197,10 +201,14 @@
   padding: 0;
   list-style: none;
   display: grid;
-  grid-auto-rows: 1fr;
+  grid-auto-rows: max-content;
+  align-content: start;
   gap: 10px;
   min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
+.call-strip .call-tile { aspect-ratio: 4 / 3; }
 .call-stage-grid[data-layout="grid"] .call-tiles {
   grid-template-columns: repeat(3, 1fr);
   grid-template-rows: repeat(2, 1fr);
@@ -817,3 +825,72 @@
 
 .call [role="alert"] { margin: 0; font: 400 13px/20px var(--font-core); color: var(--caf-red); }
 .call [role="status"] { margin: 0; font: 400 12px/18px var(--font-core); color: var(--caf-grey-600); }
+
+/* ---------- Profile peek ---------- */
+/* The peek replaces the roster inside the panel rather than covering the call, so the
+   person you are reading about stays on screen while you read. */
+.call-peek { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.call-peek-back {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+  color: var(--caf-grey-600);
+  font: 600 13px/18px var(--font-core);
+}
+.call-peek-back:hover { color: var(--caf-espresso); }
+.call-peek-head { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.call-peek-photo {
+  flex: none;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--caf-grey-100);
+}
+.call-peek-photo-empty {
+  display: grid;
+  place-items: center;
+  background: var(--caf-orange-100);
+  color: var(--caf-orange);
+  font: 700 24px/1 var(--font-core);
+}
+/* The peek's own name, out from under the panel's section-heading treatment for h3 —
+   this is the person, not a section label. */
+.call-tabpanel .call-peek-name {
+  margin: 0;
+  padding-top: 0;
+  border-top: 0;
+  font: 700 19px/24px var(--font-core);
+  letter-spacing: -.02em;
+  text-transform: none;
+  color: var(--caf-espresso);
+  overflow-wrap: anywhere;
+}
+.call-peek-role {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 1px 8px;
+  border-radius: 9px;
+  background: var(--caf-orange-100);
+  color: var(--caf-orange);
+  font: 700 11px/18px var(--font-core);
+}
+.call-peek-headline { margin: 4px 0 0; color: var(--caf-grey-600); font: 400 13px/18px var(--font-core); overflow-wrap: anywhere; }
+.call-peek-facts { list-style: none; margin: 0; padding: 14px 0; display: grid; gap: 9px; border-block: 1px solid var(--caf-grey-200); }
+.call-peek-facts li { display: flex; align-items: center; gap: 9px; font: 400 13px/18px var(--font-core); overflow-wrap: anywhere; }
+.call-peek-label { margin: 0; color: var(--caf-grey-600); font: 700 11px/16px var(--font-core); letter-spacing: .12em; text-transform: uppercase; }
+.call-peek-tags { list-style: none; margin: -6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 7px; }
+/* The design system's TagPill, at its call size. */
+.call-peek-tags li {
+  padding: 5px 12px;
+  border-radius: 30px;
+  background: var(--caf-orange-75);
+  color: var(--caf-espresso);
+  font: 600 12px/16px var(--font-core);
+}
+.call-peek-history { margin: -6px 0 0; font: 400 13px/18px var(--font-core); }

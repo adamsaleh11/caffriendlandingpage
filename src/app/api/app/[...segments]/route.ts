@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSession, clearSession, sameOrigin } from '@/lib/session';
 import { backend, BackendError } from '@/lib/backend';
-import { projectSuggestion, projectConnection, projectCall, projectRank, projectProfile, projectProfileDetail, profileEdit, projectPerson, type AppConnection } from '@/lib/app-projection';
+import { image, projectSuggestion, projectConnection, projectCall, projectRank, projectProfile, projectProfileDetail, profileEdit, projectPerson, type AppConnection } from '@/lib/app-projection';
 
 /**
  * The consumer Caffriend surface (Home, Connections, Calls, Leaderboard, Profile).
@@ -28,8 +28,18 @@ const unwrap = (body: unknown): unknown => {
 const list = (value: unknown): Record<string, unknown>[] =>
   Array.isArray(value) ? value as Record<string, unknown>[] : [];
 
+/** The first https photo in a `/media/user/:id` list, in either shape the rows arrive in. */
+const firstMediaUrl = (body: unknown): string | null => {
+  for (const item of list(body)) {
+    const raw = typeof item.url === 'string' ? item.url : typeof item.media_url === 'string' ? item.media_url : '';
+    const url = image(raw);
+    if (url) return url;
+  }
+  return null;
+};
+
 /** Fetches public profiles a few at a time; a row whose profile fails keeps its base fields. */
-async function withProfiles(rows: AppConnection[], token: string): Promise<AppConnection[]> {
+async function withProfiles<T extends {userId: string; image?: string | null}>(rows: T[], token: string): Promise<T[]> {
   const limit = 6;
   const out = [...rows];
   for (let start = 0; start < out.length; start += limit) {
@@ -38,7 +48,20 @@ async function withProfiles(rows: AppConnection[], token: string): Promise<AppCo
       backend(`/user/profile/${encodeURIComponent(row.userId)}`, {token})
         .then(projectProfileDetail)
         .catch(() => null)));
-    details.forEach((detail, index) => { if (detail) Object.assign(slice[index], detail); });
+    // Only fills in what the profile actually knows: a null there must not erase a
+    // field the row already carried (a suggestion brings its own rating and matches).
+    details.forEach((detail, index) => {
+      if (!detail) return;
+      for (const [key, value] of Object.entries(detail)) if (value !== null) (slice[index] as Record<string, unknown>)[key] = value;
+    });
+    // A person whose profile record carries no photo still has one in their media —
+    // the same list the profile modal shows — so that is the last place to look.
+    const faceless = slice.filter(row => !row.image);
+    const photos = await Promise.all(faceless.map(row =>
+      backend(`/media/user/${encodeURIComponent(row.userId)}`, {token})
+        .then(body => firstMediaUrl(unwrap(body)))
+        .catch(() => null)));
+    photos.forEach((url, index) => { if (url) faceless[index].image = url; });
   }
   return out;
 }
@@ -131,8 +154,13 @@ export async function POST(request: Request, {params}:{params:Promise<{segments:
       if (typeof body.role === 'string' && body.role) payload.role = body.role;
       const result = unwrap(await backend('/match/suggestions', {token:session.token, method:'POST', body:payload})) as Record<string, unknown>;
       const source = Array.isArray(result) ? result : list(result?.data);
+      // Like Connections, `/match/suggestions` carries only a name, so each person's
+      // public profile fills in job title, company, industry and location. A profile
+      // that fails to load leaves that row with its base fields rather than the list.
+      const items = await withProfiles(
+        source.map(projectSuggestion).filter(row => row.userId && row.userId !== me), session.token);
       return json({
-        items: source.map(projectSuggestion).filter(row => row.userId && row.userId !== me),
+        items,
         page: typeof result?.page === 'number' ? result.page : page,
         totalPages: typeof result?.totalPages === 'number' ? result.totalPages : null,
       });

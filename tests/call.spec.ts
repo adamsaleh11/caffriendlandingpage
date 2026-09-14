@@ -284,10 +284,20 @@ test.describe('workspace calls page', () => {
     await page.goto(`/app/${workspaceId}/calendar`);
     if (page.url().includes('/login')) await login(page);
 
-    // Upcoming: a month grid, with the booked call sitting on its own day.
+    // Upcoming: a month grid, with the booked call sitting on its own day. A day's chip
+    // opens the call's detail rather than navigating, so everywhere the call can be
+    // followed to — the room, its notes, the meeting record — is reachable from here.
     const grid = page.getByRole('grid', {name:/Calls in /});
     await expect(grid).toBeVisible();
-    await expect(grid.getByRole('link', {name:/Jordan Patel/})).toBeVisible();
+    const chip = grid.getByRole('button', {name:/Jordan Patel/});
+    await expect(chip).toBeVisible();
+    await chip.click();
+    const detail = page.getByRole('dialog');
+    await expect(detail.getByRole('heading', {name:'Coffee with Jordan'})).toBeVisible();
+    await expect(detail.getByRole('link', {name:/Open (notes|the call room)/}))
+      .toHaveAttribute('href', `/calls/${groupCallId}`);
+    await detail.getByRole('button', {name:'Close'}).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
 
     // The sections that were never about calls are gone.
     await expect(page.getByRole('heading', {name:'Calendar delivery'})).toHaveCount(0);
@@ -297,12 +307,16 @@ test.describe('workspace calls page', () => {
     const past = page.getByRole('list', {name:'Past calls'});
     const row = past.getByRole('listitem').filter({hasText:'Breaking into product analytics'});
     await expect(row).toBeVisible();
-    await row.getByRole('button', {name:/Breaking into product analytics/}).click();
-    await expect(row.getByRole('list', {name:'People on this call'}).getByText('Sarah Chen')).toBeVisible();
-    await expect(row.getByRole('term').filter({hasText:'Notes'})).toBeVisible();
-
-    await row.getByRole('link', {name:'Open notes'}).click();
-    await expect(page).toHaveURL(`/calls/${groupCallId}`);
-    await expect(page.getByRole('tab', {name:'Notes'})).toBeVisible({timeout: 15000});
+    // A finished call carries the same card as an upcoming one; only its action differs.
+    // Notes opens a read-only page of its own — never the live call surface, which would
+    // flash the room and its devices for a call that is over.
+    await row.getByRole('link', {name:'Notes'}).click();
+    await expect(page).toHaveURL(`/app/${workspaceId}/calls/${groupCallId}`);
+    await expect(page.getByRole('list', {name:'People on this call'}).getByText('Sarah Chen')).toBeVisible();
+    await expect(page.getByText('Ask Maya for the portfolio invite.')).toBeVisible();
+    await expect(page.getByRole('list', {name:'Commitments'}).getByText('Draft a one-page case study')).toBeVisible();
+    await expect(page.getByRole('list', {name:'Call chat'})).toBeVisible();
+    // Nothing here may offer a way into the room.
+    await expect(page.getByRole('link', {name:'Join'})).toHaveCount(0);
   });
 });
