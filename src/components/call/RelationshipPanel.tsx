@@ -1,7 +1,7 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { participantName, type CallActionItem, type CallMessage, type CallParticipant, type CallState, type NoteScope } from '@/lib/call';
-import PersonProfile from '@/components/app/PersonProfile';
+import type { AppPerson } from '@/lib/app-projection';
 import { Icon, Hidden } from './Icon';
 
 export type PanelTab = 'people' | 'chat' | 'notes' | 'actions' | 'agenda';
@@ -22,6 +22,89 @@ export type PanelActions = {
   inviteUrl: string;
 };
 
+
+/**
+ * The profile peek.
+ *
+ * The kit puts this inside the 396px panel rather than over the call, because it is
+ * something you read *while* the other person is talking — a modal would cover the
+ * face you are reading it about. It opened as the consumer app's profile modal for a
+ * while, which is why it arrived unstyled: those rules are scoped under `.crm`, and the
+ * call page does not load that stylesheet.
+ *
+ * The roster row is already on screen, so the peek opens with what the call knows —
+ * name, role, title, company — and fills in the rest of the record when it arrives.
+ * A guest has no session to read profiles with, so for them it simply stays at that.
+ */
+function Peek({person, me, onClose}:{person:CallParticipant; me:string; onClose:()=>void}) {
+  const [profile, setProfile] = useState<AppPerson>();
+
+  useEffect(() => {
+    let live = true;
+    setProfile(undefined);
+    if (!person.userId) return;
+    fetch(`/api/app/person/${encodeURIComponent(person.userId)}`,
+      {headers:{'X-Caffriend-Request':'1'}, cache:'no-store'})
+      .then(response => response.ok ? response.json() : null)
+      .then(body => { if (live && body) setProfile(body as AppPerson); })
+      // The peek is an enrichment of a row that is already readable. A profile that
+      // will not load costs the extra detail, never the peek itself.
+      .catch(() => undefined);
+    return () => { live = false; };
+  }, [person.userId]);
+
+  const name = participantName(person, me);
+  const headline = [profile?.jobTitle ?? person.jobTitle, profile?.company ?? person.company]
+    .filter(Boolean).join(' @ ');
+  const facts: {icon: string; value: string}[] = [
+    {icon:'mortarboard', value:profile?.university ?? ''},
+    {icon:'person-badge', value:profile?.pronouns ?? ''},
+    {icon:'geo-alt', value:profile?.location ?? ''},
+    {icon:'briefcase', value:profile?.industry ?? ''},
+  ].filter(row => Boolean(row.value));
+
+  const history = [
+    profile?.matches != null ? `${profile.matches} mutual connection${profile.matches === 1 ? '' : 's'}` : null,
+    profile?.coffeeChats != null ? `${profile.coffeeChats} coffee chat${profile.coffeeChats === 1 ? '' : 's'}` : null,
+  ].filter(Boolean) as string[];
+
+  return <section className="call-peek" aria-label={`${name} profile`}>
+    <button className="call-peek-back" onClick={onClose}>
+      <Icon name="chevron-left" size={13} />Back to the room
+    </button>
+    <div className="call-peek-head">
+      {profile?.image
+        // eslint-disable-next-line @next/next/no-img-element -- provider-hosted media are not a configured Next image domain
+        ? <img className="call-peek-photo" src={profile.image} alt="" />
+        : <span className="call-peek-photo call-peek-photo-empty" aria-hidden="true">{name.slice(0, 1).toUpperCase()}</span>}
+      <div>
+        <h3 className="call-peek-name">{name}</h3>
+        {person.role === 'host' && <span className="call-peek-role">Host</span>}
+        {person.role === 'co_host' && <span className="call-peek-role">Co-host</span>}
+        {headline && <p className="call-peek-headline">{headline}</p>}
+      </div>
+    </div>
+
+    {facts.length > 0 && <ul className="call-peek-facts">
+      {facts.map(row => <li key={row.icon}>
+        <Icon name={row.icon} size={14} color="var(--caf-grey-600)" />{row.value}
+      </li>)}
+    </ul>}
+
+    {profile?.coffeeChatTags && profile.coffeeChatTags.length > 0 && <>
+      <h4 className="call-peek-label">Wants to talk about</h4>
+      <ul className="call-peek-tags">
+        {profile.coffeeChatTags.map(tag => <li key={tag}>{tag}</li>)}
+      </ul>
+    </>}
+
+    {history.length > 0 && <>
+      <h4 className="call-peek-label">Between you</h4>
+      <p className="call-peek-history">{history.join(' · ')}</p>
+    </>}
+  </section>;
+}
+
 function People({state, me, inviteUrl}:{state:CallState; me:string; inviteUrl:string}) {
   const [peek, setPeek] = useState<CallParticipant>();
   const [copied, setCopied] = useState(false);
@@ -30,6 +113,8 @@ function People({state, me, inviteUrl}:{state:CallState; me:string; inviteUrl:st
     try { await navigator.clipboard.writeText(inviteUrl); setCopied(true); }
     catch { setCopied(false); }
   }
+
+  if (peek) return <Peek person={peek} me={me} onClose={() => setPeek(undefined)} />;
 
   return <>
     <h2 id="call-roster-heading">In the room · {state.participants.length}</h2>
@@ -52,7 +137,6 @@ function People({state, me, inviteUrl}:{state:CallState; me:string; inviteUrl:st
     </ul>
     <button className="call-invite" onClick={copy}><Icon name="link-45deg" size={16} />Copy invite link</button>
     {copied && <p role="status">Invite link copied</p>}
-    {peek && <PersonProfile userId={peek.userId} name={peek.displayName} onClose={() => setPeek(undefined)} />}
   </>;
 }
 

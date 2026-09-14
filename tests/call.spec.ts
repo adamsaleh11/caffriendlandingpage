@@ -196,12 +196,19 @@ test('a camera that is off falls back to the person, and mute is visible on the 
   await expect(maya).toContainText('Hand raised');
 });
 
-test('tapping someone in the room opens their profile', async ({page}) => {
+test('tapping someone in the room opens their profile inside the panel', async ({page}) => {
   await enterCall(page);
   await page.getByRole('list', {name:'In the room'}).getByRole('button', {name:/Sarah Chen/}).click();
-  const profile = page.getByRole('dialog');
-  await expect(profile).toBeVisible();
-  await expect(profile.getByText('Sarah Chen')).toBeVisible();
+  // The peek takes over the panel rather than covering the call: you read about someone
+  // while you are still looking at them, so the stage has to stay on screen.
+  const peek = page.getByRole('region', {name:'Sarah Chen profile'});
+  await expect(peek).toBeVisible();
+  await expect(peek.getByRole('heading', {name:'Sarah Chen'})).toBeVisible();
+  await expect(page.getByRole('region', {name:'Call stage'})).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  await peek.getByRole('button', {name:'Back to the room'}).click();
+  await expect(page.getByRole('list', {name:'In the room'})).toBeVisible();
 });
 
 test('the invite link can be copied', async ({page, context}) => {
@@ -284,10 +291,34 @@ test.describe('workspace calls page', () => {
     await page.goto(`/app/${workspaceId}/calendar`);
     if (page.url().includes('/login')) await login(page);
 
-    // Upcoming: a month grid, with the booked call sitting on its own day.
+    // Upcoming: a month grid, with the booked call sitting on its own day. A day's chip
+    // opens the call's detail rather than navigating, so everywhere the call can be
+    // followed to — the room, its notes, the meeting record — is reachable from here.
     const grid = page.getByRole('grid', {name:/Calls in /});
     await expect(grid).toBeVisible();
-    await expect(grid.getByRole('link', {name:/Jordan Patel/})).toBeVisible();
+    const chip = grid.getByRole('button', {name:/Jordan Patel/});
+    await expect(chip).toBeVisible();
+    await chip.click();
+    const detail = page.getByRole('dialog');
+    await expect(detail.getByRole('heading', {name:'Coffee with Jordan'})).toBeVisible();
+    // Joining is offered while it is ahead; what it produced is always one click away,
+    // and that goes to the read-only notes page, never the live call surface.
+    await expect(detail.getByRole('link', {name:'Join'})).toHaveAttribute('href', `/calls/${groupCallId}`);
+    await expect(detail.getByRole('link', {name:'Call notes'}))
+      .toHaveAttribute('href', `/app/${workspaceId}/calls/${groupCallId}`);
+    await detail.getByRole('button', {name:'Close'}).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+
+    // A call that has already happened stays on the month — the day it was held on must
+    // not go blank once it ends — and it offers its notes rather than a way back in.
+    const held = grid.getByRole('button', {name:/Priya Raman/});
+    await expect(held).toBeVisible();
+    await held.click();
+    const finished = page.getByRole('dialog');
+    await expect(finished.getByText('This call has finished')).toBeVisible();
+    await expect(finished.getByRole('link', {name:'Call notes'})).toBeVisible();
+    await expect(finished.getByRole('link', {name:'Join'})).toHaveCount(0);
+    await finished.getByRole('button', {name:'Close'}).click();
 
     // The sections that were never about calls are gone.
     await expect(page.getByRole('heading', {name:'Calendar delivery'})).toHaveCount(0);
@@ -297,12 +328,16 @@ test.describe('workspace calls page', () => {
     const past = page.getByRole('list', {name:'Past calls'});
     const row = past.getByRole('listitem').filter({hasText:'Breaking into product analytics'});
     await expect(row).toBeVisible();
-    await row.getByRole('button', {name:/Breaking into product analytics/}).click();
-    await expect(row.getByRole('list', {name:'People on this call'}).getByText('Sarah Chen')).toBeVisible();
-    await expect(row.getByRole('term').filter({hasText:'Notes'})).toBeVisible();
-
-    await row.getByRole('link', {name:'Open notes'}).click();
-    await expect(page).toHaveURL(`/calls/${groupCallId}`);
-    await expect(page.getByRole('tab', {name:'Notes'})).toBeVisible({timeout: 15000});
+    // A finished call carries the same card as an upcoming one; only its action differs.
+    // Notes opens a read-only page of its own — never the live call surface, which would
+    // flash the room and its devices for a call that is over.
+    await row.getByRole('link', {name:'Notes'}).click();
+    await expect(page).toHaveURL(`/app/${workspaceId}/calls/${groupCallId}`);
+    await expect(page.getByRole('list', {name:'People on this call'}).getByText('Sarah Chen')).toBeVisible();
+    await expect(page.getByText('Ask Maya for the portfolio invite.')).toBeVisible();
+    await expect(page.getByRole('list', {name:'Commitments'}).getByText('Draft a one-page case study')).toBeVisible();
+    await expect(page.getByRole('list', {name:'Call chat'})).toBeVisible();
+    // Nothing here may offer a way into the room.
+    await expect(page.getByRole('link', {name:'Join'})).toHaveCount(0);
   });
 });

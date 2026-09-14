@@ -16,12 +16,29 @@ const list = (value: unknown): Row[] => Array.isArray(value) ? value as Row[] : 
 const text = (value: unknown): string | null => typeof value === 'string' && value.trim() ? value : null;
 const num = (value: unknown): number | null => typeof value === 'number' && Number.isFinite(value) ? value : null;
 
-/** Only an https image passes through; anything else renders as initials. */
-const image = (value: unknown): string | null => {
+/**
+ * Only an https image passes through; anything else renders as initials. A plain
+ * http URL is allowed when it is served from this machine, because a local backend
+ * hands out `http://localhost` media and there is no mixed content to worry about.
+ */
+const localHosts = new Set(['localhost', '127.0.0.1', '[::1]']);
+export const image = (value: unknown): string | null => {
   const raw = text(value);
   if (!raw) return null;
-  try { const url = new URL(raw); return url.protocol === 'https:' && !url.username && !url.password ? url.toString() : null; }
-  catch { return null; }
+  try {
+    const url = new URL(raw);
+    if (url.username || url.password) return null;
+    const allowed = url.protocol === 'https:' || (url.protocol === 'http:' && localHosts.has(url.hostname));
+    return allowed ? url.toString() : null;
+  } catch { return null; }
+};
+/** The first usable photo in a `media` array, in either of the two shapes it arrives in. */
+const firstMedia = (value: unknown): string | null => {
+  for (const item of list(value)) {
+    const url = image(item.url) ?? image(item.media_url);
+    if (url) return url;
+  }
+  return null;
 };
 const fullName = (row: Row) => [text(row.firstName), text(row.lastName)].filter(Boolean).join(' ') || 'Unnamed';
 
@@ -36,7 +53,7 @@ export type AppProfileDetail = {
   jobTitle: string | null; industry: string | null; company: string | null;
   university: string | null; location: string | null; role: string | null;
   pronouns: string | null; linkedInUrl: string | null; websiteUrl: string | null;
-  avgRating: number | null; matches: number | null;
+  avgRating: number | null; matches: number | null; image: string | null;
 };
 export function projectProfileDetail(input: unknown): AppProfileDetail {
   const row = (input ?? {}) as Row;
@@ -59,6 +76,9 @@ export function projectProfileDetail(input: unknown): AppProfileDetail {
     websiteUrl: link(user.websiteUrl),
     avgRating: num(user.avgRating),
     matches: num(user.matches),
+    // The avatar lives on the profile as either a direct field or the first media
+    // item, which is where a list endpoint that carries no photo gets one from.
+    image: image(user.image_url) ?? image(user.imageUrl) ?? firstMedia(user.media),
   };
 }
 
@@ -66,7 +86,7 @@ export function projectProfileDetail(input: unknown): AppProfileDetail {
 export type AppSuggestion = {
   userId: string; name: string; role: string | null;
   score: number | null; avgRating: number | null; matches: number | null; image: string | null;
-};
+} & Partial<AppProfileDetail>;
 export function projectSuggestion(input: unknown): AppSuggestion {
   const row = (input ?? {}) as Row;
   return {
@@ -76,7 +96,7 @@ export function projectSuggestion(input: unknown): AppSuggestion {
     score: num(row.score),
     avgRating: num(row.avgRating),
     matches: num(row.matches),
-    image: image(row.image_url),
+    image: image(row.image_url) ?? image(row.imageUrl) ?? firstMedia(row.media),
   };
 }
 
@@ -98,7 +118,7 @@ export function projectConnection(input: unknown, bucket: string, currentUserId:
     id: String(row.id ?? ''),
     userId: String(other.id),
     name: fullName(other),
-    image: image(other.image_url) ?? image(Array.isArray(other.media) ? (other.media[0] as Row | undefined)?.url : null),
+    image: image(other.image_url) ?? image(other.imageUrl) ?? firstMedia(other.media),
     bucket,
     isNew: row.isNew === true || row.isViewed === false,
     isMatched: row.isMatched === true,
@@ -133,7 +153,7 @@ export function projectCall(input: unknown, currentUserId: string): AppCall {
     endDate: date(row.endDate),
     counterpartId: text(other.id),
     counterpart: Object.keys(other).length ? fullName(other) : null,
-    image: image(other.image_url) ?? image(Array.isArray(other.media) ? (other.media[0] as Row | undefined)?.url : null),
+    image: image(other.image_url) ?? image(other.imageUrl) ?? firstMedia(other.media),
     format: text(row.format),
     notes: text(row.notes),
     // Matches the native rule: the target owes payment when the booking is unpaid and priced.
@@ -175,7 +195,7 @@ export function projectRank(input: unknown): AppRank {
     totalChats: num(row.totalChats),
     totalMatches: num(row.totalMatches),
     totalMessages: num(row.totalMessages),
-    image: image(row.image_url),
+    image: image(row.image_url) ?? image(row.imageUrl) ?? firstMedia(row.media),
   };
 }
 

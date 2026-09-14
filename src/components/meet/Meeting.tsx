@@ -23,13 +23,14 @@ const anonymousInstallId = () => {
   }
 };
 
-export default function Meeting({ inviteToken }: { inviteToken: string }) {
+export default function Meeting({ inviteToken, viewerName = null }: { inviteToken: string; viewerName?: string | null }) {
   const [credentials, setCredentials] = useState<{ token: string; url: string }>();
   const [callJoin, setCallJoin] = useState<GuestCallJoin & {groupCallId:string}>();
   const [left, setLeft] = useState(false);
   const [details, setDetails] = useState<Details>();
   const [error, setError] = useState('');
-  const [name, setName] = useState('');
+  const signedInName = viewerName?.trim() || '';
+  const [name, setName] = useState(signedInName);
   const [terms, setTerms] = useState(false);
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState('');
@@ -77,8 +78,11 @@ export default function Meeting({ inviteToken }: { inviteToken: string }) {
         : credentials ? <><h1>{details?.purpose}</h1><Call {...credentials} devices={devices} leave={() => { setCredentials(undefined); setLeft(true); }} /></> : error ? <><h1>Invitation unavailable</h1><p role="alert">{error}</p><button onClick={() => setAttempt(value => value + 1)}>Try again</button></>
         : !details ? <p role="status">Loading invitation…</p>
         : !details.platformSupported ? <><h1>{details.purpose}</h1><p>This invitation opens on desktop.</p></>
-        : <><h1>{details.purpose}</h1><p>{new Intl.DateTimeFormat('en', { dateStyle: 'full', timeStyle: 'short', timeZone: details.timezone }).format(new Date(details.startsAt))}</p><p>{details.timezone}</p><Preview devices={devices} onDevices={setDevices} /><label>Your display name<input name="displayName" value={name} onChange={event => setName(event.target.value)} autoComplete="name" maxLength={200} required /></label>
-        <p>Your display name and enabled microphone or camera are shared with the other call participants. Leaving stops your media.</p>
+        : <><h1>{details.purpose}</h1><p className="meeting-when">{new Intl.DateTimeFormat('en', { dateStyle: 'full', timeStyle: 'short', timeZone: details.timezone }).format(new Date(details.startsAt))}</p><p className="meeting-zone">{details.timezone}</p><Preview devices={devices} onDevices={setDevices} />
+        {signedInName
+          ? <p className="meeting-as">Joining as <strong>{signedInName}</strong></p>
+          : <label>Your display name<input name="displayName" value={name} onChange={event => setName(event.target.value)} autoComplete="name" maxLength={200} required /></label>}
+        <p className="meeting-fineprint">Your display name and enabled microphone or camera are shared with the other call participants. Leaving stops your media.</p>
         <label className="meeting-terms"><input type="checkbox" checked={terms} onChange={event => setTerms(event.target.checked)} />I accept the meeting and privacy terms</label>
         {joinError && <p role="alert">{joinError}</p>}
         <button disabled={!name.trim() || !terms || joining} onClick={join}>{joining ? 'Joining…' : 'Join on web'}</button></>}

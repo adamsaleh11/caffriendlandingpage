@@ -153,8 +153,15 @@ export async function GET(request: Request, {params}:{params:Promise<{segments:s
     }
     if (workspace && segments[2] === 'mail-connections' && segments.length === 4 && uuidPattern.test(segments[3]))
       return json(await backend(`${workspace}/mail-connections/${segments[3]}`, {token:session.token}));
-    if (workspace && segments[2] === 'upcoming-calls' && segments.length === 3) {
-      const result = await backend<unknown>('/calendar/accepted-events/1', {token:session.token});
+    /**
+     * Accepted coffee chats, as the native app reads them: type 1 is what is still
+     * ahead, type 2 is what has already happened. Both are needed here — a finished
+     * call from `/group-calls/mine` carries no participants, so the history feed is
+     * the only place the person you actually met is named.
+     */
+    if (workspace && (segments[2] === 'upcoming-calls' || segments[2] === 'past-calls') && segments.length === 3) {
+      const type = segments[2] === 'past-calls' ? 2 : 1;
+      const result = await backend<unknown>(`/calendar/accepted-events/${type}`, {token:session.token});
       const value = result as {data?:unknown};
       const rows = Array.isArray(value?.data) ? value.data : Array.isArray(result) ? result : [];
       return json((rows as Record<string,unknown>[]).map(row=>projectCall(row,session.user.id)).filter(row=>!row.workspaceId||row.workspaceId===segments[1]));

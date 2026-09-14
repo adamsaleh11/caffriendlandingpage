@@ -4,6 +4,7 @@ import {chooseDate, chooseTime} from './controls';
 const workspaceId='11111111-1111-4111-8111-111111111111';
 const personId='55555555-5555-4555-8555-555555555555';
 const invite='a'.repeat(43);
+const groupCall='cacacaca-caca-4aca-8aca-cacacacacaca';
 const connection={id:'33333333-3333-4333-8333-333333333333',provider:'GOOGLE',status:'CONNECTED',accountIdentifier:'alex@example.com',calendarId:'primary',calendarName:'Alex — Work'};
 async function login(page:Page){await page.getByLabel('Email or phone number').fill('alex@example.com');await page.getByLabel('Password',{exact:true}).fill('correct');await page.getByRole('button',{name:'Sign in',exact:true}).click();}
 async function enter(page:Page,path:string){await page.goto(path);if(page.url().includes('/login'))await login(page);await expect(page).toHaveURL(path);}
@@ -65,9 +66,15 @@ test('logged-out recipient explicitly chooses a slot and accepts',async({page})=
  await expect(page.getByRole('navigation',{name:'Workspace navigation'})).toHaveCount(0);
 });
 
+// The booking appears twice on this page on purpose — once on the month grid, once in
+// the list under it — so every assertion here is scoped to the list, which is the half
+// that carries the detail and the Join button.
 test('meetings renders canonical Upcoming Calls data and join route',async({page})=>{
  await enter(page,`/app/${workspaceId}/calendar`);
- await expect(page.getByRole('heading',{name:'Coffee with Jordan'})).toBeVisible();
- await expect(page.getByText('Jordan Patel')).toBeVisible();await expect(page.getByText('Caffriend call')).toBeVisible();
- await expect(page.getByRole('link',{name:'Join',exact:true})).toHaveAttribute('href',`https://caffriend.com/meet/${invite}`);
+ const meeting=page.getByRole('list',{name:'Upcoming meetings'}).getByRole('listitem').filter({hasText:'Coffee with Jordan'});
+ await expect(meeting.getByRole('heading',{name:'Coffee with Jordan'})).toBeVisible();
+ await expect(meeting).toContainText('Jordan Patel');await expect(meeting).toContainText('Caffriend call');
+ // A Caffriend call is joined in its own collaboration room, not through the invitation
+ // URL: the room is the same address before, during and after the call.
+ await expect(meeting.getByRole('link',{name:'Join',exact:true})).toHaveAttribute('href',`/calls/${groupCall}`);
 });
