@@ -153,6 +153,17 @@ export function projectAgendaBlock(row: Record<string, unknown>): CallAgendaBloc
   };
 }
 
+/**
+ * The backend can emit more than one participant row for the same person (e.g. a row
+ * seeded at booking time and a separate one created when they actually connect), so the
+ * roster is deduped by `userId` — last row wins, since it reflects the most recent state.
+ */
+function dedupeByUserId(rows: CallParticipant[]): CallParticipant[] {
+  const byUserId = new Map<string, CallParticipant>();
+  for (const row of rows) byUserId.set(row.userId, row);
+  return [...byUserId.values()];
+}
+
 export function projectCallState(body: unknown): CallState {
   const value = (body ?? {}) as Record<string, unknown>;
   const room = (value.room ?? {}) as Record<string, unknown>;
@@ -175,8 +186,8 @@ export function projectCallState(body: unknown): CallState {
       endedAt: text(room.endedAt),
     },
     // A participant who has left is history, not someone in the room.
-    participants: rows('participants').filter(row => !row.leftAt && row.waitingStatus === 'admitted'),
-    waitingRoom: rows('waitingRoom').filter(row => row.waitingStatus === 'waiting'),
+    participants: dedupeByUserId(rows('participants').filter(row => !row.leftAt && row.waitingStatus === 'admitted')),
+    waitingRoom: dedupeByUserId(rows('waitingRoom').filter(row => row.waitingStatus === 'waiting')),
     chat: {
       // A thread is minted on the first send, so "no thread yet" means "no messages yet".
       threadId: text(chat.threadId),
@@ -248,17 +259,16 @@ export function applyCallEvent(state: CallState, event: string, payload: Record<
     }
     case 'call.participant.updated': {
       const person = projectParticipant(row('participant'));
-      const known = state.participants.some(value => value.id === person.id);
+      const known = state.participants.some(value => value.userId === person.userId);
       return {...state, participants: known
-        ? state.participants.map(value => value.id === person.id ? {...value, ...person} : value)
+        ? state.participants.map(value => value.userId === person.userId ? {...value, ...person} : value)
         : [...state.participants, person]};
     }
     case 'call.waiting.admitted': {
       const person = projectParticipant(row('participant'));
       return {...state,
         waitingRoom: state.waitingRoom.filter(value => value.id !== person.id),
-        participants: state.participants.some(value => value.id === person.id)
-          ? state.participants : [...state.participants, person]};
+        participants: dedupeByUserId([...state.participants.filter(value => value.userId !== person.userId), person])};
     }
     case 'call.waiting.declined':
       return {...state, waitingRoom: state.waitingRoom.filter(value => value.id !== String(row('participant').id))};

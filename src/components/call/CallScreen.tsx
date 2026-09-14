@@ -524,7 +524,7 @@ export function CallScreen({
               {(video) => (
                 <Stage
                   participants={state.participants}
-                  me={me}
+                  me={mine?.userId ?? me}
                   layout={layout}
                   pinnedId={pinnedId}
                   onPin={setPinnedId}

@@ -49,7 +49,7 @@ export function CallMedia({credentials, micOn, cameraOn, shareOn, children}:{
   if (!credentials || failed) return <div className="call-media">{children(() => null)}</div>;
 
   return <div className="call-media">
-    <LiveKitRoom token={credentials.token} serverUrl={credentials.url}
+    <LiveKitRoom className="call-media-room" token={credentials.token} serverUrl={credentials.url}
       connect audio={micOn} video={cameraOn} screen={shareOn} onError={() => setFailed(true)}>
       <RoomAudioRenderer />
       <StartAudio label="Enable call audio" />

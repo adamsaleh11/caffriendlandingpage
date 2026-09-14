@@ -167,6 +167,11 @@
   flex-direction: column;
   gap: 18px;
 }
+.call-media, .call-media-room {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
 
 /* ---------- Stage ---------- */
 .call-stage-grid {
