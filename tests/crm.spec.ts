@@ -134,6 +134,22 @@ test.describe('people and organizations', () => {
     await expect(page.getByText('A durable link is unavailable.')).toBeVisible();
   });
 
+  test('edits a person name from the workspace profile', async ({page, request}) => {
+    await page.goto(`/app/${workspaceId}/people/${personId}`);
+    await login(page);
+    await page.getByRole('button', {name:'Edit profile'}).click();
+    await page.getByLabel('Name', {exact:true}).fill('Alex Chen');
+    await page.getByRole('button', {name:'Save profile'}).click();
+
+    await expect(page.getByRole('status').filter({hasText:'Profile updated.'})).toBeVisible();
+    await expect(page.getByRole('heading', {name:'Alex Chen'})).toBeVisible();
+
+    const stateBody = await (await request.get(state)).json();
+    const edit = stateBody.calls.find((call: {method:string; path:string}) =>
+      call.method === 'PATCH' && call.path.endsWith(`/crm/people/${personId}`));
+    expect(edit.body).toMatchObject({displayName:'Alex Chen'});
+  });
+
   test('permanently deletes a person through the explicit delete path', async ({page}) => {
     await page.goto(`/app/${workspaceId}/people/${personId}`);
     await login(page);
