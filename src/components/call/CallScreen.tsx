@@ -61,6 +61,7 @@ export function CallScreen({groupCallId, me, guestJoin, onLeave}:{
     };
     const join = (body: Record<string, unknown>) =>
       api<JoinAccess>(`${groupCallId}/join`, {method:'POST', body:JSON.stringify(body)}, 'call');
+    const resolve = () => api(`${groupCallId}/resolve`, {}, 'call');
 
     if (guestJoin) {
       const joinBody = {
@@ -69,7 +70,7 @@ export function CallScreen({groupCallId, me, guestJoin, onLeave}:{
         invitationToken: guestJoin.invitationToken,
         acceptedTerms: guestJoin.acceptedTerms,
       };
-      join(joinBody)
+      resolve().then(() => join(joinBody))
         .then(joined => {
           if (!live) return;
           setAccess(joined);
@@ -80,13 +81,13 @@ export function CallScreen({groupCallId, me, guestJoin, onLeave}:{
         .then(value => { if (live && value) setState(value); })
         .catch(fail);
     } else {
-      api<CallState>(`${groupCallId}/call-state`, {}, 'call')
-        .then(value => {
+      resolve().then(() => join({}))
+        .then(joined => {
           if (!live) return;
-          setState(value);
-          const ended = value.room.status !== 'OPEN' || Boolean(value.room.endedAt);
-          if (!ended) return join({}).then(joined => { if (live) setAccess(joined); });
+          setAccess(joined);
+          return api<CallState>(`${groupCallId}/call-state`, {}, 'call');
         })
+        .then(value => { if (live && value) setState(value); })
         .catch(fail);
     }
     return () => { live = false; };
@@ -94,7 +95,7 @@ export function CallScreen({groupCallId, me, guestJoin, onLeave}:{
 
   const applyEvent = useCallback((patch: (value: CallState) => CallState) =>
     setState(current => current && patch(current)), []);
-  useCallEvents(groupCallId, me, applyEvent, access?.callSessionToken ?? null);
+  useCallEvents(groupCallId, me, applyEvent, access?.callSessionToken ?? null, access?.participantId ?? null);
 
   const post = useCallback(<T,>(path: string, body: Record<string, unknown>) =>
     callApi<T>(`${groupCallId}/${path}`, {method:'POST', body:JSON.stringify(body)}), [callApi, groupCallId]);

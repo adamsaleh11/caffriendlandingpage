@@ -12,6 +12,7 @@ import {useRows} from './common';
 
 export type SentInvite = {
   id: string;
+  engagementId?: string | null;
   recipientEmail: string;
   recipientName?: string;
   purpose?: string;

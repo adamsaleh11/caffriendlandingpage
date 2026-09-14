@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useList, useRows, Section, Empty } from './common';
+import { useWorkspaceData } from './workspace-data';
 import Modal from './Modal';
 import Face from '@/components/app/Face';
 import type { AppCall } from '@/lib/app-projection';
@@ -186,6 +187,11 @@ export default function Schedule({workspaceId}:{workspaceId:string}) {
    * a finished call is told who it was with.
    */
   const pastEvents = useRows<AppCall>(`workspaces/${workspaceId}/past-calls`);
+  const crm = useWorkspaceData(workspaceId);
+  useEffect(() => {
+    if (crm.people.more && !crm.people.loadingMore) crm.people.loadMore();
+    if (crm.engagements.more && !crm.engagements.loadingMore) crm.engagements.loadMore();
+  }, [crm.people.more, crm.people.loadingMore, crm.engagements.more, crm.engagements.loadingMore]);
   // Recomputed on the minute so a meeting drops off the list once it has ended.
   const [tick, setTick] = useState(() => Date.now());
   useEffect(() => {
@@ -217,9 +223,15 @@ export default function Schedule({workspaceId}:{workspaceId:string}) {
         href: null, external: false, needsPayment: false,
         groupCallId: row.id, meetingId: row.meetingId,
       } satisfies UpcomingMeeting));
-    return [...rows, ...orphans]
+    const people = new Map((crm.people.rows ?? []).map(person => [person.id, person]));
+    const engagementPeople = new Map((crm.engagements.rows ?? []).map(engagement => [engagement.id, people.get(engagement.personId ?? '')]));
+    const named = [...rows, ...orphans].map(row => {
+      const person = row.meetingId ? engagementPeople.get((meetings.rows ?? []).find(meeting => meeting.id === row.meetingId)?.engagementId ?? '') : undefined;
+      return person ? {...row, counterpart: person.displayName, image: null} : row;
+    });
+    return named
       .sort((a, b) => (Date.parse(a.startsAt ?? '') || 0) - (Date.parse(b.startsAt ?? '') || 0));
-  }, [calls.rows, pastEvents.rows, meetings.rows, history.rows]);
+  }, [calls.rows, pastEvents.rows, meetings.rows, history.rows, crm.people.rows, crm.engagements.rows]);
   const upcoming = useMemo(() => booked.filter(row => stillAhead(row, tick)), [booked, tick]);
 
   /**
@@ -246,14 +258,14 @@ export default function Schedule({workspaceId}:{workspaceId:string}) {
    */
   const byCall = useMemo(() => {
     const rows = new Map<string, UpcomingMeeting>();
-    for (const event of [...(pastEvents.rows ?? []), ...(calls.rows ?? [])]) {
-      const row = fromCall(event);
+    for (const event of booked) {
+      const row = event;
       if (!row.counterpart) continue;
       if (event.groupCallId && !rows.has(event.groupCallId)) rows.set(event.groupCallId, row);
       if (event.meetingId && !rows.has(event.meetingId)) rows.set(event.meetingId, row);
     }
     return rows;
-  }, [pastEvents.rows, calls.rows]);
+  }, [booked]);
   const whoWasOn = (call: MyCall) => byCall.get(call.id) ?? (call.meetingId ? byCall.get(call.meetingId) : undefined);
 
   /**
