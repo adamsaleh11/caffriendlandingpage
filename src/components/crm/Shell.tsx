@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { sections, sectionIcons, sectionNames, type Section, type Workspace, type User } from '@/lib/contracts';
 import NativeNav from '@/components/app/NativeNav';
+import { forgetAll } from '@/lib/remember';
 import {FormSelect} from '@/components/ui/form-select';
 
 export default function Shell({workspaces,workspace,section,user,children}:{workspaces:Workspace[];workspace:Workspace;section:Section;user:User;children:ReactNode}){
@@ -11,7 +12,7 @@ export default function Shell({workspaces,workspace,section,user,children}:{work
   const toggle=useRef<HTMLButtonElement>(null);const menuButton=useRef<HTMLButtonElement>(null);
   // Other open tabs leave authenticated state as soon as they are notified of a sign-out.
   useEffect(()=>{
-    const onStorage=(event:StorageEvent)=>{if(event.key==='caffriend.signedout'){try{sessionStorage.clear();}catch{}window.location.replace('/login');}};
+    const onStorage=(event:StorageEvent)=>{if(event.key==='caffriend.signedout'){try{sessionStorage.clear();}catch{}forgetAll();window.location.replace('/login');}};
     window.addEventListener('storage',onStorage);return()=>window.removeEventListener('storage',onStorage);
   },[]);
   return <div className="crm shell"><a className="skip-link" href="#workspace-content">Skip to content</a>
@@ -28,7 +29,7 @@ export default function Shell({workspaces,workspace,section,user,children}:{work
             <p className="small">Signs you out of Caffriend on this browser.</p>
             <button onClick={async()=>{
               try{await fetch('/api/session',{method:'DELETE',headers:{'X-Caffriend-Request':'1'}});}catch{}
-              try{sessionStorage.clear();localStorage.setItem('caffriend.signedout',String(Date.now()));}catch{}
+              try{sessionStorage.clear();localStorage.setItem('caffriend.signedout',String(Date.now()));}catch{}forgetAll();
               window.location.replace('/login');
             }}>Sign out</button>
           </div>

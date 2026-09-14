@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ApiError } from '@/lib/api';
+import { remember, recall } from '@/lib/remember';
 import type { AppCall, AppConnection, AppRank, AppSuggestion } from '@/lib/app-projection';
 import type { EventSummary } from '@/lib/events';
 import { eventsApi, problemMessage } from '@/components/events/client';
@@ -24,17 +25,25 @@ async function app<T>(path: string, options: RequestInit = {}): Promise<T> {
   return result;
 }
 
+/**
+ * A consumer screen's data, shown from the last visit while it is refetched.
+ *
+ * Each screen is its own route, so navigating here mounts it blank. Starting from what
+ * this path last returned means going back to a screen you just left is immediate; the
+ * fetch still runs and replaces it, so what you read is never stale for long.
+ */
 function useApp<T>(path: string) {
-  const [data, setData] = useState<T>();
+  const key = `app:${path}`;
+  const [data, setData] = useState<T | undefined>(() => recall<T>(key));
   const [error, setError] = useState<string>();
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let live = true;
-    setData(undefined); setError(undefined);
-    app<T>(path).then(value => { if (live) setData(value); })
+    setData(recall<T>(key)); setError(undefined);
+    app<T>(path).then(value => { if (live) { remember(key, value); setData(value); } })
       .catch(problem => { if (live) setError(problem instanceof ApiError ? problem.message : 'This could not be loaded.'); });
     return () => { live = false; };
-  }, [path, attempt]);
+  }, [path, key, attempt]);
   return {data, error, reload: useCallback(() => setAttempt(v => v + 1), [])};
 }
 

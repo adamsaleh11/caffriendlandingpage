@@ -2,7 +2,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { api, ApiError } from '@/lib/api';
+import { api } from '@/lib/api';
+import { useWorkspaceList } from './WorkspaceList';
 import { homeSection, sectionNames, sections, uuidPattern, type Section, type User, type Workspace } from '@/lib/contracts';
 import Shell from './Shell';
 import StateCard from './StateCard';
@@ -31,24 +32,13 @@ const descriptions: Record<Section,string> = {
 };
 export default function WorkspaceApp({segments,user}:{segments:string[];user:User}) {
   const router=useRouter();
-  const [workspaces,setWorkspaces]=useState<Workspace[]>();
-  const [error,setError]=useState<ApiError>();
-  const [attempt,setAttempt]=useState(0);
+  const {workspaces,problem}=useWorkspaceList();
   const [pending,setPending]=useState(false);
   const [createError,setCreateError]=useState('');
   const selectionKey=`caffriend.workspace.${user.id}`;
   const path=segments.join('/');
-  // The workspace list belongs to the signed-in user, not to the current route.
-  // Refetching it per navigation put the whole app back behind "Loading workspace…".
-  useEffect(()=>{
-    const controller=new AbortController();
-    api<Workspace[]>('workspaces',{signal:controller.signal}).then(rows=>{
-      if(!controller.signal.aborted)setWorkspaces(rows);
-    }).catch(error=>{if(!controller.signal.aborted)setError(error instanceof ApiError?error:new ApiError(503,'The workspace service is unavailable.'));});
-    return ()=>controller.abort();
-  },[attempt]);
-  // Choosing where a bare /app should land, and remembering the choice, reads the
-  // list already loaded above rather than fetching it again.
+  // Choosing where a bare /app should land, and remembering the choice. The list is
+  // already here, loaded on the server by the layout, so this lands without a fetch.
   useEffect(()=>{
     if(!workspaces)return;
     const first=path?path.split('/')[0]:'';
@@ -61,9 +51,8 @@ export default function WorkspaceApp({segments,user}:{segments:string[];user:Use
       try{sessionStorage.setItem(selectionKey,first);}catch{}
     }
   },[workspaces,path,router,selectionKey]);
-  const retry=()=>{setError(undefined);setWorkspaces(undefined);setAttempt(value=>value+1);};
-  if(error)return <div className="crm center"><StateCard title={error.status===403?'Access unavailable':'Unable to load workspaces'} message={error.message} retry={retry}/></div>;
-  if(!workspaces)return <div className="crm center"><p role="status">Loading workspace…</p></div>;
+  // Retrying re-runs the layout that loaded the list, rather than a fetch of its own.
+  if(problem)return <div className="crm center"><StateCard title={problem.status===403?'Access unavailable':'Unable to load workspaces'} message={problem.message} retry={()=>router.refresh()}/></div>;
   if(segments.join('/')==='workspaces/new')return <main className="crm login"><form className="card" onSubmit={async event=>{
     event.preventDefault();setPending(true);setCreateError('');const name=new FormData(event.currentTarget).get('name');
     try{const created=await api<Workspace>('workspaces',{method:'POST',body:JSON.stringify({name})});router.replace(`/app/${created.id}/${homeSection}`);}
