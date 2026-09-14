@@ -164,7 +164,7 @@ export function ProfileEditor({workspaceId, person, organizations, startAt, onSa
     return startAt ? [byName(startAt), ...missing.filter(field => field.name !== startAt)] : missing;
   });
   const [step, setStep] = useState(0);
-  const [everything, setEverything] = useState(queue.length === 0);
+  const [everything, setEverything] = useState(startAt === 'displayName' || queue.length === 0);
   const [pending, setPending] = useState(false);
   const [problem, setProblem] = useState('');
   /** Confirmation is shown here rather than only on the page behind: while the

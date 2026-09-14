@@ -134,8 +134,11 @@ export default function PersonDetail({workspaceId, personId}:{workspaceId:string
       </div>
       <div className="person-head-actions">
         <button onClick={() => { setStartingEngagement(true); setNotice(''); }}>Start an engagement</button>
+        <button className="secondary" onClick={() => { setEditing({startAt:'displayName'}); setNotice(''); }}>
+          Edit profile
+        </button>
         <button className="secondary" onClick={() => { setEditing({}); setNotice(''); }}>
-          {progress.missing.length ? 'Complete profile' : 'Edit profile'}
+          {progress.missing.length ? 'Complete profile' : 'Review profile'}
         </button>
         <ArchiveButton workspaceId={workspaceId} resource="people" id={person.id} name={person.displayName} what="person"
           className="secondary" label="Archive person"
