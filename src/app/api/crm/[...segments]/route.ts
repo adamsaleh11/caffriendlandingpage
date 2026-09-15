@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSession, clearSession, sameOrigin, setSealed, readSealed, hashState, pendingCookie, fiveMinutes, webOrigin, type PendingFlows } from '@/lib/session';
 import { backend, BackendError } from '@/lib/backend';
-import { isResource, project, projectPage } from '@/lib/crm-projection';
+import { isResource, project, projectPage, projectTimelinePage } from '@/lib/crm-projection';
 import { writableResources, archivableResources, deletableResources, approvalActions } from '@/lib/contracts';
 import { bookingRequest, uuidPattern, providers, meetingStatuses, type AuditEvent, type CalendarConnection, type Meeting, type MeetingStatus, type Provider, type Workspace } from '@/lib/contracts';
 import { acceptedCalls } from '@/lib/app-projection';
@@ -195,6 +195,14 @@ export async function GET(request: Request, {params}:{params:Promise<{segments:s
     }
     if (workspace && segments[2] === 'oauth' && segments[3] === 'connections' && segments.length === 4)
       return json(await backend(`${workspace}/oauth/connections${listQuery(request)}`, {token:session.token}));
+    /**
+     * An engagement's own timeline. It gets this branch, at its own segment shape,
+     * rather than joining the CRM resource vocabulary — which would also expose it
+     * through the generic list and get paths.
+     */
+    if (workspace && segments[2] === 'crm' && segments.length === 6
+      && segments[3] === 'engagements' && segments[5] === 'timeline' && uuidPattern.test(segments[4]))
+      return json(projectTimelinePage(await backend(`${workspace}/crm/engagements/${segments[4]}/timeline`, {token:session.token})));
     const resource = segments[3] ?? '';
     if (workspace && segments[2] === 'crm' && isResource(resource)) {
       if (segments.length === 4)
