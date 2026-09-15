@@ -45,6 +45,12 @@ The five stable desktop pipeline steps: Prospect, Contacted, Meeting booked, Fol
 **Invitation acceptance**:
 A recipient's explicit confirmation of exactly one selected proposed time, resulting in a booked meeting. Opening an invitation, following an accept-intent link, or selecting a time is not acceptance.
 
+**Account invitee**:
+An invitee who accepted while signed into a Caffriend account. A connection follows from their acceptance. They are not a member of the sending workspace, and naming them is the sender's own record of the person, never a workspace member.
+
+**Guest invitee**:
+An invitee who accepted from the email link without signing in. The acceptance and its booking are as real as an account invitee's, but no connection follows, so the two are never presented as the same thing.
+
 **Invitation decline**:
 A recipient's explicit decision not to book any proposed time. Following a decline-intent link is not a decline.
 
@@ -53,6 +59,9 @@ A confirmed agreement to a coffee chat at a selected date, time, and duration.
 
 **Guest**:
 An invited participant who books or joins a coffee chat without creating a Caffriend account.
+
+**Connection**:
+Two accounts that have a meeting between them, carrying a conversation so they can talk before they meet. It follows from the meeting alone and never from the surface that booked it. A guest cannot be connected to, having no account; converting to an account is what makes a connection possible. It is a relationship between people, unlike Calendar connection and Mailbox connection, which are a sender's own integrations.
 
 **Call invitation**:
 Permission to join an already scheduled call, distinct from an invitation to select a coffee-chat time.

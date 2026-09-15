@@ -6,7 +6,7 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint . --ignore-pattern .next --ignore-pattern '.next-dev*' --ignore-pattern '.next-test*' --ignore-pattern .claude --ignore-pattern node_modules --ignore-pattern test-results --ignore-pattern playwright-report",
+    "lint": "eslint . --ignore-pattern .next --ignore-pattern '.next-dev*' --ignore-pattern '.next-test*' --ignore-pattern node_modules --ignore-pattern test-results --ignore-pattern playwright-report",
     "typecheck": "tsc --noEmit",
     "test": "playwright test",
     "test:unit": "node --import ./tests/ts-resolve.mjs --test tests/**/*.test.mjs"

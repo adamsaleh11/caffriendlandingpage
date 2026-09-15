@@ -109,6 +109,9 @@ export function CallScreen({
         .then((joined) => {
           if (!live) return;
           setAccess(joined);
+          // Pass the call-session token directly — setAccess is async state and won't
+          // be readable from callHeaders until after the next render, so we carry the
+          // token through the chain explicitly instead of relying on the memoised value.
           return api<CallState>(
             `${groupCallId}/call-state`,
             {
@@ -120,7 +123,17 @@ export function CallScreen({
           );
         })
         .then((value) => {
-          if (live && value) setState(value);
+          if (live && value) {
+            // A fresh join resets screen share: the LiveKit track has not been
+            // published yet in this session, so treat it as off even if the previous
+            // participant row still carries `screenShareOn: true` from before they left.
+            setState({
+              ...value,
+              participants: value.participants.map((p) =>
+                p.userId === me ? { ...p, screenShareOn: false } : p,
+              ),
+            });
+          }
         })
         .catch(fail);
     } else {
@@ -129,17 +142,34 @@ export function CallScreen({
         .then((joined) => {
           if (!live) return;
           setAccess(joined);
-          return api<CallState>(`${groupCallId}/call-state`, {}, "call");
+          // Same as the guest path: carry the token explicitly rather than waiting for
+          // callHeaders to re-derive after the state update settles.
+          return api<CallState>(
+            `${groupCallId}/call-state`,
+            {
+              headers: joined.callSessionToken
+                ? { "X-Caffriend-Call-Session": joined.callSessionToken }
+                : {},
+            },
+            "call",
+          );
         })
         .then((value) => {
-          if (live && value) setState(value);
+          if (live && value) {
+            setState({
+              ...value,
+              participants: value.participants.map((p) =>
+                p.userId === me ? { ...p, screenShareOn: false } : p,
+              ),
+            });
+          }
         })
         .catch(fail);
     }
     return () => {
       live = false;
     };
-  }, [groupCallId, guestJoin, displayName]);
+  }, [groupCallId, guestJoin, displayName, me]);
 
   const applyEvent = useCallback(
     (patch: (value: CallState) => CallState) =>
@@ -330,21 +360,15 @@ export function CallScreen({
 
   const send = useCallback(
     async (text: string, reply: CallMessage | null, mentions: string[]) => {
-      const created = await post<CallMessage>("call-chat/messages", {
+      // Do not append locally — the server broadcasts a `call.chat.message.created`
+      // event back to all participants including the sender, and `applyCallEvent`
+      // deduplicates by id. A local append that races the broadcast causes the double-
+      // message the user sees when the socket fires before setState settles.
+      await post<CallMessage>("call-chat/messages", {
         message: text,
         replyToMessageId: reply?.id ?? null,
         mentions,
       });
-      setState(
-        (current) =>
-          current && {
-            ...current,
-            chat: {
-              ...current.chat,
-              messages: [...current.chat.messages, created],
-            },
-          },
-      );
     },
     [post],
   );
@@ -362,14 +386,10 @@ export function CallScreen({
 
   const addAction = useCallback(
     async (text: string) => {
-      const created = await post<CallActionItem>("action-items", { text });
-      setState(
-        (current) =>
-          current && {
-            ...current,
-            actionItems: [...current.actionItems, created],
-          },
-      );
+      // Same as send(): the server broadcasts `call.action_item.created` to all
+      // participants; relying on the socket event avoids the duplicate that appears
+      // when the local append and the broadcast both land.
+      await post<CallActionItem>("action-items", { text });
     },
     [post],
   );
