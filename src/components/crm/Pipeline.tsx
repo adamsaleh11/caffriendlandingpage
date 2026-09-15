@@ -7,7 +7,7 @@ import type { Engagement, Pipeline as PipelineRecord, Stage, Task } from '@/lib/
 import { canonicalPipeline, guidanceFor, isCanonical } from '@/lib/lifecycle';
 import { useKeys, useRows, Section, Empty, More } from './common';
 import type { SentInvite } from './SentInvites';
-import { lastActivity, provenanceFor, timelineFor, useWorkspaceData } from './workspace-data';
+import { provenanceFor, useWorkspaceData } from './workspace-data';
 import EngagementForm from './EngagementForm';
 import OutreachComposer from './OutreachComposer';
 import StepFlow, { type FlowStep, type StepIcon } from './StepFlow';
@@ -180,7 +180,9 @@ export default function Pipeline({workspaceId}:{workspaceId:string}) {
     const organization = (engagement.organizationId && organizations.get(engagement.organizationId))
       || (person?.organizationId ? organizations.get(person.organizationId) : undefined);
     const provenance = person ? provenanceFor(person.id, data) : null;
-    const activity = person ? lastActivity(timelineFor(person.id, new Set([engagement.id]), data)) : null;
+    // The server maintains `lastActivityAt` on every activity, acceptance included,
+    // so the board reads it directly rather than assembling a timeline per card.
+    const activity = engagement.lastActivityAt ?? null;
     return {person, organization, provenance, activity, invite};
   }
 
@@ -275,7 +277,7 @@ export default function Pipeline({workspaceId}:{workspaceId:string}) {
       </p>}
 
       {engagement.nextAction && <p className="next">Next: {engagement.nextAction}</p>}
-      {activity && <p className="small quiet">{new Date(activity.at).toLocaleDateString()} — {activity.title}</p>}
+      {activity && <p className="small quiet">Last activity {new Date(activity).toLocaleDateString()}</p>}
 
       {/* The run this person is on, and the one optional step hanging off its end. */}
       {flow.length > 0 && <>
@@ -382,7 +384,7 @@ export default function Pipeline({workspaceId}:{workspaceId:string}) {
             ? <>{provenance.addedBy.name}{provenance.confidence !== null ? ` · ${percent(provenance.confidence)}` : ''}</>
             : provenance?.addedBy ? provenance.addedBy.name : '—'}</td>
           <td>{engagement.nextAction || '—'}</td>
-          <td>{activity ? `${new Date(activity.at).toLocaleDateString()} — ${activity.title}` : '—'}</td>
+          <td>{activity ? new Date(activity).toLocaleDateString() : '—'}</td>
           <td>{person&&engagement.status!=='CLOSED'?<button className="secondary small-button" onClick={()=>setInviting(engagement)}>Send invite</button>:'—'}</td>
         </tr>;
       })}

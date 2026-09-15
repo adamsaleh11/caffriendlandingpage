@@ -3,6 +3,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { useList, useRows, type Loaded } from './common';
 import { useLiveRows } from './record-actions';
+import type { Page } from '@/lib/contracts';
+import type { TimelineEntry } from '@/lib/timeline-entry';
+import type { TimelineItem } from '@/lib/engagement-timeline';
 import {
   actorLabels, auditActions,
   type Agent, type Approval, type AuditEvent, type Conversation, type Engagement, type Meeting,
@@ -158,16 +161,33 @@ export function provenanceFor(personId: string, data: WorkspaceData): Provenance
 /* Timeline: one chronological history of a relationship.                      */
 /* -------------------------------------------------------------------------- */
 
-export type TimelineEntry = {
-  id: string;
-  at: string;
-  title: string;
-  detail?: string;
-  /** Who did it, when the record says. Agent work is never presented as the user's. */
-  actor: string;
-  byAgent: boolean;
-  kind: 'change' | 'note' | 'task' | 'meeting';
-};
+export type { TimelineEntry };
+
+/**
+ * The server's own timeline rows for a person's engagements.
+ *
+ * One request per engagement, because the endpoint is per-engagement. A failed
+ * engagement is dropped rather than failing the page: the rest of the timeline is
+ * assembled from records already loaded and must still render.
+ */
+export function useEngagementTimelines(workspaceId: string, engagementIds: string[]): TimelineItem[] {
+  const [items, setItems] = useState<TimelineItem[]>([]);
+  const ids = [...engagementIds].sort().join(',');
+  useEffect(() => {
+    const list = ids ? ids.split(',') : [];
+    if (!list.length) { setItems([]); return; }
+    let live = true;
+    Promise.all(list.map(id =>
+      // The row does not name its engagement — the path does — so it is stamped
+      // here, where the id is known, rather than guessed by any later reader.
+      api<Page<TimelineItem>>(`workspaces/${workspaceId}/crm/engagements/${id}/timeline`)
+        .then(page => (page.items ?? []).map(item => ({...item, engagementId: id})))
+        .catch(() => [] as TimelineItem[])))
+      .then(pages => { if (live) setItems(pages.flat()); });
+    return () => { live = false; };
+  }, [workspaceId, ids]);
+  return items;
+}
 
 /**
  * Every recorded thing that happened to this person, newest last.

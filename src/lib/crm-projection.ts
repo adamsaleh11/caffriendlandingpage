@@ -14,7 +14,7 @@ const archivable = [...common, 'archivedAt'];
 const fields: Record<CrmResource, string[]> = {
   people: [...archivable, 'displayName', 'title', 'location', 'email', 'phone', 'sourceCategory', 'organizationId', 'sourceUrl', 'discoveryReason'],
   organizations: [...archivable, 'name', 'domain'],
-  engagements: [...archivable, 'personId', 'organizationId', 'pipelineId', 'stageId', 'ownerId', 'status', 'objective', 'nextAction'],
+  engagements: [...archivable, 'personId', 'organizationId', 'pipelineId', 'stageId', 'ownerId', 'status', 'objective', 'nextAction', 'lastActivityAt'],
   notes: [...archivable, 'body', 'personId', 'engagementId', 'sourceConversationId'],
   tasks: [...archivable, 'title', 'personId', 'engagementId', 'assigneeId', 'dueAt', 'status'],
   pipelines: ['id', 'name', 'purpose', 'archived'],
@@ -27,6 +27,29 @@ const fields: Record<CrmResource, string[]> = {
   agents: [...common, 'name', 'status'],
   meetings: [...common, 'purpose', 'startsAt', 'endsAt', 'timezone', 'status', 'provider', 'joinUrl', 'physicalLocation', 'agenda', 'engagementId', 'organizerId', 'connectionId', 'errorCode', 'groupCallId'],
 };
+
+/**
+ * The engagement timeline's own fields.
+ *
+ * The timeline is deliberately not a `CrmResource`: adding it there would expose
+ * it through the generic list and get paths too. It gets its own projector at its
+ * own path instead.
+ */
+const timelineFields = ['id', 'kind', 'occurredAt', 'summary', 'actorType', 'actorMemberId', 'actorAgentId'];
+
+export function projectTimelinePage(body: unknown) {
+  const page = (body ?? {}) as { items?: unknown; nextCursor?: unknown };
+  const rows = Array.isArray(page.items) ? page.items : [];
+  return {
+    items: rows.map(row => {
+      const source = (row ?? {}) as Record<string, unknown>;
+      const out: Record<string, unknown> = {};
+      for (const field of timelineFields) if (field in source) out[field] = source[field];
+      return out;
+    }),
+    nextCursor: typeof page.nextCursor === 'string' ? page.nextCursor : null,
+  };
+}
 
 export const isResource = (value: string): value is CrmResource => (crmResources as readonly string[]).includes(value);
 

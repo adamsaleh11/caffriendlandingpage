@@ -212,6 +212,12 @@ export type Engagement = Record_ & Archivable & {
   status: string;
   objective: string;
   nextAction?: string | null;
+  /**
+   * When anything was last recorded against this engagement, maintained by the
+   * server on every activity — including an invitation acceptance. The board reads
+   * it directly rather than assembling a timeline per card.
+   */
+  lastActivityAt?: string | null;
 };
 export type Note = Record_ & Archivable & { body: string; personId?: string | null; engagementId?: string | null; sourceConversationId?: string | null };
 export type Task = Record_ & Archivable & { title: string; personId?: string | null; engagementId?: string | null; assigneeId?: string | null; dueAt?: string | null; status: string };

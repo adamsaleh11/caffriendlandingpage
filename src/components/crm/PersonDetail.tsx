@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { statusLabels, type Note, type Person, type Pipeline as PipelineRecord, type Task } from '@/lib/contracts';
 import { useKeys, useRows, Empty, Evidence, Rights } from './common';
-import { provenanceFor, timelineFor, useAllStages, useWorkspaceData, type TimelineEntry } from './workspace-data';
+import { provenanceFor, timelineFor, useAllStages, useEngagementTimelines, useWorkspaceData, type TimelineEntry } from './workspace-data';
+import { mergeTimeline } from '@/lib/engagement-timeline';
 import { completeness, sourceLabel, talkingPoints, talkingPointsText, type ProfileField } from './person-profile';
 import StateCard from './StateCard';
 import EngagementForm from './EngagementForm';
@@ -45,6 +46,8 @@ export default function PersonDetail({workspaceId, personId}:{workspaceId:string
   const router = useRouter();
 
   const data = useWorkspaceData(workspaceId);
+  const timelineItems = useEngagementTimelines(
+    workspaceId, (data.engagements.rows ?? []).filter(row => row.personId === personId).map(row => row.id));
   const pipelines = useRows<PipelineRecord>(`workspaces/${workspaceId}/pipelines`);
   const stages = useAllStages(workspaceId, pipelines.rows);
 
@@ -71,7 +74,17 @@ export default function PersonDetail({workspaceId, personId}:{workspaceId:string
   const engagementIds = new Set(theirEngagements.map(row => row.id));
   const organization = person.organizationId ? (data.organizations.rows ?? []).find(row => row.id === person.organizationId) : undefined;
   const provenance = provenanceFor(personId, data);
-  const timeline = timelineFor(personId, engagementIds, data);
+  /**
+   * The acceptance rows come from the server's engagement timeline, which is the
+   * record that already holds who answered — merged with, not replacing, the
+   * send-time note. Send and answer are two moments.
+   */
+  const timeline = mergeTimeline({
+    entries: timelineFor(personId, engagementIds, data),
+    items: timelineItems.filter(item => !item.engagementId || engagementIds.has(item.engagementId)),
+    person,
+    agents: data.agents.rows ?? [],
+  });
   /** Notes and tasks not attached to any one engagement still belong to the person. */
   const looseNotes = (data.notes.rows ?? []).filter(row => row.personId === personId && !row.engagementId);
   const looseTasks = (data.tasks.rows ?? []).filter(row => row.personId === personId && !row.engagementId);
