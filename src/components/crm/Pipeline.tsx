@@ -52,6 +52,7 @@ export default function Pipeline({workspaceId}:{workspaceId:string}) {
   const [building, setBuilding] = useState('');
   const [inviting, setInviting] = useState<Engagement>();
   const [focusedStageId, setFocusedStageId] = useState<string>();
+  const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set());
   /** The engagement whose optional last step is being written, if any. */
   const [addingFinal, setAddingFinal] = useState<string>();
   const keyFor = useKeys();
@@ -329,9 +330,13 @@ export default function Pipeline({workspaceId}:{workspaceId:string}) {
     </li>;
   };
 
+  const stagePageSize = 8;
   const board = (columns: Stage[], label: string) => <ol className="board" aria-label={label}>
     {columns.map((stage, column) => {
       const inStage = cards.filter(row => targetStageId(row) === stage.id);
+      const expanded = expandedStages.has(stage.id);
+      const shown = expanded ? inStage : inStage.slice(0, stagePageSize);
+      const remaining = inStage.length - shown.length;
       const help = guidanceFor(stage.name);
       return <li key={stage.id} className="stage">
         <h3><span className="step-number" aria-hidden="true">{column + 1}</span>{stage.name}
@@ -340,7 +345,13 @@ export default function Pipeline({workspaceId}:{workspaceId:string}) {
         {stage.terminalOutcome && <p className="small">Ends the engagement as {stage.terminalOutcome}.</p>}
         {inStage.length === 0
           ? <p className="small quiet">Empty</p>
-          : <ul className="cards">{inStage.map(engagement => card(engagement, column, columns))}</ul>}
+          : <ul className="cards">{shown.map(engagement => card(engagement, column, columns))}</ul>}
+        {remaining > 0 && <button className="secondary small-button" onClick={() => setExpandedStages(prev => new Set(prev).add(stage.id))}>
+          Show {remaining} more
+        </button>}
+        {expanded && inStage.length > stagePageSize && <button className="secondary small-button" onClick={() => setExpandedStages(prev => {
+          const next = new Set(prev); next.delete(stage.id); return next;
+        })}>Show fewer</button>}
       </li>;
     })}
   </ol>;

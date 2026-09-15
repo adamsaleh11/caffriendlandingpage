@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { backend, BackendError } from '@/lib/backend';
 import { clearSession, getSession, sameOrigin } from '@/lib/session';
-import { eventCapacity, type EventDetails, type EventSummary, type RosterMember, type SpotlightState } from '@/lib/events';
+import { eventCapacity, inviteRecipients, type EventDetails, type EventSummary, type RosterMember, type SpotlightState } from '@/lib/events';
 
 const json = (body:unknown, status=200) => NextResponse.json(body, {status, headers:{'Cache-Control':'no-store','Referrer-Policy':'no-referrer'}});
 const platform = {'x-caffriend-platform':'desktop'};
@@ -51,6 +51,23 @@ export async function POST(request:Request, {params}:{params:Promise<{segments?:
   const segments=(await params).segments ?? [];
   const body=await request.json().catch(()=>({})) as Record<string,unknown>;
   const session=await getSession();
+  /**
+   * Accepting an invitation to a group call. Whoever was invited may be nobody yet —
+   * that is the point of inviting an address — so this one is not behind a session, and
+   * the guest id this device already carries is sent so the call becomes part of their
+   * history and can be claimed if they sign up later.
+   */
+  if (segments[0]==='invite' && segments[2]==='accept' && /^[A-Za-z0-9_-]{20,200}$/.test(segments[1] ?? '')) {
+    const displayName=text(body.displayName,200);
+    if (!displayName) return json({error:'Enter the name you want to appear as.'},400);
+    const installId=typeof body.anonymousInstallId==='string' && /^[A-Za-z0-9_-]{8,200}$/.test(body.anonymousInstallId)
+      ? body.anonymousInstallId : undefined;
+    try {
+      return json(await backend(`/group-calls/invite/${encodeURIComponent(segments[1])}/accept`,
+        {token:session?.token, method:'POST', headers:platform,
+         body:{displayName, ...(installId?{anonymousInstallId:installId}:{})}}));
+    } catch(error) { return fail(error); }
+  }
   if (!session) return json({error:'Sign in required.'},401);
   try {
     if (!segments.length || segments[0] === 'create') {
@@ -64,6 +81,18 @@ export async function POST(request:Request, {params}:{params:Promise<{segments?:
     }
     const [id, action, verb]=segments;
     if (!/^[0-9a-f-]{36}$/i.test(id)) return json({error:'This event is unavailable.'},404);
+    /**
+     * Inviting people to a call the caller hosts. Connections and outside addresses are
+     * one send; the invitation is the recipient's registration, so nobody invited here
+     * needs to register before joining.
+     */
+    if (action==='invite') {
+      const {value, problem}=inviteRecipients(
+        Array.isArray(body.userIds)?body.userIds.map(String):[],
+        typeof body.emails==='string'?body.emails:'');
+      if (problem) return json({error:problem},400);
+      return json(await backend(`/group-calls/${id}/invite`,{token:session.token,method:'POST',headers:platform,body:{recipients:value}}));
+    }
     if (action==='register') return json(await backend(`/group-calls/${id}/register`,{token:session.token,method:'POST',headers:platform,body:{displayName:text(body.displayName,200)}}));
     if (action==='join') return json(await backend(`/group-calls/${id}/join`,{token:session.token,method:'POST',headers:platform,body:{displayName:text(body.displayName,200)}}));
     if (action==='connect') return json(await backend(`/group-calls/${id}/connect`,{token:session.token,method:'POST',body:{toUserId:body.toUserId}}));

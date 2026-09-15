@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import type { EventDetails, EventSummary } from '@/lib/events';
 import { eventsApi, problemMessage } from './client';
+import InviteGuests from './InviteGuests';
 
 export default function EventDetail({eventId,signedIn,displayName}:{eventId:string;signedIn:boolean;displayName:string}){
   const [details,setDetails]=useState<EventDetails>(); const [listing,setListing]=useState<EventSummary>(); const [error,setError]=useState(''); const [attempt,setAttempt]=useState(0);
@@ -18,12 +19,13 @@ export default function EventDetail({eventId,signedIn,displayName}:{eventId:stri
     <article className="event-detail"><section><p className="event-kicker">CAFFRIEND EVENT</p><h1>{details.title}</h1><p className="event-lede">{details.description||'A hosted room for meeting people with something real in common.'}</p>
       <dl className="event-facts"><div><dt>When</dt><dd>{details.startsAt?new Intl.DateTimeFormat('en-CA',{dateStyle:'full',timeStyle:'short'}).format(new Date(details.startsAt)):'To be announced'}</dd></div><div><dt>Admission</dt><dd>{paid?new Intl.NumberFormat('en-CA',{style:'currency',currency:listing?.currency||'CAD'}).format((listing?.priceCents||0)/100):'Free'}</dd></div><div><dt>Room</dt><dd>Up to {listing?.capacity||50} people</dd></div></dl>
     </section><aside className="registration-card"><p className="event-kicker">{hosting?'HOST CONTROLS':'YOUR PLACE'}</p><h2>{hosting?'Your room is ready':registered?'You’re registered':'Join this room'}</h2>
-      {hosting?<><p>Enter the room when you’re ready. Attendees can join after registering.</p><Link className="event-button full" href={`/events/${eventId}/call`}>Start event</Link></>
+      {hosting?<><p>Enter the room when you’re ready, and invite whoever should be in it.</p><Link className="event-button full" href={`/events/${eventId}/call`}>Start event</Link></>
       :registered?<><p>Your place is saved. The room opens from this page.</p><Link className="event-button full" href={`/events/${eventId}/call`}>Enter event</Link></>
       :paid?<><p>Paid registration needs the BE-4 event payment contract before checkout can be safely enabled.</p><button disabled>Registration unavailable</button></>
       :signedIn?<><p>Registration is free and reserves one attendee place.</p><button disabled={registering} onClick={register}>{registering?'Saving your place…':'Register'}</button></>
       :<><p>Sign in to reserve a place and see your ranked room.</p><Link className="event-button full" href={`/login?returnTo=${returnTo}`}>Sign in to register</Link></>}
       {actionError&&<p role="alert">{actionError}</p>}
+      {hosting&&<InviteGuests eventId={eventId}/>}
     </aside></article>
   </main>;
 }

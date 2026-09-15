@@ -66,7 +66,8 @@ export async function GET(request: Request, {params}:{params:Promise<{segments:s
      */
     if (segments.length === 1 && segments[0] === 'mine') {
       if (!auth.session) return json({error:'Sign in required'}, 401);
-      const rows = unwrap(await backend('/group-calls/mine', {token:auth.session.token}));
+      const rows = unwrap(await backend('/group-calls/mine',
+        {token:auth.session.token, headers:{'x-caffriend-platform':'desktop'}}));
       return json(Array.isArray(rows) ? (rows as Record<string, unknown>[]).map(projectMyCall) : []);
     }
     /**
@@ -115,8 +116,29 @@ export async function POST(request: Request, {params}:{params:Promise<{segments:
   const auth = await authFor(request);
   const segments = (await params).segments;
   const path = segments.join('/');
-  if (!mutations.some(pattern => pattern.test(path))) return json({error:'Not found'}, 404);
+  // `claim-guest` is the one POST here that names no call: it is about a person, not a
+  // room, so it is allowed through the by-shape guard rather than matched by it.
+  const claiming = path === 'claim-guest';
+  if (!claiming && !mutations.some(pattern => pattern.test(path))) return json({error:'Not found'}, 404);
   const body = await request.json().catch(() => ({})) as Record<string, unknown>;
+  /**
+   * Handing this device's guest past to the account that just signed up. It swaps the
+   * guest id for the real user id, so the calls attended as a guest become theirs and
+   * every held connection intent becomes a match. Idempotent, and a no-op with no past.
+   */
+  if (segments.length === 1 && segments[0] === 'claim-guest') {
+    if (!auth?.session) return json({error:'Sign in required'}, 401);
+    const installId = body.anonymousInstallId;
+    if (typeof installId !== 'string' || !/^[A-Za-z0-9_-]{8,200}$/.test(installId))
+      return json({error:'Request not allowed'}, 400);
+    try {
+      return json(await backend('/group-calls/claim-guest', {token:auth.session.token, method:'POST',
+        body:{anonymousInstallId:installId}, headers:{'x-caffriend-platform':'desktop'}}));
+    } catch (error) {
+      const {status, body: problem} = failure(error);
+      return json(problem, status);
+    }
+  }
   const isJoin = segments.length === 2 && segments[1] === 'join';
   if (!auth && !isJoin) return json({error:'Sign in required'}, 401);
   if (!auth && (typeof body.invitationToken !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(body.invitationToken)))

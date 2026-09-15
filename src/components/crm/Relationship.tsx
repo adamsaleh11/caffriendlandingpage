@@ -7,6 +7,7 @@ import { guidanceFor } from '@/lib/lifecycle';
 import { Empty } from './common';
 import type { WorkspaceData } from './workspace-data';
 import OutreachComposer from './OutreachComposer';
+import BookCall from './BookCall';
 import Modal from './Modal';
 import { ArchiveButton, PermanentDeleteButton, editRecord, problemText } from './record-actions';
 import { EngagementEditor, NoteEditor, TaskEditor } from './RecordEditors';
@@ -91,6 +92,7 @@ export default function Relationship({
   const [outcome, setOutcome] = useState('');
   const [taskDue, setTaskDue] = useState('');
   const [inviting, setInviting] = useState(false);
+  const [booking, setBooking] = useState(false);
   const [editingEngagement, setEditingEngagement] = useState(false);
   const [editingNote, setEditingNote] = useState<Note>();
   const [editingTask, setEditingTask] = useState<Task>();
@@ -212,6 +214,8 @@ export default function Relationship({
           apart at the end, so archiving is never the nearest button. */}
         <button onClick={() => { setRecording(true); setNotice(''); }}>{step?.action ?? 'Record what happened'}</button>
         {engagement.status !== 'CLOSED' && <button className="secondary" onClick={() => { setInviting(true); setNotice(''); }}>Send coffee chat invite</button>}
+        {/* Booked outright rather than proposed. A Caffriend call needs no calendar. */}
+        {engagement.status !== 'CLOSED' && <button className="secondary" onClick={() => { setBooking(true); setNotice(''); }}>Book a call</button>}
         <button className="secondary" onClick={() => { setEditingEngagement(true); setNotice(''); setProblem(''); }}>Edit engagement</button>
         <span className="action-split" aria-hidden="true" />
         <ArchiveButton workspaceId={workspaceId} resource="engagements" id={engagement.id} what="engagement"
@@ -237,6 +241,10 @@ export default function Relationship({
 
     {notice && <p role="status" className="notice">{notice}</p>}
     {problem && <p role="alert">{problem}</p>}
+
+    {booking && <BookCall workspaceId={workspaceId} engagementId={engagement.id} person={person}
+      initialPurpose={engagement.objective} onClose={() => setBooking(false)}
+      onBooked={() => { setBooking(false); setNotice('The call is booked and on your Meetings page.'); onChanged(); }} />}
 
     {inviting && <OutreachComposer workspaceId={workspaceId} engagementId={engagement.id} person={person}
       initialPurpose={engagement.objective} onClose={() => setInviting(false)} onSent={() => { setNotice('Invitation sent and added to the engagement timeline.'); onChanged(); }} />}

@@ -31,6 +31,8 @@ export type UpcomingMeeting = {
   groupCallId: string | null;
   /** Set when this booking also has a CRM meeting record to open. */
   meetingId: string | null;
+  /** Unified meeting flow: indicates meeting origin - 'CRM' for desktop, 'CAFFRIEND' for mobile */
+  source: 'CRM' | 'CAFFRIEND' | null;
 };
 
 /**
@@ -69,6 +71,25 @@ export function startsInText(startsAt: string | null, now: number): string {
   return `Starts in ${plural(Math.round(hours / 24), 'day')}`;
 }
 
+/**
+ * What to tell someone who pressed Join too early.
+ *
+ * Both halves matter: the rule, so the window is not a surprise the next time, and the
+ * clock time the room opens, so they can go away and come back rather than watch a
+ * countdown. The room genuinely does not exist yet — walking in early reached a call
+ * that could not be loaded, which read as a broken booking rather than an early arrival.
+ */
+export function joinOpensText(startsAt: string | null, now: number): string {
+  if (!startsAt) return 'This call is not scheduled yet.';
+  const start = Date.parse(startsAt);
+  if (!Number.isFinite(start)) return 'This call is not scheduled yet.';
+  const opens = new Date(start - JOIN_WINDOW_MINUTES * 60000);
+  const clock = opens.toLocaleTimeString(undefined, {hour:'numeric', minute:'2-digit'});
+  const sameDay = new Date(now).toDateString() === opens.toDateString();
+  const day = sameDay ? '' : ` on ${opens.toLocaleDateString(undefined, {weekday:'long', month:'short', day:'numeric'})}`;
+  return `You can join 5 minutes before the call starts. The room opens at ${clock}${day}.`;
+}
+
 const venueLabel = (call: AppCall) =>
   call.venue === 'CAFFRIEND_LIVEKIT' ? 'Caffriend call'
     : call.venue === 'PROVIDER_CONFERENCE' ? 'Google Meet'
@@ -105,7 +126,7 @@ function callTitle(call: AppCall): string {
 /** An accepted coffee chat, as it comes back from `/calendar/accepted-events`. */
 export function fromCall(call: AppCall): UpcomingMeeting {
   return {
-    key: call.meetingId || `call:${call.id}`,
+    key: `call:${call.id}`,
     title: callTitle(call),
     counterpart: call.counterpart,
     image: call.image,
@@ -122,12 +143,32 @@ export function fromCall(call: AppCall): UpcomingMeeting {
     needsPayment: call.needsPayment,
     groupCallId: call.groupCallId,
     meetingId: call.meetingId,
+    source: call.source,
   };
 }
 
 /** A meeting booked from a CRM invitation. */
 export function fromMeeting(meeting: Meeting): UpcomingMeeting {
   const open = joinable(meeting.status);
+  // Use venue field for unified meeting flow - fallback to provider logic for backward compatibility
+  const venue = meeting.venue;
+  const where = meeting.physicalLocation
+    || (venue === 'CAFFRIEND_LIVEKIT' ? 'Caffriend call'
+      : venue === 'PROVIDER_CONFERENCE' ? (meeting.provider === 'MICROSOFT' ? 'Microsoft Teams' : 'Google Meet')
+      : venue === 'IN_PERSON' ? meeting.physicalLocation || 'In person'
+      : (meeting.joinUrl || meeting.groupCallId
+        ? meeting.groupCallId ? 'Caffriend call' : meeting.provider === 'MICROSOFT' ? 'Microsoft Teams' : 'Google Meet'
+        : null));
+  
+  // Use venue field for join flow determination
+  const href = !open ? null 
+    : venue === 'CAFFRIEND_LIVEKIT' && meeting.groupCallId ? `/calls/${meeting.groupCallId}`
+    : venue === 'PROVIDER_CONFERENCE' ? meeting.joinUrl ?? null
+    : venue === 'IN_PERSON' ? null
+    : meeting.groupCallId ? `/calls/${meeting.groupCallId}` : meeting.joinUrl ?? null;
+  
+  const external = open && venue === 'PROVIDER_CONFERENCE' && Boolean(meeting.joinUrl);
+  
   return {
     key: meeting.id,
     title: meeting.purpose || 'Meeting',
@@ -135,20 +176,35 @@ export function fromMeeting(meeting: Meeting): UpcomingMeeting {
     image: null,
     startsAt: meeting.startsAt || null,
     endsAt: meeting.endsAt || null,
-    where: meeting.physicalLocation
-      || (meeting.joinUrl || meeting.groupCallId
-        ? meeting.groupCallId ? 'Caffriend call' : meeting.provider === 'MICROSOFT' ? 'Microsoft Teams' : 'Google Meet'
-        : null),
+    where,
     status: sentence(meeting.status),
     notes: meeting.agenda ?? null,
-    href: !open ? null : meeting.groupCallId ? `/calls/${meeting.groupCallId}` : meeting.joinUrl ?? null,
-    external: open && !meeting.groupCallId && Boolean(meeting.joinUrl),
+    href,
+    external,
     needsPayment: false,
     groupCallId: meeting.groupCallId ?? null,
     meetingId: meeting.id,
+    source: meeting.source || 'CRM', // Default to 'CRM' for desktop meetings
   };
 }
 
+
+/**
+ * Every accepted coffee, earliest first — including the ones that have already happened.
+ *
+ * One feed backs this: `GET /calendar/accepted-events/:type`, the same endpoint the
+ * Meetings page, desktop Upcoming Calls and the phone all read. A desktop-booked coffee
+ * is recorded three times on purpose — the canonical meeting, the attendee's mirror and
+ * the legacy projection — and the server collapses them before they get here. So no row
+ * is merged away: two rows are two coffees, and one coffee appearing twice is a backend
+ * bug to report rather than something to paper over here.
+ */
+export function coffees(calls: AppCall[]): UpcomingMeeting[] {
+  return calls
+    .map(fromCall)
+    .filter(row => row.startsAt)
+    .sort((a, b) => (Date.parse(a.startsAt ?? '') || 0) - (Date.parse(b.startsAt ?? '') || 0));
+}
 
 /**
  * Both sources as one list, earliest first — including meetings that have already
@@ -183,6 +239,7 @@ export function mergeMeetings(calls: AppCall[], meetings: Meeting[]): UpcomingMe
       href: existing.href ?? row.href,
       groupCallId: existing.groupCallId ?? row.groupCallId,
       meetingId: existing.meetingId ?? row.meetingId,
+      source: row.source ?? existing.source, // Prefer meeting source (CRM) over call source
     });
   }
   return [...rows.values()]

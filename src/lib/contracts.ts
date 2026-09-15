@@ -125,6 +125,10 @@ export type Meeting = {
   engagementId?: string | null;
   /** Present for Caffriend LiveKit meetings that share the group-call collaboration surface. */
   groupCallId?: string | null;
+  /** Unified meeting flow: indicates meeting origin - 'CRM' for desktop, 'CAFFRIEND' for mobile */
+  source?: 'CRM' | 'CAFFRIEND' | null;
+  /** Unified meeting flow: venue type for join flow determination */
+  venue?: 'CAFFRIEND_LIVEKIT' | 'PROVIDER_CONFERENCE' | 'IN_PERSON' | null;
 };
 export const statusLabels: Record<MeetingStatus, string> = {
   LOCAL: 'Not yet sent to a calendar',
@@ -137,8 +141,19 @@ export const statusLabels: Record<MeetingStatus, string> = {
   CANCEL_FAILED: 'Cancellation failed',
   CANCELLED: 'Cancelled',
 };
-/** A meeting is joinable only while the server says it is scheduled. */
-export const joinable = (status: MeetingStatus) => status === 'CONFIRMED' || status === 'BOOKED' || status === 'LOCAL';
+/**
+ * A meeting is joinable while the server says it is scheduled.
+ *
+ * `FAILED` is among those. It is the *calendar event's* verdict, not the meeting's: the
+ * booking is real, the room exists and both people can walk into it. Treating it as a
+ * dead meeting hid a call that was going ahead. What failed is shown separately, with
+ * its own retry — see `calendarFailed`.
+ */
+export const joinable = (status: MeetingStatus) =>
+  status === 'CONFIRMED' || status === 'BOOKED' || status === 'LOCAL' || status === 'FAILED';
+
+/** Whether the calendar event, and only the calendar event, could not be created. */
+export const calendarFailed = (status: MeetingStatus) => status === 'FAILED' || status === 'CANCEL_FAILED';
 export type AuditEvent = {
   id: string;
   createdAt: string;
@@ -368,4 +383,69 @@ export function describeAction(action: string): string {
   const sentence = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
   if (!tail) return sentence(group.replace(/[._-]+/g, ' '));
   return `${sentence(group.replace(/[._-]+/g, ' '))}: ${tail}`;
+}
+
+/** The venues the desktop offers. In person is not implemented and is not one of them. */
+export const desktopVenues = ['CAFFRIEND_LIVEKIT', 'PROVIDER_CONFERENCE'] as const;
+export type DesktopVenue = typeof desktopVenues[number];
+
+export type BookingDraft = {
+  purpose: string; startsAt: string; endsAt: string; timezone: string;
+  attendees: string[]; engagementId: string;
+  venue: string; connectionId?: string;
+};
+
+const knownZone = (zone: string) => {
+  try { new Intl.DateTimeFormat('en', {timeZone: zone}).format(); return true; } catch { return false; }
+};
+
+/**
+ * The body of `POST /workspaces/:id/meetings`, and the reason it cannot be sent yet.
+ *
+ * `venue` is chosen explicitly by the sender and never inferred, so the legacy `type`
+ * and `conference` keys are not assembled here at all — sending both is a 400, and the
+ * server derives them itself. Only `PROVIDER_CONFERENCE` needs a calendar connection: a
+ * Caffriend call needs nothing, which is what lets someone with no connected calendar
+ * book one.
+ */
+export function bookingRequest(draft: BookingDraft): {value: Record<string, unknown>; problem?: string} {
+  const value: Record<string, unknown> = {};
+  const attendees = draft.attendees.map(address => address.trim()).filter(Boolean);
+  const problem =
+    !(desktopVenues as readonly string[]).includes(draft.venue)
+      ? 'Choose a Caffriend call or Google Meet.'
+    : !draft.purpose.trim() ? 'Say what the call is for.'
+    : !draft.engagementId ? 'This call needs an engagement to belong to.'
+    : !attendees.length ? 'Add at least one person to invite.'
+    : !Number.isFinite(Date.parse(draft.startsAt)) || !Number.isFinite(Date.parse(draft.endsAt))
+      || Date.parse(draft.endsAt) <= Date.parse(draft.startsAt) ? 'Choose a start and an end, with the end after the start.'
+    : !knownZone(draft.timezone) ? 'Choose a timezone.'
+    : draft.venue === 'PROVIDER_CONFERENCE' && !draft.connectionId
+      ? 'Google Meet needs a connected Google calendar. A Caffriend call does not.'
+    : undefined;
+  if (problem) return {value, problem};
+  Object.assign(value, {
+    purpose: draft.purpose.trim(), startsAt: draft.startsAt, endsAt: draft.endsAt,
+    timezone: draft.timezone, attendees, engagementId: draft.engagementId, venue: draft.venue,
+  });
+  if (draft.venue === 'PROVIDER_CONFERENCE') value.connectionId = draft.connectionId;
+  return {value};
+}
+
+/**
+ * The body of `POST /meeting-invitations/decide`.
+ *
+ * The bearer token is not part of this: it is optional on that route and is attached at
+ * the server boundary when there happens to be a session. A guest answering without one
+ * is a supported outcome, not a failure — so nothing here can withhold the request for
+ * want of an account. `role` and `format` belong to the phone's multi-step accept flow
+ * and are optional everywhere; desktop sends neither, and omitting `format` lets the
+ * server derive it from the venue.
+ */
+export function decideRequest({token, decision, slotId}:{
+  token: string; decision: 'ACCEPTED' | 'DECLINED'; slotId?: string;
+}): Record<string, string> | null {
+  if (!token) return null;
+  if (decision === 'DECLINED') return {token, decision};
+  return slotId ? {token, decision, slotId} : null;
 }

@@ -450,3 +450,19 @@ export function projectPerson(profileInput: unknown, detailsInput: unknown, medi
       user.weeklyAvailability ?? user.weekly_availability ?? user.weekly_availabilty),
   };
 }
+
+/**
+ * Every accepted coffee chat in one feed, however it was booked.
+ *
+ * `GET /calendar/accepted-events/:type` is deliberately not workspace-scoped — it finds
+ * a coffee for anyone on it, organizer, member, linked person or plain invited address,
+ * so both people see the same booking whichever surface booked it. Filtering these rows
+ * by the workspace being viewed threw away exactly what that buys: a chat booked from
+ * someone's phone, or living in another workspace, vanished here while showing fine on
+ * the phone. Nothing is dropped, and the server has already de-duplicated the rows.
+ */
+export function acceptedCalls(body: unknown, currentUserId: string): AppCall[] {
+  const wrapped = (body ?? {}) as {data?: unknown};
+  const rows = Array.isArray(wrapped.data) ? wrapped.data : Array.isArray(body) ? body : [];
+  return (rows as unknown[]).map(row => projectCall(row, currentUserId));
+}

@@ -10,7 +10,15 @@ export default function EventMeeting({eventId,displayName}:{eventId:string;displ
   const [details,setDetails]=useState<EventDetails>(); const [isHost,setIsHost]=useState(false); const [error,setError]=useState(''); const [attempt,setAttempt]=useState(0);
   const [devices,setDevices]=useState<Devices>({audioInput:'',videoInput:''}); const [credentials,setCredentials]=useState<EventCredentials>(); const [joining,setJoining]=useState(false); const [left,setLeft]=useState(false);
   useEffect(()=>{let live=true;setError('');Promise.all([eventsApi<EventDetails>(eventId),eventsApi<EventSummary[]>('list').catch(()=>[])]).then(([event,rows])=>{if(live){setDetails(event);setIsHost(Boolean(rows.find(row=>row.id===eventId)?.isHost));}}).catch(problem=>{if(live)setError(problemMessage(problem));});return()=>{live=false;};},[eventId,attempt]);
-  async function join(){setJoining(true);setError('');try{await eventsApi(`${eventId}/register`,{method:'POST',body:JSON.stringify({displayName})});const access=await eventsApi<EventCredentials>(`${eventId}/join`,{method:'POST',body:JSON.stringify({displayName})});setCredentials(access);}catch(problem){setError(problemMessage(problem));}finally{setJoining(false);}}
+  /**
+   * Joining is one call.
+   *
+   * Registering first was wrong for everyone who was invited: an invitation to a call is
+   * itself a registration, and asking to register again refused people who already had a
+   * place. Reserving a place at an event nobody invited you to is a separate act, and it
+   * happens on the event page before anyone reaches this lobby.
+   */
+  async function join(){setJoining(true);setError('');try{const access=await eventsApi<EventCredentials>(`${eventId}/join`,{method:'POST',body:JSON.stringify({displayName})});setCredentials(access);}catch(problem){setError(problemMessage(problem));}finally{setJoining(false);}}
   return <main className="meeting-page event-call-page"><Link href="/events" className="meeting-brand">caffriend</Link><section className={`meeting-card ${credentials?'group-meeting-card':''}`}>
     {left?<><h1>You left the event</h1><p>Your camera and microphone are off.</p><a href={`/events/${eventId}`}>Back to the event</a></>
     :credentials&&details?<><div className="call-title"><p className="meeting-eyebrow">LIVE EVENT</p><h1>{details.title}</h1></div><Call {...credentials} devices={devices} leave={()=>{setCredentials(undefined);setLeft(true);}} event={{id:eventId,isHost}}/></>

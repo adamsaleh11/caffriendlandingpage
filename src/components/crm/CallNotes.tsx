@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { api, ApiError } from '@/lib/api';
 import type { AppCall } from '@/lib/app-projection';
 import { fromCall } from '@/lib/upcoming';
-import { participantName, type CallNote, type CallState, type MyCall, type NoteScope } from '@/lib/call';
+import { callCounterpart, participantName, type CallNote, type CallState, type MyCall, type NoteScope } from '@/lib/call';
 import { useRows, Section, Empty } from './common';
 import StateCard from './StateCard';
 
@@ -92,8 +92,8 @@ export default function CallNotes({workspaceId, callId}:{workspaceId:string; cal
    * extra person makes those two different, and the roster is the honest answer. The
    * booking still fills in when the viewer is not yet known or it was not one-to-one.
    */
-  const others = me ? detail.participants.filter(person => person.userId !== me) : [];
-  const counterpart = (others.length === 1 ? others[0].displayName : null) ?? booking?.counterpart ?? null;
+  const other = me ? callCounterpart(detail.participants, me) : null;
+  const counterpart = other?.displayName ?? booking?.counterpart ?? null;
 
   const generic = !row?.title || row.title.toLowerCase() === 'coffee chat';
   const title = generic && counterpart ? `Coffee chat with ${counterpart}` : row?.title || 'Coffee chat';
@@ -143,7 +143,7 @@ export default function CallNotes({workspaceId, callId}:{workspaceId:string; cal
             </li>)}
           </ul>}
       {/* One-to-one: the person is worth keeping hold of, so their record is one click. */}
-      {others.length === 1 && counterpart &&
+      {other && counterpart &&
         <Link className="text-link" href="/connections">See {counterpart} in Connections</Link>}
     </Section>
 

@@ -3,8 +3,8 @@ import { getSession, clearSession, sameOrigin, setSealed, readSealed, hashState,
 import { backend, BackendError } from '@/lib/backend';
 import { isResource, project, projectPage } from '@/lib/crm-projection';
 import { writableResources, archivableResources, deletableResources, approvalActions } from '@/lib/contracts';
-import { uuidPattern, providers, meetingStatuses, type AuditEvent, type CalendarConnection, type Meeting, type MeetingStatus, type Provider, type Workspace } from '@/lib/contracts';
-import { projectCall } from '@/lib/app-projection';
+import { bookingRequest, uuidPattern, providers, meetingStatuses, type AuditEvent, type CalendarConnection, type Meeting, type MeetingStatus, type Provider, type Workspace } from '@/lib/contracts';
+import { acceptedCalls } from '@/lib/app-projection';
 
 const json = (body: unknown, status = 200) => NextResponse.json(body, {status, headers:{'Cache-Control':'no-store','Referrer-Policy':'no-referrer'}});
 const failure = (error: unknown, message: string) => {
@@ -158,13 +158,14 @@ export async function GET(request: Request, {params}:{params:Promise<{segments:s
      * ahead, type 2 is what has already happened. Both are needed here — a finished
      * call from `/group-calls/mine` carries no participants, so the history feed is
      * the only place the person you actually met is named.
+     *
+     * The path is workspace-shaped only because this is where the CRM reads live. The
+     * feed underneath it is not workspace-scoped and is not narrowed to one: it is the
+     * same list, for the same person, that their phone reads.
      */
     if (workspace && (segments[2] === 'upcoming-calls' || segments[2] === 'past-calls') && segments.length === 3) {
       const type = segments[2] === 'past-calls' ? 2 : 1;
-      const result = await backend<unknown>(`/calendar/accepted-events/${type}`, {token:session.token});
-      const value = result as {data?:unknown};
-      const rows = Array.isArray(value?.data) ? value.data : Array.isArray(result) ? result : [];
-      return json((rows as Record<string,unknown>[]).map(row=>projectCall(row,session.user.id)).filter(row=>!row.workspaceId||row.workspaceId===segments[1]));
+      return json(acceptedCalls(await backend<unknown>(`/calendar/accepted-events/${type}`, {token:session.token}), session.user.id));
     }
     if (workspace && segments[2] === 'meeting-outreach' && segments.length === 3)
       return json(await backend(`${workspace}/meeting-outreach`, {token:session.token}));
@@ -234,8 +235,34 @@ export async function POST(request: Request, {params}:{params:Promise<{segments:
       if (typeof name !== 'string' || !name.trim() || name.length > 200) return json({error:'Enter a workspace name of up to 200 characters.'}, 400);
       return json(await backend('/workspaces', {token:session.token, method:'POST', body:{name:name.trim()}}));
     }
+    /**
+     * Booking a coffee chat.
+     *
+     * A Caffriend call is booked with no calendar connection at all — the server stopped
+     * requiring one, and nothing here asks for one. The key is required and scoped per
+     * user, so the same submission replayed books one meeting rather than two.
+     */
+    if (workspace && segments[2] === 'meetings' && segments.length === 3) {
+      if (!key || !uuidPattern.test(key)) return json({error:'Request not allowed'}, 400);
+      const {value, problem} = bookingRequest({
+        purpose: String(body.purpose ?? ''), startsAt: String(body.startsAt ?? ''), endsAt: String(body.endsAt ?? ''),
+        timezone: String(body.timezone ?? ''), engagementId: String(body.engagementId ?? ''),
+        attendees: Array.isArray(body.attendees) ? body.attendees.map(String) : [],
+        venue: String(body.venue ?? ''),
+        connectionId: typeof body.connectionId === 'string' ? body.connectionId : undefined,
+      });
+      if (problem) return json({error:problem}, 400);
+      return json(meetingProjection(await backend<Record<string, unknown>>(`${workspace}/meetings`,
+        {token:session.token, method:'POST', body:value, key})));
+    }
     if (workspace && segments[2] === 'meetings' && segments.length === 5 && uuidPattern.test(segments[3])) {
       const target = `${workspace}/meetings/${segments[3]}`;
+      /**
+       * A failed calendar event is not a failed meeting: the call is real and joinable,
+       * and this is the separate way to ask for the calendar event again.
+       */
+      if (segments[4] === 'retry')
+        return json(meetingProjection(await backend<Record<string, unknown>>(`${target}/retry`, {token:session.token, method:'POST', body:{}})));
       if (segments[4] === 'join-link') {
         const result = await backend<{joinUrl?:unknown}>(`${target}/join-link`, {token:session.token, method:'POST', body:{}});
         // The invite URL is issued by the server; this boundary never assembles one from a meeting id.

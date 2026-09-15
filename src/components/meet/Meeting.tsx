@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { CallScreen, type GuestCallJoin } from '@/components/call/CallScreen';
 import Call from './Call';
 import Preview, { type Devices } from './Preview';
+import { anonymousInstallId } from '@/lib/guest';
 
 type Details = {
   purpose: string; startsAt: string; endsAt: string; timezone: string;
@@ -10,18 +11,6 @@ type Details = {
   platformSupported: boolean;
 };
 
-const anonymousInstallId = () => {
-  const key = 'caffriend_anonymous_install_id_v1';
-  try {
-    const existing = window.localStorage.getItem(key);
-    if (existing) return existing;
-    const created = crypto.randomUUID();
-    window.localStorage.setItem(key, created);
-    return created;
-  } catch {
-    return crypto.randomUUID();
-  }
-};
 
 export default function Meeting({ inviteToken, viewerName = null }: { inviteToken: string; viewerName?: string | null }) {
   const [credentials, setCredentials] = useState<{ token: string; url: string }>();

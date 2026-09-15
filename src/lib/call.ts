@@ -244,6 +244,27 @@ export const participantName = (participant: CallParticipant, me: string) =>
   participant.userId === me ? 'You' : participant.displayName;
 
 /**
+ * Who a call was with, from its roster.
+ *
+ * A roster can carry the same person twice: alongside the identified participant sits
+ * an unidentified ghost with no `userId` and only a first name ("Shil" next to "Shil
+ * Patel"). Counting those made a plain one-to-one look like a three-way call, so anyone
+ * the room cannot actually identify is ignored and the rest are deduplicated by user —
+ * a ghost of the viewer would otherwise count as somebody else.
+ *
+ * Null unless exactly one other person is left, because only then does "who was this
+ * with" have a single honest answer.
+ */
+export function callCounterpart(participants: CallParticipant[], me: string): CallParticipant | null {
+  const others = new Map<string, CallParticipant>();
+  for (const person of participants) {
+    if (!person.userId || person.userId === me) continue;
+    if (!others.has(person.userId)) others.set(person.userId, person);
+  }
+  return others.size === 1 ? [...others.values()][0] : null;
+}
+
+/**
  * A live `call.*` event applied to the loaded call.
  *
  * Events patch what they carry and leave the rest alone, because the alternative —

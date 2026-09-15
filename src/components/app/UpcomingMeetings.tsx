@@ -1,7 +1,8 @@
 'use client';
 import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import { canJoinAt, startsInText, type UpcomingMeeting } from '@/lib/upcoming';
+import { canJoinAt, joinOpensText, startsInText, type UpcomingMeeting } from '@/lib/upcoming';
+import Modal from '@/components/crm/Modal';
 import Face, { type FacePerson } from './Face';
 
 /**
@@ -41,22 +42,32 @@ function useNow(intervalMs = 30000) {
 /**
  * The Join pill, and how long is left.
  *
- * The native button refuses to open a room more than five minutes before the start and
- * says how long is left instead. On the web the countdown is shown but the door is not
- * locked: a host setting a room up early, and anyone joining from a desk rather than a
- * phone, has always been able to go in, and these screens are how they do it.
+ * The door is shut until five minutes before the start, exactly as it is on the phone.
+ * Leaving it open here was wrong in a way that read as a broken booking: the room is
+ * provisioned when the call is about to begin, so walking in the day before reached a
+ * call that could not be loaded. The button stays where it is and says why instead —
+ * the countdown alone was not enough, because nothing stopped the press that followed.
  */
 function JoinAction({meeting, now}:{meeting:UpcomingMeeting; now:number}) {
+  const [tooEarly, setTooEarly] = useState(false);
   if (meeting.needsPayment) return <span className="up-pending">Payment required</span>;
   if (!meeting.href) return <span className="up-pending">Join link pending</span>;
 
   const early = !canJoinAt(meeting.startsAt, now);
   const pill = <span className="up-join-inner"><span aria-hidden="true">▶</span>Join</span>;
   return <div className="up-action-stack">
-    {meeting.external
-      ? <a className="up-join" href={meeting.href} target="_blank" rel="noreferrer noopener">{pill}</a>
-      : <Link className="up-join" href={meeting.href}>{pill}</Link>}
+    {early
+      ? <button type="button" className="up-join" onClick={() => setTooEarly(true)}>{pill}</button>
+      : meeting.external
+        ? <a className="up-join" href={meeting.href} target="_blank" rel="noreferrer noopener">{pill}</a>
+        : <Link className="up-join" href={meeting.href}>{pill}</Link>}
     {early && <p className="up-early">{startsInText(meeting.startsAt, now)}</p>}
+    {/* Deliberately not a disabled button: the booking is real and the room simply is
+        not open yet, and a dead control says neither of those things. */}
+    {tooEarly && <Modal title="Not open yet" description={meeting.title} onClose={() => setTooEarly(false)}>
+      <p>{joinOpensText(meeting.startsAt, now)}</p>
+      <div className="modal-actions"><button type="button" onClick={() => setTooEarly(false)}>Got it</button></div>
+    </Modal>}
   </div>;
 }
 

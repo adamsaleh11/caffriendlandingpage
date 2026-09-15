@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint . --ignore-pattern .next --ignore-pattern '.next-dev*' --ignore-pattern '.next-test*' --ignore-pattern .claude --ignore-pattern node_modules --ignore-pattern test-results --ignore-pattern playwright-report",
     "typecheck": "tsc --noEmit",
-    "test": "playwright test"
+    "test": "playwright test",
+    "test:unit": "node --import ./tests/ts-resolve.mjs --test tests/**/*.test.mjs"
   },
   "dependencies": {
     "@livekit/components-react": "^2.9.24",
