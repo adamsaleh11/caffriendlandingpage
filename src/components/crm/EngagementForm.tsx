@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import type { Engagement, Person, Pipeline, Stage } from '@/lib/contracts';
 import { useKeys } from './common';
+import {FormSelect} from '@/components/ui/form-select';
 
 /**
  * The backend stores `status` as free text, so these are the workspace's working
@@ -71,35 +72,30 @@ export default function EngagementForm({
   return <form onSubmit={event => { event.preventDefault(); submit(new FormData(event.currentTarget)); }}>
     <p>An engagement is one effort with one person — “get an introduction at Acme”. The same person can have more than one.</p>
 
-    {!personId && <label>Person
-      <select name="personId" defaultValue="">
-        <option value="">No person yet</option>
-        {people.map(person => <option key={person.id} value={person.id}>{person.displayName}</option>)}
-      </select>
-    </label>}
+    {!personId && <div className="field">
+      <span className="field-label">Person</span>
+      <FormSelect name="personId" aria-label="Person" options={[{value:'',label:'No person yet'},...people.map(person => ({value:person.id,label:person.displayName}))]} />
+    </div>}
 
     <label>What are you trying to achieve?
       <input name="objective" required maxLength={2000} autoFocus placeholder="Get an introduction to the platform team" />
     </label>
 
-    {!pipelineId && <label>Pipeline
-      <select value={pipeline} onChange={event => setPipeline(event.target.value)}>
-        {pipelines.filter(row => !row.archived).map(row => <option key={row.id} value={row.id}>{row.name}</option>)}
-      </select>
-    </label>}
+    {!pipelineId && <div className="field">
+      <span className="field-label">Pipeline</span>
+      <FormSelect aria-label="Pipeline" value={pipeline} onValueChange={setPipeline} options={pipelines.filter(row => !row.archived).map(row => ({value:row.id,label:row.name}))} />
+    </div>}
 
-    <label>Starting stage
-      <select name="stageId" required defaultValue={options[0]?.id ?? ''}>
-        {options.map(stage => <option key={stage.id} value={stage.id}>{stage.name}</option>)}
-      </select>
-    </label>
+    <div className="field">
+      <span className="field-label">Starting stage</span>
+      <FormSelect key={options[0]?.id ?? "none"} name="stageId" required aria-label="Starting stage" defaultValue={options[0]?.id ?? ''} options={options.map(stage => ({value:stage.id,label:stage.name}))} />
+    </div>
     {options.length === 0 && <p role="alert">This pipeline has no stages yet. Add one before starting an engagement.</p>}
 
-    <label>Status
-      <select name="status" defaultValue="OPEN">
-        {statuses.map(status => <option key={status} value={status}>{status.replace('_', ' ').toLowerCase()}</option>)}
-      </select>
-    </label>
+    <div className="field">
+      <span className="field-label">Status</span>
+      <FormSelect name="status" aria-label="Status" defaultValue="OPEN" options={statuses.map(status => ({value:status,label:status.replace('_', ' ').toLowerCase()}))} />
+    </div>
 
     <label>Next action<input name="nextAction" maxLength={2000} placeholder="Send a short intro message" /></label>
 

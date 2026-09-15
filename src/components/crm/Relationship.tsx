@@ -6,6 +6,14 @@ import { engagementStatuses, joinable, statusLabels, type Engagement, type Meeti
 import { guidanceFor } from '@/lib/lifecycle';
 import { Empty } from './common';
 import type { WorkspaceData } from './workspace-data';
+import OutreachComposer from './OutreachComposer';
+import BookCall from './BookCall';
+import Modal from './Modal';
+import { ArchiveButton, PermanentDeleteButton, editRecord, problemText } from './record-actions';
+import { EngagementEditor, NoteEditor, TaskEditor } from './RecordEditors';
+import { talkingPoints } from './person-profile';
+import {FormSelect} from '@/components/ui/form-select';
+import {DatePicker} from '@/components/ui/date-picker';
 
 /**
  * What the user is invited to do at each point of the lifecycle.
@@ -31,46 +39,20 @@ type Step = {
 
 const steps: Record<string, Step> = {
   prospect: {
-    action: 'Qualify this person',
-    noteLabel: 'Why are they worth pursuing?',
-    notePlaceholder: 'Founder building AI infrastructure in Toronto. Hiring for the platform team.',
-    advanceTo: 'Qualified',
-  },
-  qualified: {
     action: 'Record your outreach',
     noteLabel: 'What did you send, and how?',
     notePlaceholder: 'Sent a LinkedIn message on 11 Sep asking for 20 minutes.',
     advanceTo: 'Contacted',
   },
   contacted: {
-    action: 'Record their reply',
-    noteLabel: 'What did they say?',
-    notePlaceholder: 'Replied — happy to chat, suggested next week.',
-    advanceTo: 'Engaged',
-  },
-  engaged: {
-    action: 'Start scheduling',
-    noteLabel: 'What are you arranging?',
-    notePlaceholder: 'Looking for 30 minutes Tuesday or Wednesday afternoon.',
-    advanceTo: 'Scheduling',
-  },
-  scheduling: {
-    action: 'Mark the meeting as booked',
-    noteLabel: 'What was agreed?',
-    notePlaceholder: 'Agreed Tuesday 17 Sep, 2pm Toronto.',
-    advanceTo: 'Meeting booked',
-    scheduling: true,
+    action: 'Record contact activity',
+    noteLabel: 'What happened?',
+    notePlaceholder: 'Replied — happy to chat, so I sent a coffee chat invitation.',
   },
   'meeting booked': {
     action: 'Record how it went',
     noteLabel: 'What came of the conversation?',
     notePlaceholder: 'Good conversation. They will introduce me to the hiring manager.',
-    advanceTo: 'Completed',
-  },
-  completed: {
-    action: 'Set up the follow-up',
-    noteLabel: 'What did you commit to?',
-    notePlaceholder: 'Sending my portfolio and a short note about the platform role.',
     advanceTo: 'Follow-up',
     task: { label: 'What must happen next?', placeholder: 'Send portfolio and follow up on the introduction' },
   },
@@ -78,12 +60,7 @@ const steps: Record<string, Step> = {
     action: 'Close the follow-up',
     noteLabel: 'What happened?',
     notePlaceholder: 'Sent the portfolio; they replied and made the introduction.',
-    advanceTo: 'Relationship',
-  },
-  relationship: {
-    action: 'Add to the record',
-    noteLabel: 'What is worth remembering?',
-    notePlaceholder: 'Catch up again after their product launch in November.',
+    advanceTo: 'Closed',
   },
 };
 
@@ -113,6 +90,12 @@ export default function Relationship({
   const [notice, setNotice] = useState('');
   const [recording, setRecording] = useState(false);
   const [outcome, setOutcome] = useState('');
+  const [taskDue, setTaskDue] = useState('');
+  const [inviting, setInviting] = useState(false);
+  const [booking, setBooking] = useState(false);
+  const [editingEngagement, setEditingEngagement] = useState(false);
+  const [editingNote, setEditingNote] = useState<Note>();
+  const [editingTask, setEditingTask] = useState<Task>();
 
   const open = stages.filter(stage => !stage.archived);
   const stage = stages.find(row => row.id === engagement.stageId);
@@ -129,6 +112,7 @@ export default function Relationship({
   const past = meetings.filter(row => !upcoming.includes(row));
   const tasks = (data.tasks.rows ?? []).filter(row => row.engagementId === engagement.id);
   const notes = (data.notes.rows ?? []).filter(row => row.engagementId === engagement.id);
+  const person = (data.people.rows ?? []).find(row => row.id === engagement.personId);
 
   const key = () => crypto.randomUUID();
 
@@ -191,6 +175,14 @@ export default function Relationship({
     finally { setPending(false); }
   }
 
+  /** One edit of a record that already exists, reported as saved only when it was. */
+  async function change(resource: 'notes'|'tasks'|'engagements', id: string, body: Record<string,unknown>, message: string) {
+    setPending(true); setProblem(''); setNotice('');
+    try { await editRecord(workspaceId, resource, id, body); setNotice(message); onChanged(); return true; }
+    catch (error) { setProblem(problemText(error, 'That change did not save.')); return false; }
+    finally { setPending(false); }
+  }
+
   async function completeTask(task: Task) {
     setPending(true); setProblem('');
     try { await write(`workspaces/${workspaceId}/crm/tasks/${task.id}`, 'PATCH', {status: 'DONE'}); setNotice(`“${task.title}” marked done.`); onChanged(); }
@@ -198,97 +190,203 @@ export default function Relationship({
     finally { setPending(false); }
   }
 
+  /** Where this sits in its own pipeline, shown the same way a profile's progress is. */
+  const statusWord = engagement.status.replace(/_/g, ' ').toLowerCase();
+  /** People type next actions as a dashed list; show them as one, not as raw text. */
+  const nextActions = talkingPoints(engagement.nextAction);
+
   return <article className="engagement-detail">
-    <header>
-      <h3>{engagement.objective}</h3>
-      <p className="small">
-        <strong>{stage?.name ?? 'Stage unavailable'}</strong>
-        {stage?.archived && ' (retired step)'}
-        {' · '}{engagement.status}
-        {' · '}{engagement.ownerId ? 'Owner recorded' : 'No owner'}
-        {' · started '}{new Date(engagement.createdAt).toLocaleDateString()}
-      </p>
-      {help && <p className="intro">{help.meaning} <span className="quiet">{help.prompt}</span></p>}
+    <header className="engagement-head">
+      <div className="engagement-head-text">
+        <h3>{engagement.objective}</h3>
+        {/* The facts about this effort, each as its own chip rather than one run-on line. */}
+        <p className="chips static">
+          {stage
+            ? <span className="chip solid">{stage.name}{stage.archived ? ' (retired step)' : ''}</span>
+            : <span className="chip warn" title="This engagement points at a pipeline step this workspace no longer has. Choose a stage below.">Stage unavailable</span>}
+          <span className="chip">{statusWord}</span>
+          <span className="chip">{engagement.ownerId ? 'Owner recorded' : 'No owner'}</span>
+          <span className="chip">Started {new Date(engagement.createdAt).toLocaleDateString()}</span>
+        </p>
+      </div>
+      {!recording && <div className="engagement-head-actions">
+        {/* What this engagement is asking for comes first; the ways to end it sit
+          apart at the end, so archiving is never the nearest button. */}
+        <button onClick={() => { setRecording(true); setNotice(''); }}>{step?.action ?? 'Record what happened'}</button>
+        {engagement.status !== 'CLOSED' && <button className="secondary" onClick={() => { setInviting(true); setNotice(''); }}>Send coffee chat invite</button>}
+        {/* Booked outright rather than proposed. A Caffriend call needs no calendar. */}
+        {engagement.status !== 'CLOSED' && <button className="secondary" onClick={() => { setBooking(true); setNotice(''); }}>Book a call</button>}
+        <button className="secondary" onClick={() => { setEditingEngagement(true); setNotice(''); setProblem(''); }}>Edit engagement</button>
+        <span className="action-split" aria-hidden="true" />
+        <ArchiveButton workspaceId={workspaceId} resource="engagements" id={engagement.id} what="engagement"
+          name={engagement.objective} className="secondary"
+          keeps={person ? `${person.displayName} stays in this workspace, along with their other engagements.` : undefined}
+          onArchived={() => { setNotice('Engagement archived.'); onChanged(); }}
+          onProblem={setProblem} />
+        <PermanentDeleteButton workspaceId={workspaceId} resource="engagements" id={engagement.id} what="engagement"
+          name={engagement.objective} className="secondary danger"
+          warning="This also removes meetings, notes, follow-ups and timeline activity for this engagement."
+          onDeleted={() => { setNotice('Engagement deleted.'); onChanged(); }}
+          onProblem={setProblem} />
+      </div>}
     </header>
+
+    {/* How far along the pipeline this is, at a glance. */}
+    {index >= 0 && <div className="steps" role="img"
+      aria-label={`Step ${index + 1} of ${open.length} in this pipeline: ${stage?.name ?? ''}`}>
+      {open.map((row, position) => <span key={row.id} className={position <= index ? 'on' : ''} />)}
+    </div>}
+
+    {help && <p className="intro">{help.meaning} <span className="quiet">{help.prompt}</span></p>}
 
     {notice && <p role="status" className="notice">{notice}</p>}
     {problem && <p role="alert">{problem}</p>}
 
-    <p className="next">{engagement.nextAction ? <>Next: {engagement.nextAction}</> : <span className="quiet">No next action recorded.</span>}</p>
+    {booking && <BookCall workspaceId={workspaceId} engagementId={engagement.id} person={person}
+      initialPurpose={engagement.objective} onClose={() => setBooking(false)}
+      onBooked={() => { setBooking(false); setNotice('The call is booked and on your Meetings page.'); onChanged(); }} />}
 
-    {/* Where it stands, and where it goes next, in one control. */}
-    <div className="move" role="group" aria-label="Move this engagement">
-      <label htmlFor={`detail-stage-${engagement.id}`}>Stage</label>
-      <select id={`detail-stage-${engagement.id}`} value={engagement.stageId} disabled={pending}
-        onChange={event => moveTo(event.target.value)}>
-        {open.map(option => <option key={option.id} value={option.id}>{option.name}</option>)}
-        {stage?.archived && <option value={stage.id}>{stage.name} (retired)</option>}
-      </select>
-      <label htmlFor={`detail-status-${engagement.id}`}>Status</label>
-      <select id={`detail-status-${engagement.id}`} value={engagement.status} disabled={pending}
-        onChange={event => setStatus(event.target.value)}>
-        {[...new Set([engagement.status, ...engagementStatuses])].map(value =>
-          <option key={value} value={value}>{value.replace('_', ' ').toLowerCase()}</option>)}
-      </select>
+    {inviting && <OutreachComposer workspaceId={workspaceId} engagementId={engagement.id} person={person}
+      initialPurpose={engagement.objective} onClose={() => setInviting(false)} onSent={() => { setNotice('Invitation sent and added to the engagement timeline.'); onChanged(); }} />}
+
+    {/* Where it stands, where it goes next, and what is owed — one labelled row. */}
+    <div className="engagement-state">
+      <div className="field">
+        <span className="field-label" id={`detail-stage-label-${engagement.id}`}>Stage</span>
+        <FormSelect id={`detail-stage-${engagement.id}`} aria-label="Stage" value={stage ? engagement.stageId : ''} disabled={pending}
+          placeholder="Choose a stage" onValueChange={moveTo}
+          options={[...open.map(option => ({value:option.id,label:option.name})), ...(stage?.archived ? [{value:stage.id,label:`${stage.name} (retired)`}] : [])]} />
+      </div>
+      <div className="field">
+        <span className="field-label">Status</span>
+        <FormSelect id={`detail-status-${engagement.id}`} aria-label="Status" value={engagement.status} disabled={pending}
+          onValueChange={setStatus}
+          options={[...new Set([engagement.status, ...engagementStatuses])].map(value => ({value, label: value.replace('_', ' ').toLowerCase()}))} />
+      </div>
+      <div className="next">
+        <p className="eyebrow">Next action</p>
+        {nextActions.length
+          ? <ul className="point-list plain-points">{nextActions.map((action, at) => <li key={at}>{action}</li>)}</ul>
+          : <p className="small">None recorded.</p>}
+      </div>
     </div>
 
     {/* The one thing this stage is asking for. */}
-    {recording
-      ? <form onSubmit={event => { event.preventDefault(); record(new FormData(event.currentTarget)); }}>
-          <h4>{step?.action ?? 'Record what happened'}</h4>
-          <label>{step?.noteLabel ?? 'What happened?'}
-            <textarea name="body" rows={3} maxLength={20000} required autoFocus placeholder={step?.notePlaceholder} />
-          </label>
-          {/* Offered wherever a conversation is being closed out. */}
-          {(step?.advanceTo === 'Completed' || step?.advanceTo === 'Follow-up') && <label>Outcome
-            <select value={outcome} onChange={event => setOutcome(event.target.value)}>
-              <option value="">No outcome recorded</option>
-              {outcomes.map(value => <option key={value} value={value}>{value}</option>)}
-            </select>
-            <span className="small">The backend has no outcome column, so your choice is saved at the front of the note.</span>
-          </label>}
-          {step?.task && <>
-            <label>{step.task.label}<input name="taskTitle" maxLength={500} placeholder={step.task.placeholder} /></label>
-            <label>Due<input name="taskDue" type="date" /></label>
-          </>}
-          <label>Next action<input name="nextAction" maxLength={2000} defaultValue={engagement.nextAction ?? ''} /></label>
-          {target && <label className="choice">
-            <input type="checkbox" name="advance" defaultChecked />
-            Move to <strong>{target.name}</strong>
-          </label>}
-          <button disabled={pending}>{pending ? 'Saving…' : 'Save'}</button>
-          <button type="button" className="secondary" onClick={() => { setRecording(false); setOutcome(''); }}>Cancel</button>
-        </form>
-      : <button onClick={() => { setRecording(true); setNotice(''); }}>{step?.action ?? 'Record what happened'}</button>}
+    {recording && <form className="record-form" onSubmit={event => { event.preventDefault(); record(new FormData(event.currentTarget)); }}>
+      <h4 className="record-title">{step?.action ?? 'Record what happened'}</h4>
+      <label className="field">
+        <span className="field-label">{step?.noteLabel ?? 'What happened?'}</span>
+        <textarea name="body" rows={3} maxLength={20000} required autoFocus placeholder={step?.notePlaceholder} />
+      </label>
+      {/* Offered wherever a conversation is being closed out. */}
+      {(step?.advanceTo === 'Completed' || step?.advanceTo === 'Follow-up') && <div className="field">
+        <span className="field-label">Outcome</span>
+        <FormSelect aria-label="Outcome" value={outcome} onValueChange={setOutcome}
+          options={[{value:'',label:'No outcome recorded'}, ...outcomes.map(value => ({value,label:value}))]} />
+        <span className="small">The backend has no outcome column, so your choice is saved at the front of the note.</span>
+      </div>}
+      {step?.task && <div className="field-grid">
+        <label className="field">
+          <span className="field-label">{step.task.label}</span>
+          <input name="taskTitle" maxLength={500} placeholder={step.task.placeholder} />
+        </label>
+        <div className="field">
+          <span className="field-label">Due</span>
+          <DatePicker name="taskDue" aria-label="Due" value={taskDue} onChange={setTaskDue} />
+        </div>
+      </div>}
+      <label className="field">
+        <span className="field-label">Next action</span>
+        <input name="nextAction" maxLength={2000} defaultValue={engagement.nextAction ?? ''} />
+      </label>
+      {target && <label className="choice">
+        <input type="checkbox" name="advance" defaultChecked />
+        Move to <strong>{target.name}</strong>
+      </label>}
+      <div className="modal-actions">
+        <button type="button" className="secondary" onClick={() => { setRecording(false); setOutcome(''); }}>Cancel</button>
+        <button disabled={pending}>{pending ? 'Saving…' : 'Save'}</button>
+      </div>
+    </form>}
 
-    {step?.scheduling && <p role="note">
+    {step?.scheduling && <p role="note" className="aside">
       Meetings are created on the <Link className="text-link" href={`/app/${workspaceId}/calendar`}>Meetings</Link> screen, where you
       choose the calendar account, time and conference. Link the meeting to this engagement there and it will appear below.
     </p>}
 
-    <h4>Meetings</h4>
-    {!data.meetings.rows && <p role="status">Loading meetings…</p>}
-    {data.meetings.rows && meetings.length === 0 && <Empty>No meeting is linked to this engagement yet.</Empty>}
-    {upcoming.map(meeting => <MeetingRow key={meeting.id} workspaceId={workspaceId} meeting={meeting} upcoming />)}
-    {past.map(meeting => <MeetingRow key={meeting.id} workspaceId={workspaceId} meeting={meeting} />)}
-
-    <h4>Follow-ups</h4>
-    {!data.tasks.rows && <p role="status">Loading follow-ups…</p>}
-    {data.tasks.rows && tasks.length === 0 && <Empty>Nothing is owed on this engagement.</Empty>}
-    <ul className="tasks">{tasks.map(task => <li key={task.id}>
-      {task.title}
-      <span className="small"> — {task.status}{task.dueAt ? `, due ${new Date(task.dueAt).toLocaleDateString()}` : ', no date'}</span>
-      {task.status !== 'DONE' && <button className="secondary" disabled={pending} onClick={() => completeTask(task)}>
-        Mark done<span className="sr-only"> — {task.title}</span>
-      </button>}
-    </li>)}</ul>
+    {/* What is booked and what is owed, side by side — the same shape as the person's notes and tasks. */}
+    <div className="two-up engagement-lists">
+      <div>
+        <h4>Meetings</h4>
+        {!data.meetings.rows && <p role="status">Loading meetings…</p>}
+        {data.meetings.rows && meetings.length === 0 && <Empty>No meeting is linked to this engagement yet.</Empty>}
+        {upcoming.map(meeting => <MeetingRow key={meeting.id} workspaceId={workspaceId} meeting={meeting} upcoming />)}
+        {past.map(meeting => <MeetingRow key={meeting.id} workspaceId={workspaceId} meeting={meeting} />)}
+      </div>
+      <div>
+        <h4>Follow-ups</h4>
+        {!data.tasks.rows && <p role="status">Loading follow-ups…</p>}
+        {data.tasks.rows && tasks.length === 0 && <Empty>Nothing is owed on this engagement.</Empty>}
+        <ul className="tasks">{tasks.map(task => <li key={task.id}>
+          <span>{task.title}
+            <span className="small"> — {task.status}{task.dueAt ? `, due ${new Date(task.dueAt).toLocaleDateString()}` : ', no date'}</span>
+          </span>
+          <span className="row-actions">
+            {task.status !== 'DONE' && <button className="secondary small-button" disabled={pending} onClick={() => completeTask(task)}>
+              Mark done<span className="sr-only"> — {task.title}</span>
+            </button>}
+            <button className="secondary small-button" onClick={() => { setEditingTask(task); setNotice(''); setProblem(''); }}>
+              Edit<span className="sr-only"> {task.title}</span>
+            </button>
+            <ArchiveButton workspaceId={workspaceId} resource="tasks" id={task.id} name={task.title} what="follow-up"
+              onArchived={() => { setNotice('Follow-up archived.'); onChanged(); }} onProblem={setProblem} />
+            <PermanentDeleteButton workspaceId={workspaceId} resource="tasks" id={task.id} name={task.title} what="follow-up"
+              onDeleted={() => { setNotice('Follow-up deleted.'); onChanged(); }} onProblem={setProblem} />
+          </span>
+        </li>)}</ul>
+      </div>
+    </div>
 
     <h4>What was said</h4>
     {!data.notes.rows && <p role="status">Loading notes…</p>}
     {data.notes.rows && notes.length === 0 && <Empty>Nothing has been recorded on this engagement yet.</Empty>}
     <ul className="notes">{[...notes].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((note: Note) => <li key={note.id}>
-      <p>{note.body}</p><p className="small">{new Date(note.createdAt).toLocaleString()}</p>
+      <p>{note.body}</p>
+      <p className="small">{new Date(note.createdAt).toLocaleString()}
+        {note.updatedAt !== note.createdAt && ` · edited ${new Date(note.updatedAt).toLocaleString()}`}</p>
+      <p className="row-actions">
+        <button className="secondary small-button" onClick={() => { setEditingNote(note); setNotice(''); setProblem(''); }}>
+          Edit<span className="sr-only"> note</span>
+        </button>
+        <ArchiveButton workspaceId={workspaceId} resource="notes" id={note.id} what="note"
+          name={note.body.length > 60 ? `${note.body.slice(0, 60)}…` : note.body}
+          onArchived={() => { setNotice('Note archived.'); onChanged(); }} onProblem={setProblem} />
+        <PermanentDeleteButton workspaceId={workspaceId} resource="notes" id={note.id} what="note"
+          name={note.body.length > 60 ? `${note.body.slice(0, 60)}…` : note.body}
+          onDeleted={() => { setNotice('Note deleted.'); onChanged(); }} onProblem={setProblem} />
+      </p>
     </li>)}</ul>
+
+    {editingEngagement && <Modal title="Edit this engagement" description="What you are trying to achieve, what is next, and where it stands."
+      onClose={() => setEditingEngagement(false)}>
+      <EngagementEditor engagement={engagement}
+        onSave={async body => { if (await change('engagements', engagement.id, body, 'Engagement updated.')) setEditingEngagement(false); }}
+        onCancel={() => setEditingEngagement(false)} />
+    </Modal>}
+
+    {editingNote && <Modal title="Edit this note" description="Notes are a record of what was said. Correcting one does not hide that it changed."
+      onClose={() => setEditingNote(undefined)}>
+      <NoteEditor note={editingNote}
+        onSave={async body => { if (await change('notes', editingNote.id, body, 'Note updated.')) setEditingNote(undefined); }}
+        onCancel={() => setEditingNote(undefined)} />
+    </Modal>}
+
+    {editingTask && <Modal title="Edit this follow-up" description="Change what is owed, when it is due, or where it stands."
+      onClose={() => setEditingTask(undefined)}>
+      <TaskEditor task={editingTask}
+        onSave={async body => { if (await change('tasks', editingTask.id, body, 'Follow-up updated.')) setEditingTask(undefined); }}
+        onCancel={() => setEditingTask(undefined)} />
+    </Modal>}
   </article>;
 }
 

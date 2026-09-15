@@ -24,7 +24,7 @@ export async function DELETE(request: Request) {
 
 /** Reports the short-lived, non-secret result of a provider return exactly once. */
 export async function GET() {
-  const feedback = await readSealed<{outcome:string;provider?:string}>(feedbackCookie);
+  const feedback = await readSealed<{outcome:string;provider?:string;detail?:string}>(feedbackCookie);
   const response = NextResponse.json({feedback: feedback ?? null},{headers:{'Cache-Control':'no-store'}});
   if(feedback) response.cookies.set(feedbackCookie,'',{path:'/',maxAge:0});
   return response;

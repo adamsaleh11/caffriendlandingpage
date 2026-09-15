@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import {chooseOption, chooseTime} from './controls';
 
 async function login(page: Page) {
   await page.getByLabel('Email or phone number').fill('alex@example.com');
@@ -74,9 +75,12 @@ test('a connection whose profile fails to load still lists', async ({page, reque
 test('Upcoming calls shows the counterpart, not the viewer', async ({page}) => {
   await enter(page, 'calls');
   await expect(page.getByRole('heading', {name:'Upcoming calls'})).toBeVisible();
-  // 'When' is the row header here, so the person is a plain cell.
-  await expect(page.getByRole('cell', {name:/Jordan Patel/})).toBeVisible();
-  await expect(page.getByRole('cell', {name:'Video call'})).toBeVisible();
+  const call = page.getByRole('listitem').filter({hasText:'Coffee with Jordan'});
+  await expect(call).toContainText('Jordan Patel');
+  await expect(call).toContainText('Caffriend call');
+  await expect(call).toContainText('booked');
+  await expect(call.getByRole('link', {name:'Join'})).toBeVisible();
+  await expect(page.getByRole('cell', {name:/Jordan Patel/})).toHaveCount(0);
 });
 
 test('Leaderboard marks the signed-in person and sorts', async ({page}) => {
@@ -90,6 +94,110 @@ test('Profile shows the signed-in person', async ({page}) => {
   await enter(page, 'profile');
   await expect(page.getByRole('heading', {name:'Alex Rivera'})).toBeVisible();
   await expect(page.getByText('alex@example.com')).toBeVisible();
+});
+
+test('Profile edits a field and keeps it after a reload', async ({page}) => {
+  await enter(page, 'profile');
+  await page.getByRole('button', {name:/Edit current company/}).click();
+  await page.getByRole('textbox', {name:'Current company'}).fill('Northwind');
+  await page.getByRole('button', {name:'Save changes'}).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('button', {name:/Edit current company/})).toContainText('Northwind');
+  await page.reload();
+  await expect(page.getByRole('button', {name:/Edit current company/})).toContainText('Northwind');
+});
+
+test('Profile refuses a name with nothing in it', async ({page}) => {
+  await enter(page, 'profile');
+  await page.getByRole('button', {name:/Edit name/}).click();
+  await page.getByRole('textbox', {name:'First name'}).fill('');
+  await expect(page.getByRole('button', {name:'Save changes'})).toBeDisabled();
+});
+
+test('Profile refuses a link that is not https', async ({page}) => {
+  await enter(page, 'profile');
+  await page.getByRole('button', {name:/Edit links/}).click();
+  await page.getByRole('textbox', {name:'Website or portfolio'}).fill('http://example.com');
+  await page.getByRole('button', {name:'Save changes'}).click();
+  await expect(page.getByRole('dialog').getByRole('alert')).toContainText('check what you entered');
+});
+
+test('Profile switches account role and adds a weekly slot', async ({page}) => {
+  await enter(page, 'profile');
+  await page.getByRole('button', {name:'Mentor'}).click();
+  await expect(page.getByRole('button', {name:'Mentor'})).toHaveAttribute('aria-pressed', 'true');
+
+  await page.getByRole('button', {name:/Edit weekly availability/}).click();
+  await chooseOption(page.getByRole('combobox', {name:'Day'}), {label:'Tuesday'});
+  await page.getByRole('button', {name:'Add slot'}).click();
+  await page.getByRole('button', {name:'Save changes'}).click();
+  await expect(page.getByRole('button', {name:/Edit weekly availability/})).toContainText('1 weekly slot');
+});
+
+// Entered locally, stored in UTC: an evening slot falls on two UTC days, and
+// used to be discarded on the way out, which looked exactly like a failed save.
+test.describe('evening availability', () => {
+test.use({timezoneId: 'America/Toronto'});
+test('an evening availability slot is saved, not silently dropped', async ({page}) => {
+  await enter(page, 'profile');
+  await page.getByRole('button', {name:/Edit weekly availability/}).click();
+  await chooseOption(page.getByRole('combobox', {name:'Day'}), {label:'Monday'});
+  await chooseTime(page.getByRole('button', {name:'From'}), '17:00');
+  await chooseTime(page.getByRole('button', {name:'To'}), '23:00');
+  await page.getByRole('button', {name:'Add slot'}).click();
+  await page.getByRole('button', {name:'Save changes'}).click();
+  await expect(page.getByRole('button', {name:/Edit weekly availability/})).toContainText('1 weekly slot');
+
+  await page.reload();
+  await page.getByRole('button', {name:/Edit weekly availability/}).click();
+  await expect(page.getByRole('dialog').getByText('Mon 5:00 PM-11:00 PM')).toBeVisible();
+});
+});
+
+test('Profile removes a photo', async ({page}) => {
+  await enter(page, 'profile');
+  await page.getByRole('button', {name:'Remove'}).click();
+  await expect(page.getByText('No photos yet.')).toBeVisible();
+});
+
+test('a profile edit that the backend refuses says so and changes nothing', async ({page, request}) => {
+  await request.post('http://127.0.0.1:4100/__state', {data:{saveFails:true}});
+  await enter(page, 'profile');
+  await page.getByRole('button', {name:/Edit industry/}).click();
+  await page.getByRole('textbox', {name:'Industry'}).fill('Robotics');
+  await page.getByRole('button', {name:'Save changes'}).click();
+  await expect(page.getByRole('dialog').getByRole('alert')).toBeVisible();
+  await expect(page.getByRole('dialog')).toBeVisible();
+});
+
+test('opening a person in Connections shows their full profile', async ({page}) => {
+  await enter(page, 'connections');
+  await page.getByRole('rowheader', {name:/Jordan Patel/}).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('heading', {name:'Jordan Patel'})).toBeVisible();
+  await expect(dialog.getByText('Staff Engineer @ Acme')).toBeVisible();
+  await expect(dialog.getByText('UofT')).toBeVisible();
+  await expect(dialog.getByText('she/her')).toBeVisible();
+  await expect(dialog.getByText('Career advice')).toBeVisible();
+  await expect(dialog.getByText('Best advice you ever got?')).toBeVisible();
+  await expect(dialog.getByText("Companies I've worked at")).toBeVisible();
+  await expect(dialog.getByText('7 Coffee Chat')).toBeVisible();
+  await expect(dialog.getByText('12 connections')).toBeVisible();
+  // Contact and billing fields are on that record but must never be rendered.
+  expect(await page.content()).not.toContain('PRIVATE_CONTACT_SENTINEL');
+});
+
+test('opening a person in the Leaderboard shows the same profile', async ({page}) => {
+  await enter(page, 'leaderboard');
+  await page.getByRole('cell', {name:/Jordan Patel/}).click();
+  await expect(page.getByRole('dialog').getByText('Staff Engineer @ Acme')).toBeVisible();
+});
+
+test('a profile that fails to load says so instead of showing an empty card', async ({page, request}) => {
+  await request.post('http://127.0.0.1:4100/__state', {data:{profileFails:true}});
+  await enter(page, 'leaderboard');
+  await page.getByRole('cell', {name:/Jordan Patel/}).click();
+  await expect(page.getByRole('dialog').getByRole('alert')).toBeVisible();
 });
 
 test('the top-right navbar moves between the app screens', async ({page}) => {

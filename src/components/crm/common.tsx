@@ -1,6 +1,7 @@
 'use client';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { api, ApiError } from '@/lib/api';
+import { remember, recall } from '@/lib/remember';
 import { rightsLabels, rightsExplanations, type Page, type RightsState, type SourceArtifact, type SourceClaim, type Conversation } from '@/lib/contracts';
 
 /** A retry of the same submitted operation reuses its key; changed input gets a new one. */
@@ -27,7 +28,8 @@ export type Loaded<T> = {
  * rather than collapsing to an error screen — the ticket requires a partial state.
  */
 export function useList<T>(path: string | null, deps: unknown[] = []): Loaded<T> {
-  const [rows, setRows] = useState<T[]>();
+  const key = path ? `crm:${path}` : null;
+  const [rows, setRows] = useState<T[] | undefined>(() => recall<T[]>(key));
   const [cursor, setCursor] = useState<string | null>(null);
   const [error, setError] = useState<ApiError>();
   const [loadingMore, setLoadingMore] = useState(false);
@@ -44,10 +46,10 @@ export function useList<T>(path: string | null, deps: unknown[] = []): Loaded<T>
   useEffect(() => {
     if (!path) { setRows([]); shown.current = null; return; }
     const controller = new AbortController();
-    if (shown.current !== path) { setRows(undefined); shown.current = path; }
+    if (shown.current !== path) { setRows(recall<T[]>(key)); shown.current = path; }
     setError(undefined); setCursor(null);
     api<Page<T>>(path, {signal: controller.signal})
-      .then(page => { if (controller.signal.aborted) return; setRows(page.items); setCursor(page.nextCursor); })
+      .then(page => { if (controller.signal.aborted) return; setRows(page.items); remember(key, page.items); setCursor(page.nextCursor); })
       .catch(problem => { if (!controller.signal.aborted) setError(problem instanceof ApiError ? problem : new ApiError(503, 'This is unavailable right now.')); });
     return () => controller.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- callers declare what invalidates the list
@@ -58,34 +60,37 @@ export function useList<T>(path: string | null, deps: unknown[] = []): Loaded<T>
     setLoadingMore(true);
     try {
       const page = await api<Page<T>>(`${path}${path.includes('?') ? '&' : '?'}cursor=${encodeURIComponent(cursor)}`);
-      setRows(current => [...(current ?? []), ...page.items]);
+      setRows(current => { const next = [...(current ?? []), ...page.items]; remember(key, next); return next; });
       setCursor(page.nextCursor);
       setError(undefined);
     } catch (problem) {
       setError(problem instanceof ApiError ? problem : new ApiError(503, 'Unable to load more.'));
     } finally { setLoadingMore(false); }
-  }, [path, cursor]);
+  }, [path, cursor, key]);
 
-  return { rows, error, loadingMore, more: !!cursor, reload: () => setAttempt(v => v + 1), loadMore, set: setRows };
+  const set = useCallback((next: T[]) => { remember(key, next); setRows(next); }, [key]);
+  return { rows, error, loadingMore, more: !!cursor, reload: () => setAttempt(v => v + 1), loadMore, set };
 }
 
 /** A plain array endpoint. Pipelines and stages are not cursor-paginated. */
-export function useRows<T>(path: string | null): Loaded<T> {
-  const [rows, setRows] = useState<T[]>();
+export function useRows<T>(path: string | null, base: 'crm' | 'app' | 'call' = 'crm'): Loaded<T> {
+  const key = path ? `${base}:${path}` : null;
+  const [rows, setRows] = useState<T[] | undefined>(() => recall<T[]>(key));
   const [error, setError] = useState<ApiError>();
   const [attempt, setAttempt] = useState(0);
   const shown = useRef<string | null>(null);
   useEffect(() => {
     if (!path) { setRows(undefined); shown.current = null; return; }
     const controller = new AbortController();
-    if (shown.current !== path) { setRows(undefined); shown.current = path; }
+    if (shown.current !== path) { setRows(recall<T[]>(key)); shown.current = path; }
     setError(undefined);
-    api<T[]>(path, {signal: controller.signal})
-      .then(result => { if (!controller.signal.aborted) setRows(Array.isArray(result) ? result : []); })
+    api<T[]>(path, {signal: controller.signal}, base)
+      .then(result => { if (controller.signal.aborted) return; const next = Array.isArray(result) ? result : []; remember(key, next); setRows(next); })
       .catch(problem => { if (!controller.signal.aborted) setError(problem instanceof ApiError ? problem : new ApiError(503, 'This is unavailable right now.')); });
     return () => controller.abort();
-  }, [path, attempt]);
-  return { rows, error, loadingMore:false, more:false, reload: () => setAttempt(v => v + 1), loadMore: () => {}, set: setRows };
+  }, [path, attempt, key]);
+  const set = useCallback((next: T[]) => { remember(key, next); setRows(next); }, [key]);
+  return { rows, error, loadingMore:false, more:false, reload: () => setAttempt(v => v + 1), loadMore: () => {}, set };
 }
 
 /** The standard states every primary screen owes the reader, in one place. */

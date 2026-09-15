@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 
 async function submitEarlyAccess(email: string) {
   const res = await fetch("/api/early-access", {
@@ -174,11 +175,23 @@ export default function FooterCta() {
             />
           </div>
           <div className="flex-1"></div>
+          <Link
+            href="/privacy"
+            className="text-[#1F150F] hover:text-[#FA6404] hover:underline text-sm"
+          >
+            Privacy Policy
+          </Link>
+          <Link
+            href="/terms"
+            className="text-[#1F150F] hover:text-[#FA6404] hover:underline text-sm"
+          >
+            Terms &amp; Conditions
+          </Link>
           <a
-            href="mailto:caffriendapp@gmail.com"
+            href="mailto:info@caffriend.com"
             className="text-[#FA6404] hover:underline text-sm"
           >
-            contact@caffriend.com
+            info@caffriend.com
           </a>
           <div className="flex gap-4">
             <a

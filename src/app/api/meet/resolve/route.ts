@@ -11,7 +11,18 @@ export async function POST(request: Request) {
     const result = await backend<Record<string, unknown>>('/meetings/join/resolve', { method: 'POST', body: { token: body.token } });
     if (typeof result.purpose !== 'string' || typeof result.startsAt !== 'string' || typeof result.endsAt !== 'string' || typeof result.timezone !== 'string' || !Number.isFinite(Date.parse(result.startsAt)) || !Number.isFinite(Date.parse(result.endsAt))) return json({ error: 'Unable to load this invitation. Please try again.' }, 502);
     try { new Intl.DateTimeFormat('en', { timeZone: result.timezone }).format(); } catch { return json({ error: 'Unable to load this invitation. Please try again.' }, 502); }
-    return json({ purpose: result.purpose, startsAt: result.startsAt, endsAt: result.endsAt, timezone: result.timezone });
+    const groupCallId = typeof result.groupCallId === 'string' && /^[0-9a-f-]{36}$/i.test(result.groupCallId)
+      ? result.groupCallId : null;
+    return json({
+      purpose: result.purpose,
+      startsAt: result.startsAt,
+      endsAt: result.endsAt,
+      timezone: result.timezone,
+      groupCallId,
+      requiresDisplayName: result.requiresDisplayName !== false,
+      requiresTermsAcceptance: result.requiresTermsAcceptance !== false,
+      platformSupported: result.platformSupported !== false,
+    });
   } catch (error) {
     const status = error instanceof BackendError ? error.status : 503;
     return json({ error: status === 404 ? 'Invitation unavailable.' : 'Unable to load this invitation. Please try again.' }, status);

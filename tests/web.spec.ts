@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import {chooseOption} from './controls';
 const workspaceId = '11111111-1111-4111-8111-111111111111';
 async function login(page: Page) {
   await page.getByLabel('Email or phone number').fill('alex@example.com');
@@ -34,8 +35,12 @@ test('multiple-workspace user chooses a workspace and navigates every section wi
     await page.getByRole('navigation',{name:'Workspace navigation'}).getByRole('link',{name,exact:true}).click();
     await expect(page.getByRole('heading',{name,exact:true})).toBeVisible();
   }
-  await page.getByLabel('Switch workspace').selectOption(other.id);
+  await chooseOption(page.getByLabel('Switch workspace'), {label:other.name});
   await expect(page).toHaveURL(`/app/${other.id}/people`);
+  // The workspace the bare /app route remembers is recorded by the workspace
+  // page itself, so let the switched-to workspace finish rendering first.
+  await expect(page.getByLabel('Switch workspace')).toContainText(other.name);
+  await expect(page.getByRole('heading',{name:'People',exact:true})).toBeVisible();
   await page.goto('/app');
   await expect(page).toHaveURL(`/app/${other.id}/pipeline`);
 });

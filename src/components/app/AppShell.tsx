@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { sections, sectionIcons, sectionNames, type Workspace } from '@/lib/contracts';
 import NativeNav from './NativeNav';
+import { forgetAll } from '@/lib/remember';
 
 
 /**
@@ -11,6 +12,7 @@ import NativeNav from './NativeNav';
  * The workspace sidebar is deliberately always here, exactly as it is in the CRM:
  * the two surfaces share one sign-in, and the CRM must never be more than a click
  * away. The top-right navbar carries the app screens; the sidebar carries the CRM.
+ * Events are not a sidebar destination: they are one of the Home categories.
  */
 export default function AppShell({workspaces, children}:{workspaces:Workspace[]; children:ReactNode}) {
   const [open, setOpen] = useState(false);
@@ -19,7 +21,7 @@ export default function AppShell({workspaces, children}:{workspaces:Workspace[];
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
-      if (event.key === 'caffriend.signedout') { try { sessionStorage.clear(); } catch {} window.location.replace('/login'); }
+      if (event.key === 'caffriend.signedout') { try { sessionStorage.clear(); } catch {} forgetAll(); window.location.replace('/login'); }
     };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
@@ -49,7 +51,7 @@ export default function AppShell({workspaces, children}:{workspaces:Workspace[];
       <div className="sidebar-footer">
         <button onClick={async () => {
           try { await fetch('/api/session', {method:'DELETE', headers:{'X-Caffriend-Request':'1'}}); } catch {}
-          try { sessionStorage.clear(); localStorage.setItem('caffriend.signedout', String(Date.now())); } catch {}
+          try { sessionStorage.clear(); localStorage.setItem('caffriend.signedout', String(Date.now())); } catch {} forgetAll();
           window.location.replace('/login');
         }}>Sign out</button>
         <p className="small">Your relationships. Your pace.</p>

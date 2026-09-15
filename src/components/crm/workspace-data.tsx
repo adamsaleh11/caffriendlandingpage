@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { useList, useRows, type Loaded } from './common';
+import { useLiveRows } from './record-actions';
 import {
   actorLabels, auditActions,
   type Agent, type Approval, type AuditEvent, type Conversation, type Engagement, type Meeting,
@@ -42,11 +43,13 @@ export type WorkspaceData = {
 export function useWorkspaceData(workspaceId: string, pipelineId?: string): WorkspaceData {
   const crm = (resource: string) => `workspaces/${workspaceId}/crm/${resource}`;
   return {
-    people: useList<Person>(crm('people')),
-    organizations: useList<Organization>(crm('organizations')),
-    engagements: useList<Engagement>(pipelineId ? `${crm('engagements')}?pipelineId=${pipelineId}` : crm('engagements')),
-    notes: useList<Note>(crm('notes')),
-    tasks: useList<Task>(crm('tasks')),
+    // Archived records are filtered here rather than at each reader, so no screen
+    // can forget and show something the workspace has archived.
+    people: useLiveRows(useList<Person>(crm('people'))),
+    organizations: useLiveRows(useList<Organization>(crm('organizations'))),
+    engagements: useLiveRows(useList<Engagement>(pipelineId ? `${crm('engagements')}?pipelineId=${pipelineId}` : crm('engagements'))),
+    notes: useLiveRows(useList<Note>(crm('notes'))),
+    tasks: useLiveRows(useList<Task>(crm('tasks'))),
     meetings: useList<Meeting>(`workspaces/${workspaceId}/meetings`),
     events: useList<AuditEvent>(crm('audit-events')),
     claims: useList<SourceClaim>(crm('source-claims')),

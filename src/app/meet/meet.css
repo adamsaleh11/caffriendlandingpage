@@ -1,20 +1,132 @@
-.meeting-page { min-height: 100vh; background: #fffaf6; color: #291b13; padding: clamp(20px, 5vw, 64px); font-family: var(--font-manrope), sans-serif; }
-.meeting-brand { font-size: 26px; font-weight: 800; color: #a83c00; }
-.meeting-card { background: white; border: 1px solid #e5d8ce; border-radius: 24px; padding: clamp(24px, 5vw, 48px); max-width: 960px; margin: 48px auto; overflow-wrap: anywhere; }
-.meeting-card h1 { font-size: clamp(28px, 4vw, 44px); font-weight: 700; margin: 12px 0 24px; }
-.meeting-card p { margin: 12px 0; }
-.meeting-eyebrow { color: #765342; letter-spacing: .12em; font-size: 12px; font-weight: 700; }
-.meeting-card label { display: grid; gap: 8px; margin: 24px 0; }
-.meeting-card input, .meeting-card select { border: 1px solid #967a66; border-radius: 8px; padding: 12px; min-height: 44px; max-width: 100%; color: #291b13; background: white; }
-.meeting-card button { padding: 12px 20px; min-height: 44px; border-radius: 24px; background: #a83c00; color: white; cursor: pointer; }
-.meeting-card button:disabled { opacity: .6; cursor: not-allowed; }
-.meeting-page :focus-visible { outline: 3px solid #204ecf; outline-offset: 4px; }
-.meeting-card video { width: 100%; max-height: 360px; border-radius: 16px; background: #291b13; object-fit: contain; }
-.meeting-card .meeting-terms { display: flex; align-items: center; gap: 12px; }
-.meeting-terms input { flex-shrink: 0; width: 20px; }
+/**
+ * The pre-join screen, and the event room that shares its furniture.
+ *
+ * Contrast note: `#fa6404` is the app's brand, but on the warm page it only reaches
+ * 2.9:1, so it is a fill here and never ink. Brand text takes `--brand-deep`, and the
+ * orange buttons carry espresso labels — which is what `.crm button` already does.
+ *
+ * This surface used to carry a palette of its own — a maroon `#a83c00` brand, an
+ * `#291b13` ink and an `#e5d8ce` rule — which made the last screen before a call the
+ * one screen that did not look like Caffriend. The values below are the app's: the
+ * `#fa6404` brand and `#1f150f` ink from `globals.css`, the warm `#fff9f5` page and
+ * `#e0e0e0` rules from the workspace, and the radii and card weight the design
+ * system's desktop call kit uses on the other side of the Join button.
+ */
+.meeting-page {
+  --ink: #1f150f;
+  --muted: #6b6b6b;
+  --line: #e3d7cd;
+  --brand: #fa6404;
+  --brand-deep: #a04c22;
+  --brand-tint: #ffe6d7;
+  --warm: #fff9f5;
+  min-height: 100vh;
+  background: var(--warm);
+  color: var(--ink);
+  padding: clamp(20px, 5vw, 64px);
+  font-family: var(--font-manrope), sans-serif;
+}
+.meeting-brand { font-size: 26px; font-weight: 800; letter-spacing: -.04em; color: var(--brand-deep); }
+.meeting-card {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  box-shadow: 0 20px 55px rgba(67,43,28,.10);
+  padding: clamp(24px, 5vw, 48px);
+  max-width: 960px;
+  margin: 48px auto;
+  overflow-wrap: anywhere;
+}
+.meeting-card h1 { font-size: clamp(28px, 4vw, 44px); font-weight: 700; letter-spacing: -.04em; margin: 12px 0 24px; }
+.meeting-card p { margin: 12px 0; color: var(--muted); line-height: 1.65; }
+.meeting-eyebrow { color: var(--brand-deep); letter-spacing: .16em; text-transform: uppercase; font-size: 12px; font-weight: 700; }
+/* When the meeting is, is the fact the page exists to state, so it is ink, not muted. */
+.meeting-card .meeting-when { color: var(--ink); font-size: 1.05rem; font-weight: 600; }
+.meeting-card .meeting-zone { font-size: .85rem; }
+.meeting-card .meeting-fineprint { font-size: .85rem; }
+/* A signed-in member is told which name is going into the room, in place of the field
+   they used to have to fill in before Join would light up. */
+.meeting-card .meeting-as { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 999px; background: var(--brand-tint); color: var(--ink); font-size: .9rem; }
+.meeting-card .meeting-as strong { font-weight: 700; }
+.meeting-card label { display: grid; gap: 8px; margin: 24px 0; font-size: .9rem; font-weight: 600; }
+.meeting-card input, .meeting-card select { font: inherit; border: 1px solid #dadada; border-radius: 8px; padding: 12px; min-height: 44px; max-width: 100%; color: var(--ink); background: white; }
+.meeting-card button { border: 0; padding: 12px 20px; min-height: 44px; border-radius: 10px; background: var(--brand); color: var(--ink); font-weight: 700; cursor: pointer; }
+.meeting-card button:disabled { opacity: .55; cursor: not-allowed; }
+.meeting-page :focus-visible { outline: 3px solid var(--brand-deep); outline-offset: 4px; }
+.meeting-card video { width: 100%; max-height: 420px; border-radius: 20px; background: var(--ink); object-fit: cover; }
+.meeting-card .meeting-terms { display: flex; align-items: center; gap: 12px; font-weight: 500; }
+.meeting-terms input { flex-shrink: 0; width: 20px; min-height: 20px; }
+.meeting-preview { display: flex; flex-direction: column; gap: 16px; margin: 20px 0; }
+.meeting-preview-frame { position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: 20px; overflow: hidden; background: var(--ink); }
+.meeting-preview-frame video { width: 100%; height: 100%; object-fit: cover; }
+.meeting-preview-placeholder { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.5); font-size: 18px; font-weight: 600; }
+.meeting-preview-action { width: 100%; }
+.meeting-preview-controls { display: flex; gap: 12px; justify-content: center; }
+.preview-control-button { display: flex; align-items: center; gap: 8px; height: 48px; padding: 0 20px; border: 0; border-radius: 24px; cursor: pointer; background: white; color: var(--ink); font: 600 14px/20px var(--font-manrope), sans-serif; box-shadow: 0 2px 8px rgba(0,0,0,0.08); transition: all 120ms ease; }
+.preview-control-button:hover { background: #f5f5f5; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+.preview-control-button[data-on="true"] { background: var(--ink); color: white; }
+.preview-control-label { font-weight: 600; }
+.field { display: grid; gap: 8px; }
+.field-label { font-size: .9rem; font-weight: 600; color: var(--ink); }
 .meeting-videos { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(260px,100%),1fr)); gap: 16px; }
 .meeting-controls { display: flex; flex-wrap: wrap; gap: 12px; margin: 20px 0; }
-.meeting-card fieldset { border: 1px solid #e5d8ce; border-radius: 12px; padding: 12px; margin: 12px 0; }
+.meeting-dock {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 24px 0;
+  padding: 14px 18px;
+  border-radius: 40px;
+  background: white;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  flex-wrap: wrap;
+}
+.meeting-dock-button {
+  min-height: 48px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 24px;
+  cursor: pointer;
+  background: #f5f5f5;
+  color: var(--ink);
+  font: 600 14px/20px var(--font-manrope), sans-serif;
+  transition: all 120ms ease;
+}
+.meeting-dock-button:hover {
+  background: #e8e8e8;
+  transform: translateY(-1px);
+}
+.meeting-dock-button[data-lk-enabled="false"],
+.meeting-dock-button[data-on="true"] {
+  background: var(--ink);
+  color: white;
+}
+.meeting-card fieldset { border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin: 12px 0; }
 .meeting-card h2 { font-size: 22px; font-weight: 700; margin-top: 24px; }
-.meeting-card .lk-participant-tile { min-height: 180px; }
-.meeting-card .lk-button { color: white; background: #a83c00; }
+.meeting-card .lk-participant-tile { min-height: 180px; border-radius: 16px; overflow: hidden; }
+.meeting-card .lk-button { color: var(--ink); background: var(--brand); }
+.group-meeting-card { max-width: 1440px; }
+.call-title h1 { margin-bottom: 14px; }
+.profile-grid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:18px 0; }
+.profile-tile { min-width:0;border:1px solid var(--line);border-radius:18px;overflow:hidden;background:#fff; }
+.profile-tile .lk-participant-tile { min-height:190px;aspect-ratio:16/10;border-radius:0; }
+.profile-tile .lk-participant-metadata,.profile-tile .lk-participant-name { display:none; }
+.profile-tile footer { display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px; }
+.profile-tile h3 { margin:0 0 4px;font-size:1rem; }
+.profile-tile footer p { margin:0;color:var(--muted);font-size:.76rem;line-height:1.35; }
+.meeting-card .connect-button { min-height:36px;padding:7px 13px;font-size:.78rem;flex:none; }
+.spotlight { display:flex;align-items:center;gap:18px;padding:16px 18px;margin:16px 0;border:1px solid var(--brand-tint);border-radius:16px;background:#fff5ed; }
+.spotlight h2 { margin:2px 0 0; }
+.spotlight>strong { margin-left:auto;font-size:1.8rem;font-variant-numeric:tabular-nums; }
+.host-controls { display:flex;align-items:center;justify-content:space-between;gap:16px;margin:16px 0;padding:12px 16px;border-radius:14px;background:var(--ink);color:white; }
+.host-controls button { background:#fff;color:var(--ink); }
+.call-notice { padding:10px 14px;border-radius:12px;background:#eef7ec;color:#285424; }
+.grid-pagination { display:flex;justify-content:center;align-items:center;gap:14px;margin:16px 0 24px; }
+.grid-pagination button { min-height:38px;padding:7px 15px; }
+.device-controls { display:grid;grid-template-columns:1fr 1fr;gap:12px; }
+@media(max-width:800px){.profile-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.device-controls{grid-template-columns:1fr}}
+@media(max-width:520px){.meeting-page{padding:12px}.meeting-card{padding:20px;margin:24px auto}.profile-grid{grid-template-columns:1fr}.profile-tile .lk-participant-tile{min-height:220px}.host-controls{align-items:flex-start;flex-direction:column}.host-controls button{width:100%}}
+
+/* Device pickers are shadcn triggers, not call-to-action buttons. */
+.meeting-card button[data-slot="select-trigger"] { background:#fff; color:var(--ink); border:1px solid #dadada; border-radius:10px; padding:10px 12px; width:100%; justify-content:space-between; gap:8px; font-weight:500; }
