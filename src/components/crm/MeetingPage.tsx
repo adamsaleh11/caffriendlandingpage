@@ -2,8 +2,9 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
-import { joinable, statusLabels, type AuditEvent, type Meeting } from '@/lib/contracts';
+import { calendarFailed, joinable, statusLabels, type AuditEvent, type Meeting } from '@/lib/contracts';
 import StateCard from './StateCard';
+import {DateTimePicker} from '@/components/ui/date-time-picker';
 
 const when = (value: string, timezone: string) => {
   const parsed = Date.parse(value);
@@ -26,6 +27,7 @@ export default function MeetingPage({workspaceId, meetingId}:{workspaceId:string
   const [error, setError] = useState<ApiError>();
   const [attempt, setAttempt] = useState(0);
   const [notice, setNotice] = useState('');
+  const [retrying, setRetrying] = useState(false);
   const [problem, setProblem] = useState('');
   const [dialog, setDialog] = useState<'reschedule'|'cancel'>();
   const [pending, setPending] = useState(false);
@@ -70,6 +72,21 @@ export default function MeetingPage({workspaceId, meetingId}:{workspaceId:string
     } catch (failure) {
       setProblem(failure instanceof ApiError ? failure.message : 'The invite link could not be copied. Try again.');
     }
+  }
+
+  /**
+   * Asks for the calendar event again. The meeting itself never needed it: the call is
+   * joinable either way, and this is only about the invitation landing in an inbox.
+   */
+  async function retryCalendar() {
+    setNotice(''); setProblem(''); setRetrying(true);
+    try {
+      await api<Meeting>(`${base}/retry`, {method:'POST', body:'{}'});
+      setNotice('Asking the calendar again. The call was joinable throughout.');
+      refresh();
+    } catch (failure) {
+      setProblem(failure instanceof ApiError ? failure.message : 'The calendar event could not be retried.');
+    } finally { setRetrying(false); }
   }
 
   async function reschedule() {
@@ -120,16 +137,37 @@ export default function MeetingPage({workspaceId, meetingId}:{workspaceId:string
         <dt>Starts</dt><dd>{when(meeting.startsAt, meeting.timezone)}</dd>
         <dt>Ends</dt><dd>{when(meeting.endsAt, meeting.timezone)}</dd>
         <dt>Timezone</dt><dd>{meeting.timezone}</dd>
+        {meeting.source && <><dt>Source</dt><dd>{meeting.source === 'CRM' ? 'Desktop' : 'Mobile'}</dd></>}
+        {meeting.venue && <><dt>Venue</dt><dd>{meeting.venue === 'CAFFRIEND_LIVEKIT' ? 'Caffriend call' : meeting.venue === 'PROVIDER_CONFERENCE' ? (meeting.provider === 'MICROSOFT' ? 'Microsoft Teams' : 'Google Meet') : meeting.venue === 'IN_PERSON' ? 'In person' : meeting.venue}</dd></>}
         {meeting.agenda && <><dt>Agenda</dt><dd>{meeting.agenda}</dd></>}
         {meeting.physicalLocation && <><dt>Location</dt><dd>{meeting.physicalLocation}</dd></>}
       </dl>
-      {meeting.errorCode && <p role="alert">The calendar reported: {meeting.errorCode}</p>}
+      {/*
+        A failed calendar event is not a failed meeting, and is not reported as one. The
+        call above is joinable; what could not be done is put in an inbox.
+      */}
+      {calendarFailed(meeting.status) && <div className="connection-gate" role="status">
+        <strong>The call is booked — only its calendar invitation failed</strong>
+        <p>Everyone can still join from here. {meeting.errorCode ? `The calendar reported: ${meeting.errorCode}.` : ''} You can ask the calendar again.</p>
+        <button type="button" disabled={retrying} onClick={retryCalendar}>
+          {retrying ? 'Asking the calendar…' : 'Retry calendar invitation'}</button>
+      </div>}
+      {meeting.errorCode && !calendarFailed(meeting.status) && <p role="alert">The calendar reported: {meeting.errorCode}</p>}
 
       {notice && <p role="status">{notice}</p>}
       {problem && <p role="alert">{problem}</p>}
 
       <div className="meeting-actions">
-        {meeting.joinUrl && joinable(meeting.status) && <a className="text-link" href={meeting.joinUrl}>Join on web</a>}
+        {/* Unified meeting flow: use venue field for join determination */}
+        {joinable(meeting.status) && meeting.venue === 'CAFFRIEND_LIVEKIT' && meeting.groupCallId
+          ? <a className="text-link" href={`/calls/${meeting.groupCallId}`}>Join on web</a>
+          : joinable(meeting.status) && meeting.venue === 'PROVIDER_CONFERENCE' && meeting.joinUrl
+            ? <a className="text-link" href={meeting.joinUrl} target="_blank" rel="noreferrer noopener">Join on web</a>
+            : joinable(meeting.status) && meeting.venue === 'IN_PERSON'
+              ? <span className="text-link" style={{color: '#666', cursor: 'default'}}>In person</span>
+              : joinable(meeting.status) && meeting.groupCallId
+                ? <a className="text-link" href={`/calls/${meeting.groupCallId}`}>Join on web</a>
+                : joinable(meeting.status) && meeting.joinUrl && <a className="text-link" href={meeting.joinUrl} target="_blank" rel="noreferrer noopener">Join on web</a>}
         <button onClick={copyLink} disabled={cancelled}>Copy invite link</button>
         <button ref={dialog === 'reschedule' ? opener : undefined} disabled={cancelled}
           onClick={event => {opener.current = event.currentTarget; setStart(''); setEnd(''); setProblem(''); setDialog('reschedule');}}>Reschedule</button>
@@ -140,8 +178,8 @@ export default function MeetingPage({workspaceId, meetingId}:{workspaceId:string
       {dialog === 'reschedule' && <div role="dialog" aria-modal="true" aria-label="Reschedule this meeting" className="meeting-dialog">
         <h2>Reschedule this meeting</h2>
         <p>Everyone invited is notified through {meeting.provider === 'MICROSOFT' ? 'Outlook' : 'Google'} Calendar. Times are in {meeting.timezone}.</p>
-        <label>New start<input type="datetime-local" value={start} onChange={event => setStart(event.target.value)} required/></label>
-        <label>New end<input type="datetime-local" value={end} onChange={event => setEnd(event.target.value)} required/></label>
+        <div className="field"><span className="field-label">New start</span><DateTimePicker aria-label="New start" value={start} onChange={setStart} required/></div>
+        <div className="field"><span className="field-label">New end</span><DateTimePicker aria-label="New end" value={end} onChange={setEnd} required/></div>
         <button disabled={pending || !start || !end} onClick={reschedule}>{pending ? 'Rescheduling…' : 'Confirm reschedule'}</button>
         <button className="secondary" onClick={close}>Keep current time</button>
       </div>}

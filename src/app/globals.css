@@ -3,6 +3,26 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* shadcn/ui tokens, tuned to the Caffriend warm palette */
+  --radius: 0.625rem;
+  --card: #ffffff;
+  --card-foreground: #1f150f;
+  --popover: #ffffff;
+  --popover-foreground: #1f150f;
+  --primary: #fa6404;
+  --primary-foreground: #ffffff;
+  --secondary: #fff1e7;
+  --secondary-foreground: #1f150f;
+  --muted: #f6f1ed;
+  --muted-foreground: #6b6b6b;
+  --accent: #ffe6d7;
+  --accent-foreground: #1f150f;
+  --destructive: #963b2b;
+  --destructive-foreground: #ffffff;
+  --border: #e3d7cd;
+  --input: #dadada;
+  --ring: #fa6404;
 }
 
 @theme inline {
@@ -10,6 +30,27 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-manrope), sans-serif;
   --font-mono: var(--font-geist-mono);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
 }
 
 /* @media (prefers-color-scheme: dark) {
@@ -24,3 +65,36 @@ body {
   color: var(--foreground);
   font-family: var(--font-manrope), sans-serif;
 }
+
+.invitation-page { min-height: 100dvh; display: grid; place-items: center; padding: 24px; background: #fff9f5; color: #1f150f; }
+.invitation-card { width: min(100%, 680px); padding: clamp(24px, 5vw, 48px); background: #fff; border: 1px solid #eaded4; border-radius: 20px; box-shadow: 0 20px 55px rgba(67,43,28,.12); }
+.invitation-card h1 { margin: 8px 0 14px; font-size: clamp(1.8rem, 5vw, 3rem); line-height: 1.05; }
+.invitation-mark { color: #fa6404; font-weight: 800; letter-spacing: .04em; }
+.invitation-card .eyebrow { margin-bottom: 0; color: #715f54; text-transform: uppercase; letter-spacing: .08em; font-size: .75rem; font-weight: 700; }
+.invitation-message { font-size: 1.05rem; line-height: 1.65; white-space: pre-wrap; }
+.invitation-facts { display: grid; grid-template-columns: auto 1fr; gap: 8px 20px; padding: 18px 0; border-block: 1px solid #eaded4; }
+.invitation-facts dt { font-weight: 700; }.invitation-facts dd { margin: 0; }
+.invitation-actions { display: flex; gap: 10px; margin: 22px 0; }.invitation-actions button { flex: 1; }
+.invitation-card button { min-height: 44px; border: 0; border-radius: 10px; padding: 10px 18px; background: #fa6404; color: #fff; font-weight: 700; cursor: pointer; }
+.invitation-card button.secondary { color: #49372c; background: #eee3da; }.invitation-card button.selected { outline: 3px solid #d6a988; outline-offset: 2px; }
+.invitation-card button:focus-visible { outline: 3px solid #195b9b; outline-offset: 3px; }.invitation-card button:disabled { opacity: .55; cursor: not-allowed; }
+.invitation-card fieldset { border: 0; padding: 0; margin: 0 0 18px; }.invitation-card legend { font-weight: 750; margin-bottom: 10px; }
+.invitation-slot { display: flex; gap: 12px; align-items: center; padding: 14px; margin: 8px 0; border: 1px solid #dfd1c6; border-radius: 12px; cursor: pointer; }
+.invitation-slot:has(input:checked) { border-color: #fa6404; background: #fff9f5; }.invitation-slot small { display: block; color: #715f54; margin-top: 3px; }
+.decision-button { width: 100%; margin-top: 8px; }
+
+/* The choice before the booking. Same card, same type, same orange button as
+   the rest of the invitation page; the guest option is a secondary button
+   because it is an equal outcome, not a way out. */
+.invitation-card .gate-option { width: 100%; margin-top: 10px; }
+.invitation-card .gate-google { display: flex; justify-content: center; margin: 22px 0 6px; min-height: 44px; }
+.invitation-card .gate-signin { display: grid; gap: 12px; margin: 18px 0 6px; }
+.invitation-card .gate-signin label { display: grid; gap: 6px; font-weight: 600; font-size: .9rem; }
+.invitation-card .gate-signin input { font: inherit; padding: 12px; border: 1px solid #dfd1c6; border-radius: 10px; background: #fff; color: #1f150f; }
+.invitation-card .gate-signin button { width: 100%; }
+.invitation-card .notice { margin-top: 18px; padding: 12px 14px; border-radius: 10px; background: #fff9f5; border: 1px solid #eaded4; color: #49372c; font-weight: 600; }
+@media (max-width: 520px) { .invitation-page { padding: 0; align-items: stretch; }.invitation-card { border-radius: 0; border-inline: 0; }.invitation-actions { flex-direction: column; } }
+
+/* The offscreen twin that lends a shadcn Select the browser's own `required`
+ * reporting — it must stay focusable, so it is moved rather than hidden. */
+.select-required-shim { position: absolute; width: 1px; height: 1px; padding: 0; margin: 0; border: 0; opacity: 0; pointer-events: none; }

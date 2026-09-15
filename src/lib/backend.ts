@@ -1,8 +1,13 @@
 import 'server-only';
 export class BackendError extends Error {
-  constructor(public status: number) {super('Backend request failed');}
+  constructor(public status: number, public body?: Record<string, unknown>) {super('Backend request failed');}
 }
-export async function backend<T>(path: string, options: {token?: string; method?: string; body?: unknown; key?: string} = {}): Promise<T> {
+/**
+ * A `FormData` body is sent as-is and the Content-Type header is left off, so
+ * `fetch` can set the multipart boundary. Only the avatar upload needs this.
+ */
+export async function backend<T>(path: string, options: {token?: string; method?: string; body?: unknown; key?: string; headers?:Record<string,string>} = {}): Promise<T> {
+  const multipart = options.body instanceof FormData;
   const origin = process.env.CAFFRIEND_API_ORIGIN;
   if (!origin) throw new BackendError(503);
   const url = new URL(origin);
@@ -11,11 +16,15 @@ export async function backend<T>(path: string, options: {token?: string; method?
   try {
     const response = await fetch(new URL(path, url.origin), {
       method: options.method || 'GET', cache:'no-store', redirect:'manual', signal:AbortSignal.timeout(15000),
-      headers: {Accept:'application/json', ...(options.token ? {Authorization:`Bearer ${options.token}`} : {}), ...(options.body ? {'Content-Type':'application/json'} : {}), ...(options.key ? {'Idempotency-Key':options.key} : {})},
-      body: options.body ? JSON.stringify(options.body) : undefined,
+      headers: {Accept:'application/json', ...(options.token ? {Authorization:`Bearer ${options.token}`} : {}), ...(options.body && !multipart ? {'Content-Type':'application/json'} : {}), ...(options.key ? {'Idempotency-Key':options.key} : {}), ...options.headers},
+      body: multipart ? options.body as FormData : options.body ? JSON.stringify(options.body) : undefined,
     });
     if (process.env.NODE_ENV !== 'production') console.log(`[backend] ${options.method || 'GET'} ${path} ${response.status} ${Math.round(performance.now() - started)}ms len=${response.headers.get('content-length')} enc=${response.headers.get('content-encoding')} te=${response.headers.get('transfer-encoding')}`);
-    if (!response.ok) throw new BackendError(response.status >= 300 && response.status < 400 ? 502 : response.status);
+    if (!response.ok) {
+      const status = response.status >= 300 && response.status < 400 ? 502 : response.status;
+      const body = await response.json().catch(() => undefined) as Record<string, unknown> | undefined;
+      throw new BackendError(status, body);
+    }
     const text = await response.text();
     if (process.env.NODE_ENV !== 'production') console.log(`[backend] ${path} body ${text.length}b after ${Math.round(performance.now() - started)}ms`);
     return JSON.parse(text) as T;

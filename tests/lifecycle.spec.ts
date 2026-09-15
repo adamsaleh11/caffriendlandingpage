@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import {chooseDate, chooseOption} from './controls';
 
 /**
  * The whole product, in one pass: an agent-discovered prospect is qualified,
@@ -57,46 +58,38 @@ test('a prospect an agent found becomes a relationship, and the history survives
   await expect(why).toContainText('prospect-brief.pdf');
   await expect(why).toContainText('page 4, paragraph 2');
 
-  // 5–11. The lifecycle, one recorded step at a time.
-  await advance(page, 'Qualify this person', 'Engineer on the platform team, hiring now.', 'Qualified');
+  // Outreach moves the person to Contacted. Booking itself is automatic.
   await advance(page, 'Record your outreach', 'Sent a short intro message on LinkedIn.', 'Contacted');
-  await advance(page, 'Record their reply', 'Replied — happy to chat next week.', 'Engaged');
-  await advance(page, 'Start scheduling', 'Looking for 30 minutes Tuesday or Wednesday.', 'Scheduling');
+  await page.goto(`/invitation/${'a'.repeat(43)}?intent=accept`);
+  await page.getByRole('radio').first().check();
+  await page.getByRole('button', {name:'Confirm time'}).click();
+  await expect(page.getByRole('heading', {name:'Your coffee chat is booked'})).toBeVisible();
+  await open(page, `/app/${w}/people/${personId}`);
+  await expect(page.locator('.engagement-detail header')).toContainText('Meeting booked');
 
-  // 12–13. Scheduling points at the one place meetings are actually made.
-  await expect(page.getByRole('note')).toContainText('Meetings are created on the');
-  await advance(page, 'Mark the meeting as booked', 'Agreed Tuesday at 2pm Toronto.', 'Meeting booked');
-
-  // 14–16. The booked meeting is the workspace's real meeting, joinable from here.
+  // The booked meeting is the workspace's real meeting, joinable from here.
   const meeting = page.locator('.meeting-row').first();
   await expect(meeting).toContainText('Coffee with Alex');
   await expect(meeting.getByRole('link', {name:'Join Coffee with Alex'})).toBeVisible();
 
-  // 17–19. The outcome is recorded in the user's own words.
+  // The outcome and follow-up are recorded together in the user's own words.
   await page.getByRole('button', {name:'Record how it went', exact:true}).click();
-  await page.getByLabel('Outcome').selectOption('Introduction promised');
+  await chooseOption(page.getByLabel('Outcome'), {label:'Introduction promised'});
   await page.getByRole('textbox', {name:/What came of the conversation/}).fill('They will introduce me to the hiring manager.');
-  await page.getByRole('button', {name:'Save', exact:true}).click();
-  await expect(page.getByRole('status').filter({hasText:'moved to Completed'})).toBeVisible();
-
-  // 20–21. A follow-up is a real task with a date, not a dead column.
-  await page.reload();
-  await page.getByRole('button', {name:'Set up the follow-up', exact:true}).click();
-  await page.getByRole('textbox', {name:/What did you commit to/}).fill('Sending my portfolio.');
   await page.getByLabel('What must happen next?').fill('Send portfolio to Alex');
-  await page.getByLabel('Due', {exact:true}).fill('2026-09-18');
+  await chooseDate(page.getByLabel('Due', {exact:true}), '2026-09-18');
   await page.getByRole('button', {name:'Save', exact:true}).click();
   await expect(page.getByRole('status').filter({hasText:'moved to Follow-up'})).toBeVisible();
 
   await page.reload();
   await expect(page.locator('.engagement-detail .tasks')).toContainText('Send portfolio to Alex');
 
-  // 22–23. Closing the follow-up leaves an ongoing relationship.
-  await advance(page, 'Close the follow-up', 'Sent it; they made the introduction.', 'Relationship');
+  // Closing the follow-up ends the five-step lifecycle.
+  await advance(page, 'Close the follow-up', 'Sent it; they made the introduction.', 'Closed');
 
   // 24. The whole history is still there, and agent work still reads as agent work.
   const timeline = page.locator('.timeline');
-  await expect(timeline).toContainText('Engineer on the platform team, hiring now.');
+  await expect(timeline).toContainText('Sent a short intro message on LinkedIn.');
   await expect(timeline).toContainText('Introduction promised: They will introduce me to the hiring manager.');
   await expect(timeline).toContainText('Send portfolio to Alex');
   await expect(timeline).toContainText('Coffee with Alex');
@@ -110,8 +103,8 @@ test('the pipeline reads as a table as well as a board', async ({page}) => {
   await expect(row).toContainText('Alex Rivera');
   await expect(row).toContainText('Notes Assistant');
   // The stage is changed from the table too, against the same records.
-  await row.getByLabel(/Stage for Alex Rivera/).selectOption({label:'Qualified'});
-  await expect(page.getByRole('status').filter({hasText:'Moved to Qualified'})).toBeVisible();
+  await chooseOption(row.getByLabel(/Stage for Alex Rivera/), {label:'Contacted'});
+  await expect(page.getByRole('status').filter({hasText:'Moved to Contacted'})).toBeVisible();
 });
 
 test('an overdue follow-up reaches the Inbox, and a stuck meeting with it', async ({page, request}) => {

@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
-import { getSession, clearSession, sameOrigin, setSealed, readSealed, hashState, pendingCookie, fiveMinutes, type PendingFlows } from '@/lib/session';
+import { getSession, clearSession, sameOrigin, setSealed, readSealed, hashState, pendingCookie, fiveMinutes, webOrigin, type PendingFlows } from '@/lib/session';
 import { backend, BackendError } from '@/lib/backend';
 import { isResource, project, projectPage } from '@/lib/crm-projection';
-import { writableResources, archivableResources, approvalActions } from '@/lib/contracts';
-import { uuidPattern, providers, meetingStatuses, type AuditEvent, type CalendarConnection, type Meeting, type MeetingStatus, type Provider, type Workspace } from '@/lib/contracts';
+import { writableResources, archivableResources, deletableResources, approvalActions } from '@/lib/contracts';
+import { bookingRequest, uuidPattern, providers, meetingStatuses, type AuditEvent, type CalendarConnection, type Meeting, type MeetingStatus, type Provider, type Workspace } from '@/lib/contracts';
+import { acceptedCalls } from '@/lib/app-projection';
 
 const json = (body: unknown, status = 200) => NextResponse.json(body, {status, headers:{'Cache-Control':'no-store','Referrer-Policy':'no-referrer'}});
 const failure = (error: unknown, message: string) => {
@@ -35,15 +36,41 @@ const idempotent = (request: Request) => {
   return key && uuidPattern.test(key) ? key : null;
 };
 
+function connectionProjection(row: Record<string, unknown>): CalendarConnection | null {
+  const id = typeof row.id === 'string' ? row.id : '';
+  const provider = providers.includes(row.provider as Provider) ? row.provider as Provider : null;
+  if (!id || !provider) return null;
+  const rawStatus = typeof row.status === 'string' ? row.status : '';
+  const status = rawStatus === 'CONNECTED' ? 'ACTIVE'
+    : rawStatus === 'ERROR' ? 'RECONNECT_REQUIRED'
+    : ['ACTIVE','SELECT_CALENDAR','RECONNECT_REQUIRED','DISCONNECTED'].includes(rawStatus) ? rawStatus as CalendarConnection['status']
+    : 'RECONNECT_REQUIRED';
+  const optional = (value: unknown) => typeof value === 'string' && value.trim() ? value.trim() : null;
+  return {
+    id,
+    provider,
+    status,
+    accountIdentifier: optional(row.accountIdentifier),
+    calendarId: optional(row.calendarId),
+    calendarName: optional(row.calendarName),
+    scopes: Array.isArray(row.scopes) ? row.scopes.filter((scope): scope is string => typeof scope === 'string') : null,
+    errorCode: optional(row.errorCode),
+  };
+}
+
 /** Follows every page so existing connections are never silently omitted. */
 async function allConnections(path: string, token: string) {
   const rows: CalendarConnection[] = [];
+  const seen = new Set<string>();
   let cursor: string | null = null;
   for (let request = 0; request < 20; request++) {
     const query = new URLSearchParams({limit:'100'});
     if (cursor) query.set('cursor', cursor);
     const body = await backend<{items:CalendarConnection[];nextCursor:string|null}>(`${path}?${query.toString()}`, {token});
-    rows.push(...(body.items ?? []));
+    for (const row of body.items ?? []) {
+      const projected = connectionProjection(row as Record<string, unknown>);
+      if (projected && !seen.has(projected.id)) { seen.add(projected.id); rows.push(projected); }
+    }
     cursor = body.nextCursor ?? null;
     if (!cursor) break;
   }
@@ -68,6 +95,7 @@ function meetingProjection(row: Record<string, unknown>): Meeting {
     agenda: optional(row.agenda),
     errorCode: optional(row.errorCode),
     engagementId: optional(row.engagementId),
+    groupCallId: optional(row.groupCallId),
   };
 }
 
@@ -123,6 +151,26 @@ export async function GET(request: Request, {params}:{params:Promise<{segments:s
       if (segments.length === 5 && segments[4] === 'calendars' && uuidPattern.test(segments[3]))
         return json(await backend(`${workspace}/calendar-connections/${segments[3]}/calendars`, {token:session.token}));
     }
+    if (workspace && segments[2] === 'mail-connections' && segments.length === 4 && uuidPattern.test(segments[3]))
+      return json(await backend(`${workspace}/mail-connections/${segments[3]}`, {token:session.token}));
+    /**
+     * Accepted coffee chats, as the native app reads them: type 1 is what is still
+     * ahead, type 2 is what has already happened. Both are needed here — a finished
+     * call from `/group-calls/mine` carries no participants, so the history feed is
+     * the only place the person you actually met is named.
+     *
+     * The path is workspace-shaped only because this is where the CRM reads live. The
+     * feed underneath it is not workspace-scoped and is not narrowed to one: it is the
+     * same list, for the same person, that their phone reads.
+     */
+    if (workspace && (segments[2] === 'upcoming-calls' || segments[2] === 'past-calls') && segments.length === 3) {
+      const type = segments[2] === 'past-calls' ? 2 : 1;
+      return json(acceptedCalls(await backend<unknown>(`/calendar/accepted-events/${type}`, {token:session.token}), session.user.id));
+    }
+    if (workspace && segments[2] === 'meeting-outreach' && segments.length === 3)
+      return json(await backend(`${workspace}/meeting-outreach`, {token:session.token}));
+    if (workspace && segments[2] === 'meeting-outreach' && segments.length === 4 && uuidPattern.test(segments[3]))
+      return json(await backend(`${workspace}/meeting-outreach/${segments[3]}`, {token:session.token}));
     if (workspace && segments[2] === 'meetings' && segments.length === 4 && uuidPattern.test(segments[3]))
       return json(meetingProjection(await backend<Record<string, unknown>>(`${workspace}/meetings/${segments[3]}`, {token:session.token})));
     if (workspace && segments[2] === 'meetings' && segments.length === 5 && segments[4] === 'audit' && uuidPattern.test(segments[3]))
@@ -173,15 +221,48 @@ export async function POST(request: Request, {params}:{params:Promise<{segments:
   const path = segments.join('/');
   const workspace = workspacePath(segments);
   const key = request.headers.get('x-idempotency-key');
-  const body = await request.json().catch(() => ({})) as Record<string, unknown>;
   try {
+    if (workspace && segments[2] === 'crm' && segments.length === 6 && segments[3] === 'prospects' && segments[4] === 'import' && segments[5] === 'parse') {
+      if (!key || !uuidPattern.test(key)) return json({error:'Request not allowed'}, 400);
+      const form = await request.formData();
+      const file = form.get('file');
+      if (!(file instanceof File)) return json({error:'Choose a CSV or Excel file.'}, 400);
+      return json(await backend(`${workspace}/crm/prospects/import/parse`, {token:session.token, method:'POST', body:form, key}));
+    }
+    const body = await request.json().catch(() => ({})) as Record<string, unknown>;
     if (path === 'workspaces') {
       const name = body.name;
       if (typeof name !== 'string' || !name.trim() || name.length > 200) return json({error:'Enter a workspace name of up to 200 characters.'}, 400);
       return json(await backend('/workspaces', {token:session.token, method:'POST', body:{name:name.trim()}}));
     }
+    /**
+     * Booking a coffee chat.
+     *
+     * A Caffriend call is booked with no calendar connection at all — the server stopped
+     * requiring one, and nothing here asks for one. The key is required and scoped per
+     * user, so the same submission replayed books one meeting rather than two.
+     */
+    if (workspace && segments[2] === 'meetings' && segments.length === 3) {
+      if (!key || !uuidPattern.test(key)) return json({error:'Request not allowed'}, 400);
+      const {value, problem} = bookingRequest({
+        purpose: String(body.purpose ?? ''), startsAt: String(body.startsAt ?? ''), endsAt: String(body.endsAt ?? ''),
+        timezone: String(body.timezone ?? ''), engagementId: String(body.engagementId ?? ''),
+        attendees: Array.isArray(body.attendees) ? body.attendees.map(String) : [],
+        venue: String(body.venue ?? ''),
+        connectionId: typeof body.connectionId === 'string' ? body.connectionId : undefined,
+      });
+      if (problem) return json({error:problem}, 400);
+      return json(meetingProjection(await backend<Record<string, unknown>>(`${workspace}/meetings`,
+        {token:session.token, method:'POST', body:value, key})));
+    }
     if (workspace && segments[2] === 'meetings' && segments.length === 5 && uuidPattern.test(segments[3])) {
       const target = `${workspace}/meetings/${segments[3]}`;
+      /**
+       * A failed calendar event is not a failed meeting: the call is real and joinable,
+       * and this is the separate way to ask for the calendar event again.
+       */
+      if (segments[4] === 'retry')
+        return json(meetingProjection(await backend<Record<string, unknown>>(`${target}/retry`, {token:session.token, method:'POST', body:{}})));
       if (segments[4] === 'join-link') {
         const result = await backend<{joinUrl?:unknown}>(`${target}/join-link`, {token:session.token, method:'POST', body:{}});
         // The invite URL is issued by the server; this boundary never assembles one from a meeting id.
@@ -213,9 +294,45 @@ export async function POST(request: Request, {params}:{params:Promise<{segments:
         return json(await allConnections(`${workspace}/calendar-connections`, session.token));
       }
     }
+    if (workspace && segments[2] === 'mail-connections' && segments.length === 5 && uuidPattern.test(segments[3])) {
+      if (segments[4] === 'connect') {
+        const result = await backend<Record<string, unknown>>(`${workspace}/mail-connections/${segments[3]}/connect`, {token:session.token, method:'POST', body:{}});
+        const target = oauthRedirectValue(result);
+        let redirect: URL;
+        try { redirect = new URL(target ?? ''); } catch { return mailUnavailable('invalid_redirect_body', result); }
+        const state = redirect.searchParams.get('state');
+        if (redirect.protocol !== 'https:' || !['accounts.google.com','login.microsoftonline.com'].includes(redirect.hostname) || !state)
+          return mailUnavailable('invalid_provider_redirect', {protocol:redirect.protocol, hostname:redirect.hostname, hasState:!!state});
+        const callback = normalizeProviderCallback(redirect.searchParams.get('redirect_uri'), '/crm-mail/callback/GOOGLE');
+        if (!callback) return mailUnavailable('invalid_callback_redirect', {redirectUri:redirect.searchParams.get('redirect_uri')});
+        redirect.searchParams.set('redirect_uri', callback);
+        // Remembered for the same reason the calendar flow remembers its own: the
+        // callback has to know which workspace to return the person to, and a
+        // replayed state must find nothing waiting for it.
+        const existing = (await readSealed<PendingFlows>(pendingCookie))?.flows ?? [];
+        const cutoff = Date.now() - fiveMinutes * 1000;
+        const flows = [...existing.filter(flow => flow.created > cutoff), {provider:'GOOGLE_MAIL', workspaceId:segments[1], stateHash: await hashState(state), created: Date.now()}].slice(-5);
+        await setSealed(pendingCookie, {flows}, fiveMinutes);
+        return json({redirect:redirect.toString()});
+      }
+      if (segments[4] === 'revoke')
+        return json(await backend(`${workspace}/mail-connections/${segments[3]}/revoke`, {token:session.token, method:'POST', body:{}}));
+    }
+    if (workspace && segments[2] === 'meeting-outreach') {
+      if (segments.length === 4 && segments[3] === 'preview')
+        return json(await backend(`${workspace}/meeting-outreach/preview`, {token:session.token, method:'POST', body}));
+      if (segments.length === 3) {
+        if (!key || !uuidPattern.test(key)) return json({error:'Request not allowed'}, 400);
+        return json(await backend(`${workspace}/meeting-outreach`, {token:session.token, method:'POST', body, key}));
+      }
+    }
     if (workspace && segments[2] === 'crm' && segments.length >= 4) {
       if (!key) return json({error:'Request not allowed'}, 400);
       const resource = segments[3];
+      if (resource === 'prospects' && segments.length === 5 && segments[4] === 'ingest') {
+        if (!uuidPattern.test(key)) return json({error:'Request not allowed'}, 400);
+        return json(await backend(`${workspace}/crm/prospects/ingest`, {token:session.token, method:'POST', body, key}));
+      }
       // Proposals are how an agent asks; they are never applied by this call.
       if (resource === 'proposals' && segments.length === 5 && (approvalActions as readonly string[]).includes(segments[4]))
         return json(await backend(`${workspace}/crm/proposals/${segments[4]}`, {token:session.token, method:'POST', body, key}));
@@ -263,12 +380,34 @@ export async function POST(request: Request, {params}:{params:Promise<{segments:
     }
     return json({error:'Not found'}, 404);
   } catch (error) {
+    if (error instanceof BackendError && path.includes('crm/prospects/')) {
+      const message = typeof error.body?.message === 'string' ? error.body.message : 'That contact import did not complete.';
+      return json({error:message}, error.status);
+    }
+    if (error instanceof BackendError && path.includes('meeting-outreach')) {
+      const code = typeof error.body?.code === 'string' ? error.body.code : undefined;
+      const message = typeof error.body?.message === 'string' ? error.body.message : 'The invitation was not sent.';
+      return json({error:message, ...(code ? {code} : {})}, error.status);
+    }
     const {status, body: problem} = failure(error, path === 'workspaces'
       ? 'Unable to create workspace. Refresh the workspace list before trying again.'
       : 'That did not complete. Check the connection below before trying again.');
     if (status === 401) await clearSession();
     return json(problem, status);
   }
+}
+
+function oauthRedirectValue(result: Record<string, unknown>) {
+  for (const key of ['redirect', 'url', 'authorizationUrl', 'authorization_url', 'authUrl', 'auth_url']) {
+    const value = result[key];
+    if (typeof value === 'string' && value) return value;
+  }
+  return null;
+}
+
+function mailUnavailable(reason: string, detail?: unknown) {
+  if (process.env.NODE_ENV !== 'production') console.warn('[crm-mail-connect]', reason, detail);
+  return json({error:'Mailbox authorization is unavailable right now.', ...(process.env.NODE_ENV !== 'production' ? {reason} : {})}, 502);
 }
 
 /** Records a bounded pending flow per state so parallel tabs cannot be confused for one another. */
@@ -279,12 +418,60 @@ async function connect(token: string, workspaceId: string, provider: string) {
   try { redirect = new URL(result.redirect ?? ''); } catch { return json({error:'This provider is unavailable right now.'}, 502); }
   const expected = provider === 'GOOGLE' ? 'accounts.google.com' : 'login.microsoftonline.com';
   const state = redirect.searchParams.get('state');
-  if (redirect.protocol !== 'https:' || redirect.hostname !== expected || !state) return json({error:'This provider is unavailable right now.'}, 502);
+  const callback = normalizeProviderCallback(redirect.searchParams.get('redirect_uri'), `/crm-calendar/callback/${provider}`);
+  if (redirect.protocol !== 'https:' || redirect.hostname !== expected || !state || !callback) return json({error:'This provider is unavailable right now.'}, 502);
+  redirect.searchParams.set('redirect_uri', callback);
   const existing = (await readSealed<PendingFlows>(pendingCookie))?.flows ?? [];
   const cutoff = Date.now() - fiveMinutes * 1000;
   const flows = [...existing.filter(flow => flow.created > cutoff), {provider, workspaceId, stateHash: await hashState(state), created: Date.now()}].slice(-5);
   await setSealed(pendingCookie, {flows}, fiveMinutes);
   return json({redirect: redirect.toString()});
+}
+
+function normalizeProviderCallback(value: string | null, expectedPath: string) {
+  if (!value) return null;
+  let callback: URL;
+  try { callback = new URL(value); } catch { return null; }
+  const frontend = new URL(expectedPath, webOrigin());
+  if (callback.toString() === frontend.toString()) return frontend.toString();
+
+  // The backend registers its mail callback under its own outreach path, which
+  // is spelled differently from the one this app answers on. Both name the same
+  // backend-owned callback, so both are recognised before rewriting; anything
+  // else is not the backend's redirect and is refused. The backend builds that
+  // callback against the web origin (so Google/Microsoft land the user back on
+  // this app), not against its own API origin, so both origins are accepted.
+  const backendPaths = expectedPath === '/crm-mail/callback/GOOGLE'
+    ? [expectedPath, '/crm-outreach/mail-callback/GOOGLE']
+    : [expectedPath];
+  if (![...backendCallbackOrigins(), frontend.origin].includes(callback.origin) || !sameProviderCallbackPath(callback.pathname, backendPaths) || callback.hash || callback.username || callback.password)
+    return null;
+  return frontend.toString();
+}
+
+function sameProviderCallbackPath(actual: string, allowed: string[]) {
+  const normalise = (path: string) => {
+    const pieces = path.split('/');
+    const provider = pieces.at(-1);
+    if (provider) pieces[pieces.length - 1] = provider.toUpperCase();
+    return pieces.join('/');
+  };
+  return allowed.includes(normalise(actual));
+}
+
+function backendCallbackOrigins() {
+  const origins = new Set<string>();
+  for (const value of [process.env.CAFFRIEND_API_ORIGIN, 'https://api.caffriend.com']) {
+    try {
+      if (!value) continue;
+      const origin = new URL(value);
+      origins.add(origin.origin);
+      if (origin.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(origin.hostname)) {
+        origins.add(new URL(`http://${origin.hostname === 'localhost' ? '127.0.0.1' : 'localhost'}${origin.port ? `:${origin.port}` : ''}`).origin);
+      }
+    } catch {}
+  }
+  return [...origins];
 }
 
 /** Shared preamble for every mutating verb below. */
@@ -354,6 +541,14 @@ export async function DELETE(request: Request, {params}:{params:Promise<{segment
   const segments = (await params).segments;
   const workspace = workspacePath(segments);
   try {
+    // Permanent deletion is distinct from archival and deliberately lives on a
+    // longer path so callers cannot hit it by accident.
+    if (workspace && segments[2] === 'crm' && segments.length === 6 && segments[5] === 'permanent' && uuidPattern.test(segments[4])) {
+      const resource = segments[3];
+      if (!isResource(resource) || !(deletableResources as readonly string[]).includes(resource))
+        return json({error:'This record cannot be deleted here.'}, 403);
+      return json(await backend(`${workspace}/crm/${resource}/${segments[4]}/permanent`, {token:session!.token, method:'DELETE', key}));
+    }
     // Archival, not deletion: the backend soft-archives and the record stays auditable.
     if (workspace && segments[2] === 'crm' && segments.length === 5 && uuidPattern.test(segments[4])) {
       const resource = segments[3];
@@ -363,7 +558,7 @@ export async function DELETE(request: Request, {params}:{params:Promise<{segment
     }
     return json({error:'Not found'}, 404);
   } catch (error) {
-    const {status, body: problem} = failure(error, 'That did not archive. Reload before trying again.');
+    const {status, body: problem} = failure(error, 'That did not delete. Reload before trying again.');
     if (status === 401) await clearSession();
     return json(problem, status);
   }

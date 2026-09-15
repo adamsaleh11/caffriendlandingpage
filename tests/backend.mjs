@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { Server as SocketServer } from 'socket.io';
 /** Generated rows get uuid-shaped ids, as the backend's randomUUID rows do. */
 let minted = 0;
 const uid = () => {
@@ -10,6 +11,58 @@ const connectionId = '33333333-3333-4333-8333-333333333333';
 const oauthConnectionId = '22222222-2222-4222-8222-222222222222';
 export const meetingId = '44444444-4444-4444-8444-444444444444';
 const inviteToken = 'a'.repeat(43);
+const guestCallSessionToken = 'guest-call-session-token-1234567890';
+export const groupCallId = 'cacacaca-caca-4aca-8aca-cacacacacaca';
+/** A coffee chat the viewer (`user-1`) hosts, as `GET /group-calls/:id/call-state` returns it. */
+const participant = (over) => ({
+  micOn:true, cameraOn:true, handRaised:false, screenShareOn:false,
+  connectionQuality:'unknown', activeSpeaker:false, pinned:false,
+  waitingStatus:'admitted', role:'participant', leftAt:null, ...over,
+});
+const baseCallState = () => ({
+  room: {id:groupCallId, title:'Breaking into product analytics', kind:'COFFEE_CHAT',
+         status:state.callEnded?'ENDED':'OPEN',
+         roomName:`cfgroup_${groupCallId}`, locked:false, muteOnEntry:true, micOpenOnArrival:true,
+         // The room was minted when the first person joined, which is when the call began.
+         roomProvisionedAt:new Date(Date.now()-125000).toISOString(),
+         endedAt:state.callEnded?new Date().toISOString():null,
+         aiNotesConsent:{'user-1':true}, hostId:state.viewerIsHost===false?'user-2':'user-1'},
+  participants: [
+    participant({id:'p1', userId:'user-1', displayName:'Alex Rivera', role:state.viewerIsHost===false?'participant':'host',
+                 // Everyone who leaves an ended call carries `leftAt`; reading its notes must still work.
+                 leftAt:state.callEnded?new Date().toISOString():null}),
+    participant({id:'p2', userId:'user-2', displayName:'Sarah Chen', jobTitle:'Senior Product Manager', company:'Notion', activeSpeaker:true, role:state.viewerIsHost===false?'host':'participant'}),
+    participant({id:'p3', userId:'user-3', displayName:'Maya Okafor', jobTitle:'Design Lead', company:'Figma', role:'co_host', micOn:false, handRaised:true}),
+  ],
+  waitingRoom: [
+    participant({id:'w1', userId:'user-4', displayName:'Alex Duarte', jobTitle:'PM', company:'Wealthsimple', waitingStatus:'waiting'}),
+    participant({id:'w2', userId:'user-5', displayName:'Nina Ostrov', jobTitle:'Analyst', company:'RBC', waitingStatus:'waiting'}),
+  ],
+  chat: {threadId:'thread-1', messages:[
+    {id:'m1', senderId:'user-3', message:'Before we start — you asked about the analytics ladder.', createdAt:'2026-09-13T09:12:00.000Z', mentions:[], resourceCards:[]},
+    {id:'m2', senderId:'user-2', message:'I will drop the levelling doc we use.', createdAt:'2026-09-13T09:13:00.000Z', mentions:[], resourceCards:[{title:'How Notion levels product analysts', url:'https://notion.so/levels'}]},
+  ]},
+  // `call-state` returns notes already filtered for the viewer: another member's
+  // private note is never in this payload, which is what the screen relies on.
+  notes: [
+    {id:'n1', authorUserId:'user-1', scope:'private', body:'Ask Maya for the portfolio invite.', createdAt:'2026-09-13T09:14:00.000Z'},
+    {id:'n2', authorUserId:'user-2', scope:'shared', body:'Levelling doc — Sarah shares after the call.', createdAt:'2026-09-13T09:15:00.000Z'},
+    {id:'n3', authorUserId:'user-2', scope:'ai', body:'Group agreed to reconvene in four weeks.', createdAt:'2026-09-13T09:16:00.000Z'},
+  ],
+  actionItems: [
+    {id:'a1', createdByUserId:'user-2', ownerUserId:'user-2', text:'Share the analytics levelling doc', dueAt:'2026-09-13T00:00:00.000Z', done:true},
+    {id:'a2', createdByUserId:'user-1', ownerUserId:'user-1', text:'Draft a one-page case study on the checkout experiment', dueAt:'2026-09-18T00:00:00.000Z', done:false},
+    {id:'a3', createdByUserId:'user-2', ownerUserId:'user-3', text:'Introduce Steve to Dev for the toolkit walkthrough', dueAt:null, done:false},
+  ],
+  agendaBlocks: [
+    {id:'g1', createdByUserId:'user-1', title:'Warm intros', prompt:null, sortOrder:0, completed:true},
+    {id:'g2', createdByUserId:'user-1', title:'What good analytics work looks like', prompt:'What would you do differently?', sortOrder:1, completed:false},
+    {id:'g3', createdByUserId:'user-1', title:'Concrete next steps', prompt:null, sortOrder:2, completed:false},
+  ],
+});
+
+export const eventId = '12121212-1212-4121-8121-121212121212';
+const baseEvent = () => ({id:eventId,kind:'EVENT',hostId:'host-1',title:'Builders over coffee',description:'A room for people turning thoughtful ideas into useful products.',startsAt:'2026-09-20T18:00:00.000Z',listed:true,priceCents:0,currency:'cad',status:'OPEN',micOpenOnArrival:false,spotlightTurnMs:60000,roomName:'PRIVATE_ROOM_SENTINEL'});
 const baseMeeting = () => ({
   id: meetingId, workspaceId: workspace.id,
   purpose:'Coffee with Alex', startsAt:'2026-09-12T19:00:00.000Z', endsAt:'2026-09-12T19:30:00.000Z',
@@ -31,17 +84,12 @@ const auditRows = () => [
 export const pipelineId = '66666666-6666-4666-8666-666666666666';
 /** The canonical lifecycle, as the stage rows a workspace actually holds. */
 export const stageA = '77777777-7777-4777-8777-777777777777'; // Prospect
-export const stageB = '88888888-8888-4888-8888-888888888888'; // Qualified
+export const stageB = '88888888-8888-4888-8888-888888888888'; // Contacted
 export const lifecycleStages = [
   {id: stageA, name: 'Prospect', terminalOutcome: null},
-  {id: stageB, name: 'Qualified', terminalOutcome: null},
-  {id: '77777777-7777-4777-8777-000000000002', name: 'Contacted', terminalOutcome: null},
-  {id: '77777777-7777-4777-8777-000000000003', name: 'Engaged', terminalOutcome: null},
-  {id: '77777777-7777-4777-8777-000000000004', name: 'Scheduling', terminalOutcome: null},
+  {id: stageB, name: 'Contacted', terminalOutcome: null},
   {id: '77777777-7777-4777-8777-000000000005', name: 'Meeting booked', terminalOutcome: null},
-  {id: '77777777-7777-4777-8777-000000000006', name: 'Completed', terminalOutcome: null},
   {id: '77777777-7777-4777-8777-000000000007', name: 'Follow-up', terminalOutcome: null},
-  {id: '77777777-7777-4777-8777-000000000008', name: 'Relationship', terminalOutcome: null},
   {id: '77777777-7777-4777-8777-000000000009', name: 'Closed', terminalOutcome: 'CLOSED'},
 ];
 export const engagementId = '99999999-9999-4999-8999-999999999999';
@@ -73,13 +121,19 @@ const clone = value => JSON.parse(JSON.stringify(value));
 const defaultConnections = () => state.connections ?? [];
 const defaultStatus = () => state.status ?? {GOOGLE:{configured:true},MICROSOFT:{configured:true}};
 
-http.createServer(async (req,res) => {
+const server = http.createServer(async (req,res) => {
   const url = new URL(req.url, 'http://localhost');
   let raw = ''; for await (const chunk of req) raw += chunk;
-  const body = raw ? JSON.parse(raw) : {};
+  const multipart = String(req.headers['content-type'] ?? '').includes('multipart/form-data');
+  const body = raw && !multipart ? JSON.parse(raw) : {};
   const send = (data,status=200) => {res.writeHead(status, {'Content-Type':'application/json'});res.end(JSON.stringify(data));};
   const path = url.pathname;
   if(path === '/__state') { if(req.method==='POST'){state=clone(body);state.calls=[];} return send(state); }
+  /** Stands in for another participant's client: broadcasts one `call.*` event. */
+  if(path === '__emit' || path === '/__emit') {
+    calls?.to(groupCallId).emit(body.event, {groupCallId, timestamp:Date.now(), ...body.payload});
+    return send({emitted:body.event});
+  }
   if(path === '/meetings/join/token') {
     if(state.allowJoin) return send({token:'test-livekit-token',url:'wss://livekit.test'});
     if(state.joinClosed) return send({message:'Meeting is not open for joining'},403);
@@ -88,7 +142,154 @@ http.createServer(async (req,res) => {
   if(path === '/meetings/join/resolve') {
     if(state.invitationUnavailable || body.token !== 'a'.repeat(43)) return send({message:'Invitation unavailable'},404);
     if(state.meetingFailure) return send({message:'PRIVATE_CRM_SENTINEL'},503);
-    return send({purpose:'Coffee with Alex',startsAt:'2026-09-12T19:00:00.000Z',endsAt:'2026-09-12T19:30:00.000Z',timezone:'America/Toronto',requiresDisplayName:true,requiresTermsAcceptance:true,workspaceId:'PRIVATE_CRM_SENTINEL',notes:'PRIVATE_CRM_SENTINEL'});
+    return send({purpose:'Coffee with Alex',startsAt:'2026-09-12T19:00:00.000Z',endsAt:'2026-09-12T19:30:00.000Z',timezone:'America/Toronto',requiresDisplayName:true,requiresTermsAcceptance:true,groupCallId:state.meetingGroupCall?groupCallId:null,platformSupported:true,workspaceId:'PRIVATE_CRM_SENTINEL',notes:'PRIVATE_CRM_SENTINEL'});
+  }
+  /**
+   * Every call the caller was in. Declared before the `:id` routes so "mine" is not
+   * parsed as a call id — the same ordering the real controller uses.
+   */
+  if(path === '/group-calls/mine' && req.method === 'GET') {
+    state.callState ??= baseCallState();
+    const room = state.callState.room;
+    const mine = room.hostId === 'user-1' ||
+      state.callState.participants.some(row => row.userId === 'user-1' && row.waitingStatus === 'admitted');
+    return send(mine ? [{
+      id: room.id, title: room.title, kind: room.kind, status: room.status, hostId: room.hostId,
+      startsAt: '2026-09-13T09:00:00.000Z', endedAt: room.endedAt ?? null,
+      meetingId: meetingId, createdAt: '2026-09-05T14:02:00.000Z',
+    }] : []);
+  }
+  const callState = path.match(/^\/group-calls\/([0-9a-f-]{36})\/call-state$/i);
+  if(callState && req.method === 'GET') {
+    if(callState[1] !== groupCallId) return send({message:'Not found'},404);
+    if(state.callForbidden) return send({message:'Forbidden'},403);
+    state.callState ??= baseCallState();
+    // `mustMemberEver`: ever admitted, or the host. `leftAt` and `status` are ignored,
+    // so someone who left an ended call can still read what it produced.
+    const call = state.callState;
+    const sessionMember = req.headers['x-caffriend-call-session'] === guestCallSessionToken;
+    const everMember = sessionMember || call.room.hostId === 'user-1' ||
+      call.participants.concat(call.waitingRoom).some(row => row.userId === 'user-1' && row.waitingStatus === 'admitted');
+    if(!everMember) return send({message:'Forbidden'},403);
+    return send(call);
+  }
+  const waitingAction = path.match(/^\/group-calls\/([0-9a-f-]{36})\/waiting-room\/([a-z0-9-]+)\/(admit|decline)$/i);
+  if(waitingAction && req.method === 'POST') {
+    state.callState ??= baseCallState();
+    const call = state.callState;
+    if(call.room.hostId !== 'user-1' && !call.participants.some(row=>row.userId==='user-1'&&row.role==='co_host')) return send({message:'Forbidden'},403);
+    if(state.admitFails) return send({message:'Forbidden'},403);
+    const index = call.waitingRoom.findIndex(row => row.id === waitingAction[2]);
+    if(index < 0) return send({message:'Not found'},404);
+    const [row] = call.waitingRoom.splice(index,1);
+    if(waitingAction[3] === 'admit') {
+      row.waitingStatus='admitted'; row.leftAt=null;
+      call.participants.push(row);
+    } else { row.waitingStatus='declined'; row.leftAt=new Date().toISOString(); }
+    return send(row);
+  }
+  const chatSend = path.match(/^\/group-calls\/([0-9a-f-]{36})\/call-chat\/messages$/i);
+  if(chatSend && req.method === 'POST') {
+    state.callState ??= baseCallState();
+    if(state.chatFails) return send({message:'Forbidden'},403);
+    const row = {id:`m${state.callState.chat.messages.length+1}`, senderId:'user-1', message:body.message ?? '',
+                 createdAt:new Date().toISOString(), mentions:body.mentions ?? [], resourceCards:body.resourceCards ?? [],
+                 replyToMessageId:body.replyToMessageId ?? null};
+    state.callState.chat.messages.push(row);
+    return send(row);
+  }
+  const collection = path.match(/^\/group-calls\/([0-9a-f-]{36})\/(notes|action-items|agenda-blocks)$/i);
+  if(collection && req.method === 'POST') {
+    state.callState ??= baseCallState();
+    const call = state.callState;
+    if(collection[2] === 'notes') {
+      if(!['private','shared','ai'].includes(body.scope)) return send({message:'Unsupported note scope'},400);
+      const row = {id:`n${call.notes.length+1}`, authorUserId:'user-1', scope:body.scope, body:body.body ?? '', createdAt:new Date().toISOString()};
+      call.notes.push(row); return send(row);
+    }
+    if(collection[2] === 'action-items') {
+      const row = {id:`a${call.actionItems.length+1}`, createdByUserId:'user-1', ownerUserId:body.ownerUserId ?? 'user-1', text:body.text ?? '', dueAt:body.dueAt ?? null, done:false};
+      call.actionItems.push(row); return send(row);
+    }
+    const row = {id:`g${call.agendaBlocks.length+1}`, createdByUserId:'user-1', title:body.title ?? '', prompt:body.prompt ?? null, sortOrder:body.sortOrder ?? call.agendaBlocks.length, completed:false};
+    call.agendaBlocks.push(row); return send(row);
+  }
+  const actionUpdate = path.match(/^\/group-calls\/([0-9a-f-]{36})\/action-items\/([a-z0-9-]+)$/i);
+  if(actionUpdate && req.method === 'POST') {
+    state.callState ??= baseCallState();
+    if(state.actionFails) return send({message:'Forbidden'},403);
+    const row = state.callState.actionItems.find(item => item.id === actionUpdate[2]);
+    if(!row) return send({message:'Not found'},404);
+    Object.assign(row, {...(typeof body.done==='boolean'?{done:body.done}:{}), ...(body.text?{text:body.text}:{}), ...(body.ownerUserId?{ownerUserId:body.ownerUserId}:{}), ...('dueAt' in body?{dueAt:body.dueAt}:{})});
+    return send(row);
+  }
+  const controls = path.match(/^\/group-calls\/([0-9a-f-]{36})\/call-controls$/i);
+  if(controls && req.method === 'POST') {
+    state.callState ??= baseCallState();
+    const call = state.callState;
+    if(call.room.hostId !== 'user-1' && !call.participants.some(row=>row.userId==='user-1'&&row.role==='co_host')) return send({message:'Forbidden'},403);
+    if(state.controlsFail) return send({message:'Forbidden'},403);
+    if(typeof body.locked === 'boolean') call.room.locked = body.locked;
+    if(typeof body.muteOnEntry === 'boolean') call.room.muteOnEntry = body.muteOnEntry;
+    if(typeof body.aiNotesConsent === 'boolean') call.room.aiNotesConsent = {...call.room.aiNotesConsent, 'user-1':body.aiNotesConsent};
+    return send(call.room);
+  }
+  const participantAction = path.match(/^\/group-calls\/([0-9a-f-]{36})\/participants\/([a-z0-9-]+)\/(state|remove)$/i);
+  if(participantAction && req.method === 'POST') {
+    state.callState ??= baseCallState();
+    const call = state.callState;
+    const index = call.participants.findIndex(row => row.id === participantAction[2]);
+    if(index < 0) return send({message:'Not found'},404);
+    const row = call.participants[index];
+    const moderator = call.room.hostId === 'user-1' || call.participants.some(p=>p.userId==='user-1'&&p.role==='co_host');
+    if(participantAction[3] === 'remove') {
+      if(!moderator || state.removeFails) return send({message:'Forbidden'},403);
+      call.participants.splice(index,1);
+      return send({...row, waitingStatus:'removed', leftAt:new Date().toISOString()});
+    }
+    if(row.userId !== 'user-1' && !moderator) return send({message:'Forbidden'},403);
+    if(body.role !== undefined && !moderator) return send({message:'Forbidden'},403);
+    if(state.participantStateFails) return send({message:'Forbidden'},403);
+    for(const key of ['micOn','cameraOn','handRaised','screenShareOn','activeSpeaker','pinned']) if(typeof body[key]==='boolean') row[key]=body[key];
+    if(typeof body.connectionQuality==='string') row.connectionQuality=body.connectionQuality;
+    if(typeof body.role==='string') row.role=body.role;
+    return send(row);
+  }
+  const callJoin = path.match(/^\/group-calls\/([0-9a-f-]{36})\/join$/i);
+  if(callJoin && callJoin[1] === groupCallId && req.method === 'POST') {
+    if(state.joinRefused) return send({message:'Forbidden'},403);
+    return send({token:'test-call-livekit-token', url:state.livekitUrl ?? 'wss://livekit.test', participantId:'p1', callSessionToken:body.invitationToken?guestCallSessionToken:null});
+  }
+  if(path === '/group-calls/events' && req.method === 'GET') return send(state.events ?? [baseEvent()]);
+  const eventResolve = path.match(/^\/group-calls\/([0-9a-f-]{36})\/resolve$/i);
+  if(eventResolve) {
+    const event=(state.events??[baseEvent()]).find(row=>row.id===eventResolve[1]);
+    return event?send({id:event.id,kind:'EVENT',title:event.title,description:event.description,startsAt:event.startsAt,micOpenOnArrival:false}):send({message:'Not found'},404);
+  }
+  if(path === `/group-calls/${eventId}/spotlight`) return send(state.spotlight ?? {holderId:null,remainingMs:0,reconnecting:false,finished:true});
+  if(path === '/meeting-invitations/resolve') {
+    if(state.outreachUnavailable || body.token !== inviteToken) return send({message:'Invitation unavailable'},404);
+    return send({purpose:'Coffee chat about the platform team',message:'Would love to hear about your team.',timezone:'America/Toronto',conference:'Caffriend call',recipientEmail:'guest@example.com',decision:state.outreachDecision??'PENDING',sender:{displayName:'Alex Rivera',jobTitle:'Founder'},slots:[{id:'slot-1',startsAt:'2026-09-20T15:00:00.000Z',endsAt:'2026-09-20T15:30:00.000Z'},{id:'slot-2',startsAt:'2026-09-21T16:00:00.000Z',endsAt:'2026-09-21T16:30:00.000Z'}]});
+  }
+  if(path === '/meeting-invitations/decide') {
+    if(body.token !== inviteToken) return send({message:'Invitation unavailable'},404);
+    if(body.decision==='ACCEPTED'&&!body.slotId)return send({message:'Invalid slotId'},400);
+    if(body.decision==='ACCEPTED'&&body.calendarUpdateRecipients!=='ALL')return send({message:'Calendar updates must be sent to both participants'},400);
+    state.outreachDecision=body.decision;
+    if(body.decision==='ACCEPTED') {
+      state.crm ??= crmDefaults();
+      const booked=(state.stages??lifecycleStages).find(row=>row.name.toLowerCase()==='meeting booked');
+      const engagement=state.crm.engagements.find(row=>row.id===engagementId);
+      if(booked&&engagement) engagement.stageId=booked.id;
+    }
+    return send({purpose:'Coffee chat about the platform team',message:'Would love to hear about your team.',timezone:'America/Toronto',conference:'Caffriend call',decision:body.decision,sender:{displayName:'Alex Rivera'},slots:[]});
+  }
+  if(path==='/user/social/google') {
+    if(state.googleFails) return send({message:'Invalid Google token'},401);
+    // The real endpoint signs in or creates; `isNew` says which happened.
+    state.googleSignIns=(state.googleSignIns??0)+1;
+    const googleToken='eyJhbGciOiJIUzI1NiJ9.'+Buffer.from(JSON.stringify({sub:'user-guest',exp:Math.floor(Date.now()/1000)+3600})).toString('base64url')+'.test-signature';
+    return send({success:true,data:{token:googleToken,user:{id:'user-guest',firstName:'Sam',email:'guest@example.com',isNew:state.googleExisting!==true}}});
   }
   if(path==='/user/login') {
     if(body.password !== 'correct') return send({message:'Password is incorrect'},400);
@@ -100,6 +301,20 @@ http.createServer(async (req,res) => {
   if(state.workspacesFail && path==='/workspaces') return send({message:'Unavailable'},503);
   if(!req.headers.authorization) return send({},401);
   (state.calls ??= []).push({method:req.method,path,key:req.headers['idempotency-key'] ?? null,body});
+
+  if(path==='/group-calls' && req.method==='POST') {
+    const created={...baseEvent(),id:uid(),hostId:'user-1',title:body.title,description:body.description??null,startsAt:body.startsAt,listed:body.listed===true,priceCents:body.priceCents??0,spotlightTurnMs:body.spotlightTurnMs??60000};
+    state.events=[...(state.events??[baseEvent()]),created];return send(created);
+  }
+  if(path === `/group-calls/${eventId}/register`) {state.registered=true;return send({participantId:'participant-me'});}
+  if(path === `/group-calls/${eventId}/join`) {if(!state.registered)return send({message:'Registration required'},403);return send({token:'test-event-livekit-token',url:'wss://livekit.test'});}
+  if(path === `/group-calls/${eventId}/roster`) return send(state.roster??[
+    {participantId:'participant-jordan',userId:'u-2',displayName:'Jordan Patel',isGuest:false,canConnect:true,reasons:['Both in fintech','Both in Toronto']},
+    {participantId:'participant-sam',userId:'u-3',displayName:'Sam Okonkwo',isGuest:false,canConnect:true,reasons:['Both studied at UofT']},
+  ]);
+  if(path === `/group-calls/${eventId}/connect`) return send({state:'saved',mutual:false,threadId:null,matcherId:null});
+  if(path === `/group-calls/${eventId}/spotlight/start`) {state.spotlight={holderId:'participant-jordan',remainingMs:60000,reconnecting:false,finished:false};return send(state.spotlight);}
+  if(path === `/group-calls/${eventId}/end`) return send({threadId:null});
 
   if(path==='/workspaces') { if(req.method==='POST'){state.workspaces=[{...workspace,name:body.name}];return send(state.workspaces[0]);} return send(state.workspaces ?? [workspace]); }
   if(path===`/workspaces/${workspace.id}`) return send(workspace);
@@ -157,11 +372,24 @@ http.createServer(async (req,res) => {
     const consumed = start + items.length;
     return send({items, nextCursor: consumed < rows.length ? items[items.length-1].id : null});
   }
+  const mailBase=`/workspaces/${workspace.id}/mail-connections`;
+  if(path===`${mailBase}/${connectionId}`) return send({connectionId,provider:'GOOGLE',canSend:state.mailConnected!==false,senderAddress:state.mailConnected===false?undefined:'alex@example.com',grantedScopes:state.mailConnected===false?[]:['https://www.googleapis.com/auth/gmail.send'],mailStatus:state.mailConnected===false?'NOT_CONNECTED':'ACTIVE'});
+  if(path===`${mailBase}/${connectionId}/connect`) {
+    const redirectUri = state.mailRedirectUri ?? 'http://localhost:3100/crm-mail/callback/GOOGLE';
+    const redirect = `https://accounts.google.com/o/oauth2/v2/auth?client_id=test&state=state-GOOGLE-MAIL&redirect_uri=${encodeURIComponent(redirectUri)}`;
+    return send(state.mailRedirectField === 'url' ? {url: redirect} : {redirect});
+  }
+  if(path===`${mailBase}/${connectionId}/revoke`){state.mailConnected=false;return send({connectionId,canSend:false,mailStatus:'REVOKED'});}
+  if(path==='/crm-outreach/mail-callback/GOOGLE'){state.mailConnected=true;return send({connectionId,provider:'GOOGLE',canSend:true,senderAddress:'alex@example.com',grantedScopes:['https://www.googleapis.com/auth/gmail.send'],mailStatus:'ACTIVE'});}
+  const outreachBase=`/workspaces/${workspace.id}/meeting-outreach`;
+  if(path===`${outreachBase}/preview`){if(state.conferenceUnsupported)return send({code:'CONFERENCE_UNSUPPORTED',message:'This calendar cannot create Google Meet. Choose a Caffriend call.'},400);return send({subject:`Coffee chat with Alex Rivera: ${body.purpose}`,html:`<main><h1>${body.purpose}</h1><p>${body.message}</p></main>`,text:`${body.purpose}\n${body.message}`,from:'alex@example.com',to:body.recipientEmail,slots:body.slots,previewToken:'preview-not-a-live-invitation'});}
+  if(path===outreachBase){if(!req.headers['idempotency-key'])return send({message:'Idempotency-Key required'},400);return send({id:'abababab-abab-4bab-8bab-abababababab',sendStatus:'SENT',from:'alex@example.com',to:body.recipientEmail,decision:'PENDING'});}
   if(path.endsWith('/connect')) {
     const provider = path.split('/').at(-2);
     if(state.connectFails) return send({message:'Unavailable'},503);
     const host = provider==='GOOGLE' ? 'accounts.google.com/o/oauth2/v2/auth' : 'login.microsoftonline.com/common/oauth2/v2.0/authorize';
-    return send({redirect:`https://${host}?client_id=test&state=state-${provider}&redirect_uri=http%3A%2F%2Flocalhost%3A3100%2Fcrm-calendar%2Fcallback%2F${provider}`});
+    const redirectUri = state.calendarRedirectUri ?? `http://localhost:3100/crm-calendar/callback/${provider}`;
+    return send({redirect:`https://${host}?client_id=test&state=state-${provider}&redirect_uri=${encodeURIComponent(redirectUri)}`});
   }
   if(path===`${calendarBase}/${connectionId}/calendars`) return send([{id:'primary',name:'Alex — Work',writable:true,supportsConference:true},{id:'readonly',name:'Holidays',writable:false,supportsConference:false}]);
   if(path===`${calendarBase}/${connectionId}/select`) {
@@ -181,7 +409,35 @@ http.createServer(async (req,res) => {
     return send({workspaceId:workspace.id,connectionId,status:'SELECT_CALENDAR'});
   }
   // ---- consumer surface: same endpoints the native app calls ----
-  if(path==='/user/my-profile') return send({data:{id:'user-1',firstName:'Alex',lastName:'Rivera',email:'alex@example.com',role:'mentee',image_url:null,bio:'Building things.'}});
+  // The signed-in person's own record, mutated by the profile editor below.
+  state.me ??= {id:'user-1',firstName:'Alex',lastName:'Rivera',email:'alex@example.com',role:'mentee',image_url:null,bio:'Building things.',
+    media:[{id:'photo-1',url:'https://cdn.example.com/alex-1.jpg'}],weeklyAvailability:[]};
+  if(path==='/user/my-profile') return send({data:state.me});
+  if(path==='/user/profile' && req.method==='PUT') {
+    if(state.saveFails) return send({message:'Save failed'},503);
+    state.me={...state.me,...body};
+    return send({data:state.me});
+  }
+  if(path==='/user/role' && req.method==='PUT') { state.me={...state.me,role:String(body.role).toLowerCase()}; return send({data:state.me}); }
+  if(path==='/media/upload' && req.method==='POST') {
+    state.me.media=[...(state.me.media??[]),{id:`photo-${state.me.media.length+1}`,url:`https://cdn.example.com/alex-${state.me.media.length+1}.jpg`}];
+    return send({id:'photo-new',url:'https://cdn.example.com/alex-new.jpg'});
+  }
+  if(path.startsWith('/media/') && req.method==='DELETE') {
+    const id=path.split('/').at(-1);
+    state.me.media=(state.me.media??[]).filter(m=>m.id!==id);
+    return send({message:'Deleted'});
+  }
+  if(path.startsWith('/media/user/')) return send([]);
+  if(path.startsWith('/basic-details/answers/')) {
+    const id=path.split('/').at(-1);
+    if(id!=='u-2') return send({basicDetails:[]});
+    return send({basicDetails:[{answer:'Career advice',questionType:'COFFEE_CHAT_TYPE'}],
+      promptsBlocks:[{question:'Best advice you ever got?',answer:'Ship it, then listen.'}],
+      workExperiences:[{position:'Staff Engineer',company:'Acme',startDate:'2022-01-01',endDate:null,isCurrentlyWorking:true}],
+      projects:[{id:'p-1',description:'A fintech ledger',projectLink:'https://acme.test/ledger',imageUrl:null}],
+      avgRating:4.6,matches:12,coffeeChat:7});
+  }
   if(path==='/match/suggestions') {
     const rows=[
       {userId:'u-2',firstName:'Jordan',lastName:'Patel',role:'mentor',score:0.9,avgRating:4.6,matches:12,image_url:null},
@@ -197,6 +453,9 @@ http.createServer(async (req,res) => {
       'u-2':{id:'u-2',firstName:'Jordan',lastName:'Patel',job_title:'Staff Engineer',industry:'Fintech',company:'Acme',university:'UofT',location:'Toronto',role:'mentor',pronouns:'she/her',linkedInUrl:'https://linkedin.com/in/jordan',websiteUrl:null,avgRating:4.6,matches:12,image_url:null,
              email:'PRIVATE_CONTACT_SENTINEL',phoneNumber:'PRIVATE_CONTACT_SENTINEL',rate:'PRIVATE_CONTACT_SENTINEL',subscription:'PRIVATE_CONTACT_SENTINEL'},
       'u-3':{id:'u-3',firstName:'Sam',lastName:'Okonkwo',job_title:'Product Designer',industry:'Healthcare',company:'Beta Health',university:null,location:'Vancouver',role:'mentee',pronouns:null,avgRating:4.1,matches:3,image_url:null},
+      // The people seated in the call fixture, so a profile opened from the room resolves.
+      'user-2':{id:'user-2',firstName:'Sarah',lastName:'Chen',job_title:'Senior Product Manager',industry:'Software',company:'Notion',university:'University of Toronto',location:'Toronto',role:'mentor',pronouns:'she/her',avgRating:4.9,matches:21,image_url:null},
+      'user-3':{id:'user-3',firstName:'Maya',lastName:'Okafor',job_title:'Design Lead',industry:'Software',company:'Figma',university:'Central Saint Martins',location:'London',role:'mentor',pronouns:'she/her',avgRating:4.8,matches:14,image_url:null},
     };
     return send(people[id] ? {user:people[id]} : {message:'Not found'},people[id]?200:404);
   }
@@ -213,8 +472,20 @@ http.createServer(async (req,res) => {
   });
   if(path.startsWith('/calendar/accepted-events/')) return send([
     {id:'e-1',startDate:'2026-09-20T15:00:00.000Z',endDate:'2026-09-20T15:30:00.000Z',format:'Video call',notes:'Intro chat',
-     isPaid:true,amount:0,messageThreadId:'t-1',
+     isPaid:true,amount:0,messageThreadId:'t-1',source:'CRM',venue:'CAFFRIEND_LIVEKIT',joinUrl:`https://caffriend.com/meet/${inviteToken}`,timezone:'America/Toronto',purpose:'Coffee with Jordan',meetingId,workspaceId:workspace.id,engagementId,counterpartName:'Jordan Patel',status:'BOOKED',groupCallId,
      booker:{id:'u-2',firstName:'Jordan',lastName:'Patel',image_url:null},
+     targetUser:{id:'user-1',firstName:'Alex',lastName:'Rivera',image_url:null}},
+    // A Caffriend call that already happened: its room still holds the notes.
+    {id:'e-2',startDate:'2026-09-06T15:00:00.000Z',endDate:'2026-09-06T15:30:00.000Z',format:'Video call',
+     isPaid:true,amount:0,source:'CAFFRIEND',venue:'CAFFRIEND_LIVEKIT',timezone:'America/Toronto',
+     purpose:'Coffee with Priya',workspaceId:workspace.id,counterpartName:'Priya Raman',status:'COMPLETED',groupCallId,
+     booker:{id:'u-3',firstName:'Priya',lastName:'Raman',image_url:null},
+     targetUser:{id:'user-1',firstName:'Alex',lastName:'Rivera',image_url:null}},
+    // Not a Caffriend call — it belongs to the calendar, not to this list.
+    {id:'e-3',startDate:'2026-09-22T15:00:00.000Z',endDate:'2026-09-22T16:00:00.000Z',format:'In person',
+     isPaid:true,amount:0,source:'CRM',venue:'IN_PERSON',physicalLocation:'Head office',timezone:'America/Toronto',
+     purpose:'Quarterly review',workspaceId:workspace.id,counterpartName:'Dana Fox',status:'BOOKED',
+     booker:{id:'u-4',firstName:'Dana',lastName:'Fox',image_url:null},
      targetUser:{id:'user-1',firstName:'Alex',lastName:'Rivera',image_url:null}},
   ]);
   if(path==='/leaderboard') return send({currentPage:1,totalPages:1,totalCount:2,hasNextPage:false,usersPerPage:50,timeRange:'all',type:'combined',
@@ -244,6 +515,29 @@ http.createServer(async (req,res) => {
   if(path === `${crmBase}/people/${personId}/permissions`)
     return send(state.permissions ?? {id:personId, permittedUses:['OUTREACH'], blocked:false});
 
+  if(path === `${crmBase}/prospects/import/parse`) {
+    if(state.parseFails) return send({message:'Could not read that file'},400);
+    return send(state.importParse ?? {
+      people: [
+        {displayName:'Priya Shah', title:'Investor', organizationName:'Northwind', email:null, phone:null, location:'Toronto', sourceUrl:'https://linkedin.com/in/priya', discoveryReason:'Met through LinkedIn export', sourceCategory:'IMPORTED'},
+        {displayName:'Jordan Lee', title:'Founder', organizationName:'Beta Labs', email:'jordan@example.com', phone:null, location:null, sourceUrl:null, discoveryReason:'Spreadsheet row', sourceCategory:'IMPORTED'},
+      ],
+      skipped: [{row:4, reason:'Missing a name'}],
+    });
+  }
+
+  if(path === `${crmBase}/prospects/ingest`) {
+    if(!req.headers['idempotency-key']) return send({message:'Idempotency-Key required'},400);
+    if(state.ingestFails) return send({message:'That contact could not be imported'},503);
+    const existing = state.crm.people.find(row =>
+      (body.email && row.email === body.email) ||
+      (!body.email && row.displayName === body.displayName && body.organizationName && row.organizationName === body.organizationName));
+    if(existing) return send({status:'already_in_network', person:existing});
+    const row = {id:uid(), workspaceId:workspace.id, archivedAt:null, ...stamp, ...body};
+    state.crm.people.push(row);
+    return send({status:'added', person:row});
+  }
+
   if(path === `${crmBase}/approvals/${approvalId}/review`) {
     if(!req.headers['idempotency-key']) return send({message:'Idempotency-Key required'},400);
     const row = state.crm.approvals.find(a=>a.id===approvalId);
@@ -257,7 +551,9 @@ http.createServer(async (req,res) => {
   if(path.startsWith(crmBase + '/')) {
     const rest = path.slice(crmBase.length+1).split('/');
     const [resource, id] = rest;
-    const rows = state.crm[resource];
+    // A test that posts a partial `crm` state must not take the server down and
+    // fail every test after it: an absent collection is simply empty.
+    const rows = state.crm[resource] ?? [];
     if(!rows) return send({message:'Unknown CRM resource'},400);
     if(req.method==='GET' && !id) return page(rows);
     if(req.method==='GET') { const row = rows.find(r=>r.id===id); return row ? send(row) : send({message:'Resource not found'},404); }
@@ -273,7 +569,10 @@ http.createServer(async (req,res) => {
       if(!row) return send({message:'Resource not found'},404);
       Object.assign(row, body); return send(row);
     }
-    if(req.method==='DELETE') { state.crm[resource] = rows.filter(r=>r.id!==id); return send({id, status:'ARCHIVED'}); }
+    if(req.method==='DELETE') {
+      state.crm[resource] = rows.filter(r=>r.id!==id);
+      return send({id, status:rest[2] === 'permanent' ? 'DELETED' : 'ARCHIVED'});
+    }
   }
 
   // ---- pipelines and stages ----
@@ -330,4 +629,23 @@ http.createServer(async (req,res) => {
     return send(state.availability ?? {busy:[{start:'2026-09-12T19:00:00.000Z', end:'2026-09-12T20:00:00.000Z', summary:'PRIVATE_CRM_SENTINEL'}]});
 
   return send({},404);
-}).listen(4100,'127.0.0.1');
+});
+
+/**
+ * The `/calls` namespace, as the gateway exposes it: the handshake carries the same
+ * bearer token the REST calls do, and a client joins one room per group call.
+ */
+const calls = new SocketServer(server, {cors:{origin:true, credentials:true}}).of('/calls');
+calls.on('connection', socket => {
+  const token = socket.handshake.auth?.token;
+  if(!token) { socket.emit('roomError', {error:'User not authenticated'}); return socket.disconnect(); }
+  socket.on('subscribeCallRoom', payload => {
+    if(payload?.groupCallId !== groupCallId) return socket.emit('roomError', {error:'User is not a call member'});
+    socket.join(groupCallId);
+    socket.emit('call.room.subscribed', {groupCallId, userId:'user-1', timestamp:Date.now()});
+  });
+});
+
+// Playwright owns 4100. A second copy can run beside it on another port for manual
+// use, so a test run never takes down a dev server someone is clicking through.
+server.listen(Number(process.env.FAKE_BACKEND_PORT ?? 4100), '127.0.0.1');

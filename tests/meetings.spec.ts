@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import {chooseOption} from './controls';
 
 const invite = 'a'.repeat(43);
 test('a guest sees only safe meeting details without signing in', async ({ page, request }) => {
@@ -66,6 +67,42 @@ test('the call has camera, microphone, device and participant controls while con
   await expect(page.getByRole('button', { name: /screen share|chat/i })).toHaveCount(0);
   await page.getByRole('button', { name: 'Leave', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'You left the call' })).toBeVisible();
+});
+
+test('a booked meeting link backed by a group call opens the full call design', async ({ page, request }) => {
+  await request.post('http://127.0.0.1:4100/__state', { data: { meetingGroupCall: true } });
+  await page.route('https://livekit.test/**', route => route.abort());
+  await page.routeWebSocket('wss://livekit.test/**', () => {});
+  await page.goto(`/meet/${invite}`);
+  await page.getByLabel('Your display name').fill('Jordan');
+  await page.getByLabel('I accept the meeting and privacy terms').check();
+  await page.getByRole('button', { name: 'Join on web', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Breaking into product analytics' })).toBeVisible({timeout: 15000});
+  await expect(page.getByRole('region', { name: 'Call stage' })).toBeVisible();
+  for (const tab of ['People', 'Chat', 'Notes', 'Actions', 'Agenda']) {
+    await expect(page.getByRole('tab', { name: tab })).toBeVisible();
+  }
+  // Joining from /meet used to leave the call inside the lobby card, which painted
+  // every roster control orange. The call is its own surface, matching /calls/:id.
+  const inviteLink = page.getByRole('button', { name: 'Copy invite link' });
+  expect(await inviteLink.evaluate(el => getComputedStyle(el).backgroundColor)).toBe('rgb(255, 255, 255)');
+  const lead = await page.getByRole('region', { name: 'Call stage' }).locator('.call-tile').first().boundingBox();
+  expect(lead?.height ?? 0).toBeGreaterThan(280);
+  // Every dock control does something: the mic, camera, share and hand go to the call,
+  // and picture in picture goes to the browser. Nothing is shown that has nowhere to go.
+  await expect(page.getByRole('button', { name: 'Reactions' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Raise hand' })).toBeVisible();
+});
+
+test('the device preview uses the same cream page and orange join control as the rest of the product', async ({ page, request }) => {
+  await request.post('http://127.0.0.1:4100/__state', { data: {} });
+  await page.goto(`/meet/${invite}`);
+  const pageColor = await page.locator('.meeting-page').evaluate(el => getComputedStyle(el).backgroundColor);
+  expect(pageColor).toBe('rgb(255, 251, 249)');
+  const join = page.getByRole('button', { name: 'Join on web', exact: true });
+  expect(await join.evaluate(el => getComputedStyle(el).color)).toBe('rgb(255, 255, 255)');
+  expect(await join.evaluate(el => getComputedStyle(el).backgroundColor)).toBe('rgb(250, 100, 4)');
+  await expect(page.getByRole('region', { name: 'Device preview' })).toBeVisible();
 });
 
 test('an unavailable invitation is safe, a failing resolve leaks nothing, and retry recovers', async ({ page, request }) => {
@@ -162,9 +199,28 @@ test('the recipient chooses a microphone and camera before joining, and that cho
   await expect(microphone).toBeVisible();
   await expect(camera).toBeVisible();
 
-  await microphone.selectOption({ label: 'Headset Microphone' });
-  await camera.selectOption({ label: 'External Webcam' });
+  await chooseOption(microphone, { label: 'Headset Microphone' });
+  await chooseOption(camera, { label: 'External Webcam' });
   const used = await page.evaluate(() => (window as unknown as {__constraints: MediaStreamConstraints[]}).__constraints.at(-1));
   expect(JSON.stringify(used)).toContain('mic-2');
   expect(JSON.stringify(used)).toContain('cam-2');
+});
+
+test('a signed-in member is not asked for a name they already gave at sign up', async ({ page, request }) => {
+  await request.post('http://127.0.0.1:4100/__state', { data: { allowJoin: true } });
+  await page.goto('/login');
+  await page.getByLabel('Email or phone number').fill('alex@example.com');
+  await page.getByLabel('Password', { exact: true }).fill('correct');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page).not.toHaveURL(/\/login/);
+
+  await page.goto(`/meet/${invite}`);
+  await expect(page.getByRole('heading', { name: 'Coffee with Alex' })).toBeVisible();
+  // The name is stated, not asked for, and Join needs only the terms.
+  await expect(page.getByLabel('Your display name')).toHaveCount(0);
+  await expect(page.getByText(/Joining as/)).toBeVisible();
+  const join = page.getByRole('button', { name: 'Join on web', exact: true });
+  await expect(join).toBeDisabled();
+  await page.getByLabel('I accept the meeting and privacy terms').check();
+  await expect(join).toBeEnabled();
 });

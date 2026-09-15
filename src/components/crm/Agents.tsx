@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { api, ApiError } from '@/lib/api';
-import { agentScopes, agentScopeNames, immediateAgentScopes, auditActions, actorLabels, type Agent, type AgentScope, type AuditEvent } from '@/lib/contracts';
+import { agentScopeGroups, agentScopeLabels, agentScopeNames, immediateAgentScopes, auditActions, actorLabels, type Agent, type AgentScope, type AuditEvent } from '@/lib/contracts';
 import { useKeys, useList, Section, Empty, More } from './common';
 
 type Connection = { id: string; clientName?: string | null; scopes?: string[] | null; createdAt?: string; expiresAt?: string | null; revokedAt?: string | null };
@@ -75,7 +75,7 @@ export default function Agents({workspaceId}:{workspaceId:string}) {
       <p className="code"><code>{issued.id}</code></p>
       <button onClick={async () => { try { await navigator.clipboard.writeText(issued.id); setCopied(true); } catch { setCopied(false); setProblem('Copying failed. Select the client ID above and copy it manually.'); } }}>Copy client ID</button>
       {copied && <span role="status"> Copied.</span>}
-      <p className="small">Permissions granted: {issued.scopes.join(', ')}</p>
+      <p className="small">Permissions granted: {issued.scopes.map(scope => agentScopeLabels[scope as AgentScope] ?? scope).join(', ')}</p>
       {/* Recorded gap: this backend issues a public client with PKCE and no client secret. */}
       <p role="note" className="small">No client secret is issued. This agent authenticates as a public client using PKCE at the authorization endpoint below.</p>
       <button className="secondary" onClick={() => { setIssued(undefined); setNotice('Agent created.'); }}>I have saved it</button>
@@ -92,7 +92,7 @@ export default function Agents({workspaceId}:{workspaceId:string}) {
       {(connections.rows ?? []).map(connection => <article key={connection.id} className="connection">
         <h4>{connection.clientName || 'Connected agent'}</h4>
         <dl>
-          <dt>Permissions</dt><dd>{connection.scopes?.length ? connection.scopes.join(', ') : 'Permissions unavailable'}</dd>
+          <dt>Permissions</dt><dd>{connection.scopes?.length ? connection.scopes.map(scope => agentScopeLabels[scope as AgentScope] ?? scope).join(', ') : 'Permissions unavailable'}</dd>
           <dt>Connected</dt><dd>{connection.createdAt ? new Date(connection.createdAt).toLocaleString() : 'Unknown'}</dd>
           <dt>Status</dt><dd>{connection.revokedAt ? `Revoked on ${new Date(connection.revokedAt).toLocaleString()}` : 'Active'}</dd>
         </dl>
@@ -111,12 +111,23 @@ export default function Agents({workspaceId}:{workspaceId:string}) {
         ? <form onSubmit={event => { event.preventDefault(); register(new FormData(event.currentTarget)); }}>
             <label>Name<input name="name" required maxLength={200} autoFocus /><span className="small">How this agent appears in your Inbox and audit history.</span></label>
             <label>Redirect URI<input name="redirectUri" type="url" required maxLength={2048} placeholder="https://" /><span className="small">Supplied by the host you are connecting. Must be https.</span></label>
-            <fieldset>
+            <fieldset className="permissions">
               <legend>What may this agent do?</legend>
-              {agentScopes.map(scope => <label key={scope} className="choice">
-                <input type="checkbox" name="scopes" value={scope} />
-                {scope}<span className="small">{agentScopeNames[scope as AgentScope]}{immediateAgentScopes.includes(scope) ? ' This one takes effect without your approval.' : ''}</span>
-              </label>)}
+              <p className="small">Pick only what this agent needs. You can revoke it at any time.</p>
+              {agentScopeGroups.map(group => <div key={group.title} className="permission-group">
+                <h4>{group.title}</h4>
+                <p className="small group-note">{group.note}</p>
+                {group.scopes.map(scope => <label key={scope} className="choice permission">
+                  <input type="checkbox" name="scopes" value={scope} />
+                  <span className="permission-text">
+                    <span className="permission-name">
+                      {agentScopeLabels[scope]}
+                      {immediateAgentScopes.includes(scope) && <span className="badge">No approval needed</span>}
+                    </span>
+                    <span className="small">{agentScopeNames[scope]}</span>
+                  </span>
+                </label>)}
+              </div>)}
             </fieldset>
             {/* Recorded gap: the backend accepts name, redirectUris and scopes only. */}
             <p role="note" className="small">A per-day request limit is not yet enforceable: this backend records no daily limit on an agent. Revoke a connection to stop an agent immediately.</p>

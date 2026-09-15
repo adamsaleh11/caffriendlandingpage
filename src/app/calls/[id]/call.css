@@ -1,0 +1,907 @@
+/**
+ * The desktop call surface.
+ *
+ * Ported from `ui_kits/video-call-desktop` in the Caffriend Design System: cream page,
+ * white cards at radius 30, espresso ink, orange for the one action that matters,
+ * Manrope throughout. The kit's own note applies — the Figma call frames were not the
+ * direction, the workspace visual language was — so the values below come from the kit's
+ * `tokens/` files rather than from the Figma file.
+ *
+ * The video is a card on a cream page, not a black room, and the relationship panel is a
+ * peer of the stage rather than an overlay, because the panel outlives the call.
+ */
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap");
+/* The kit's glyph set. Installed rather than pulled from the CDN its tokens/icons.css names. */
+@import "bootstrap-icons/font/bootstrap-icons.css";
+
+.call {
+  --caf-orange: rgb(250,100,4);
+  --caf-orange-bright: rgb(255,149,0);
+  --caf-orange-200: rgb(253,178,139);
+  --caf-orange-100: rgb(255,230,215);
+  --caf-orange-75: rgb(255,238,229);
+  --caf-espresso: rgb(31,21,15);
+  --caf-cream: rgb(255,251,249);
+  --caf-white: rgb(255,255,255);
+  --caf-grey-600: rgb(103,103,103);
+  --caf-grey-300: rgb(218,218,218);
+  --caf-grey-275: rgb(217,217,217);
+  --caf-grey-250: rgb(229,229,229);
+  --caf-grey-200: rgb(239,239,239);
+  --caf-grey-100: rgb(245,245,245);
+  --caf-grey-50: rgb(250,250,250);
+  --caf-red: rgb(233,24,24);
+  --caf-green: rgb(47,168,79);
+  --font-core: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  --shadow-card: 0 4px 4px rgba(0,0,0,0.1);
+  --shadow-drop: 0 4px 4px rgba(0,0,0,0.25);
+
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--caf-cream);
+  color: var(--caf-espresso);
+  font-family: var(--font-core);
+  overflow: hidden;
+}
+
+.call button { font-family: inherit; }
+.call-sr {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- Header ---------- */
+.call-header {
+  height: 76px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0 24px;
+}
+.call-header h1 {
+  margin: 0;
+  font: 700 16px/22px var(--font-core);
+  margin-right: auto;
+}
+.call-wordmark { height: 22px; width: auto; display: block; }
+.call-header-rule { width: 1px; height: 26px; background: var(--caf-grey-250); }
+.call-duration {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 30px;
+  background: var(--caf-white);
+  box-shadow: var(--shadow-card);
+  font: 700 14px/20px var(--font-core);
+  font-variant-numeric: tabular-nums;
+}
+.call-duration-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--caf-green); }
+
+.call-layout-switch {
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 30px;
+  background: var(--caf-white);
+  box-shadow: var(--shadow-card);
+}
+.call-layout-switch button {
+  width: 38px;
+  height: 32px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 30px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--caf-grey-600);
+  font: 400 13px/18px var(--font-core);
+}
+.call-layout-switch button[aria-pressed="true"] {
+  background: var(--caf-espresso);
+  color: var(--caf-white);
+}
+
+.call-room-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 30px;
+  cursor: pointer;
+  background: var(--caf-white);
+  box-shadow: var(--shadow-card);
+  color: var(--caf-espresso);
+  font: 400 14px/20px var(--font-core);
+}
+.call-mode-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 30px;
+  background: var(--caf-white);
+  box-shadow: var(--shadow-card);
+  color: var(--caf-espresso);
+  font: 400 14px/20px var(--font-core);
+}
+.call-room-count {
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  padding: 0 5px;
+  background: var(--caf-orange);
+  color: var(--caf-white);
+  font: 700 11px/18px var(--font-core);
+  text-align: center;
+}
+
+/* ---------- Body ---------- */
+.call-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 20px;
+  padding: 0 24px 22px;
+}
+.call-stage {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.call-media, .call-media-room {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+/* ---------- Stage ---------- */
+.call-stage-grid {
+  flex: 1;
+  min-height: 0;
+  background: var(--caf-white);
+  border-radius: 30px;
+  box-shadow: var(--shadow-card);
+  padding: 14px;
+  display: flex;
+}
+.call-tiles {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+/* Speaker view: the lead fills the stage, everyone else runs down a wider strip. */
+.call-stage-grid[data-layout="speaker"] { gap: 14px; }
+.call-stage-grid[data-layout="speaker"] .call-tiles { grid-template-columns: 1fr; grid-template-rows: 1fr; position: relative; }
+/* The strip is a column of thumbnails, not a second stage. Rows are sized by the tile's
+   own 16:9 aspect ratio; they stack from the top and the strip scrolls once a busy
+   room runs past the bottom of the stage. */
+.call-strip {
+  width: 280px;
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-auto-rows: max-content;
+  align-content: start;
+  gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.call-strip .call-tile { aspect-ratio: 16 / 9; }
+/* Grid view: tiles fill available height and maintain aspect ratio. Uses auto-fill to 
+   handle varying participant counts - 1-2 people get larger tiles, 3+ get standard grid. */
+.call-stage-grid[data-layout="grid"] .call-tiles {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr));
+  grid-auto-rows: 1fr;
+  align-content: start;
+}
+/* Tiles maintain 16:9 ratio in grid view */
+.call-stage-grid[data-layout="grid"] .call-tile {
+  aspect-ratio: 16 / 9;
+}
+
+.call-tile {
+  position: relative;
+  min-height: 0;
+  border-radius: 20px;
+  overflow: hidden;
+  background: var(--caf-espresso);
+}
+.call-tile[data-speaking="true"] { box-shadow: inset 0 0 0 3px var(--caf-orange); }
+.call-tile-video, .call-tile-video video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.call-tile-avatar {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--caf-white);
+  font: 700 34px/1 var(--font-core);
+  opacity: 0.85;
+}
+.call-tile-chip {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 28px);
+  padding: 6px 12px;
+  border-radius: 30px;
+  background: rgba(255,251,249,0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.call-tile-name { font: 700 12px/18px var(--font-core); }
+.call-tile-role { font: 400 11px/16px var(--font-core); color: var(--caf-orange); }
+.call-quality-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--caf-green); flex-shrink: 0; }
+.call-quality-dot[data-weak="true"] { background: var(--caf-orange-bright); }
+.call-tile-hand {
+  position: absolute;
+  right: 14px;
+  top: 14px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--caf-orange);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* The self-view sits over the lead tile, as a picture in picture. */
+.call-selfview {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  width: 240px;
+  height: 135px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--caf-espresso);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.24), inset 0 0 0 2px var(--caf-white);
+}
+.call-selfview .call-tile-avatar { font-size: 36px; }
+.call-selfview-name {
+  position: absolute;
+  left: 12px;
+  bottom: 10px;
+  font: 700 13px/18px var(--font-core);
+  color: var(--caf-white);
+  text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+}
+.call-tile[data-lead="true"] .call-tile-name { font-size: 15px; }
+
+.call-invite-tile {
+  background: var(--caf-cream);
+  box-shadow: inset 0 0 0 1px var(--caf-grey-250);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+  padding: 12px;
+}
+.call-invite-tile-title { font: 700 13px/20px var(--font-core); color: var(--caf-espresso); }
+.call-invite-tile-url { font: 200 11px/16px var(--font-core); color: var(--caf-grey-600); word-break: break-all; }
+
+.call-tile-pin {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 30px;
+  cursor: pointer;
+  background: rgba(255,251,249,0.92);
+  color: var(--caf-espresso);
+  font: 700 12px/18px var(--font-core);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.call-tile:hover .call-tile-pin, .call-tile-pin:focus-visible, .call-tile-pin[data-pinned="true"] { opacity: 1; }
+/* The self-view sits in the lead tile's bottom-right corner, so the lead's pin steps
+   left of it — 240px of inset plus its margins — rather than hiding underneath. */
+.call-tile[data-lead="true"] .call-tile-pin { right: 280px; }
+.call-tile-pin[data-pinned="true"] { background: var(--caf-orange); color: var(--caf-white); }
+
+/* ---------- Dock ---------- */
+.call-dock {
+  align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 40px;
+  background: var(--caf-white);
+  box-shadow: var(--shadow-card);
+}
+.call-dock-button {
+  width: 56.906px;
+  height: 56.906px;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  background: var(--caf-grey-100);
+  color: var(--caf-espresso);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 120ms ease;
+}
+.call-dock-button:hover { background: var(--caf-grey-200); }
+/* An engaged control fills espresso, as the kit has it. */
+.call-dock-button[data-on="true"] { background: var(--caf-espresso); color: var(--caf-white); }
+.call-dock-rule { width: 1px; height: 36px; background: var(--caf-grey-200); margin: 0 4px; }
+.call-dock .call-leave {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 56.906px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: 30px;
+  cursor: pointer;
+  background: var(--caf-red);
+  color: var(--caf-white);
+  font: 700 15px/20px var(--font-core);
+}
+
+/* ---------- Panel ---------- */
+.call-panel {
+  width: 396px;
+  flex-shrink: 0;
+  background: var(--caf-white);
+  border-radius: 30px;
+  box-shadow: var(--shadow-card);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow: hidden;
+}
+.call-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 30px;
+  background: var(--caf-grey-100);
+}
+.call-tabs button {
+  flex: 1;
+  border: 0;
+  border-radius: 30px;
+  padding: 8px 0;
+  cursor: pointer;
+  background: transparent;
+  color: var(--caf-grey-600);
+  font: 400 13px/18px var(--font-core);
+}
+.call-tabs button[aria-selected="true"] {
+  background: var(--caf-orange);
+  color: var(--caf-white);
+  font-weight: 700;
+}
+.call-tabpanel {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.call-tabpanel h2 {
+  margin: 0;
+  font: 700 11px/16px var(--font-core);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--caf-grey-600);
+}
+.call-tabpanel h3 {
+  margin: 14px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--caf-grey-200);
+  font: 700 11px/16px var(--font-core);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--caf-grey-600);
+}
+.call-tabpanel ul { margin: 0; padding: 0; list-style: none; }
+.call-empty { margin: 0; font: 200 12px/18px var(--font-core); color: var(--caf-grey-600); }
+
+/* People */
+.call-roster li { border-bottom: 1px solid var(--caf-grey-200); }
+.call-roster-open {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+.call-roster-name { font: 700 14px/20px var(--font-core); }
+.call-roster-role { font: 400 11px/16px var(--font-core); color: var(--caf-orange); }
+.call-roster-detail {
+  flex: 1;
+  min-width: 0;
+  font: 200 12px/18px var(--font-core);
+  color: var(--caf-grey-600);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.call-roster-icons { display: flex; align-items: center; gap: 8px; color: var(--caf-grey-600); }
+.call-roster-open { align-items: center; }
+.call-invite {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 44px;
+  border: 0;
+  border-radius: 30px;
+  cursor: pointer;
+  background: var(--caf-white);
+  box-shadow: inset 0 0 0 1px var(--caf-grey-250);
+  color: var(--caf-espresso);
+  font: 700 14px/20px var(--font-core);
+}
+
+/* Chat */
+.call-chat-note {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--caf-orange-75);
+  font: 400 12px/18px var(--font-core);
+}
+/* The composer stays at the foot of the panel; the thread takes the slack above it. */
+.call-chat { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
+.call-message { display: grid; grid-template-columns: auto 1fr; gap: 0 8px; }
+.call-message-who { font: 700 12px/18px var(--font-core); }
+.call-message-when { font: 200 11px/16px var(--font-core); color: var(--caf-grey-600); }
+.call-message p { grid-column: 1 / -1; margin: 3px 0 0; font: 400 14px/21px var(--font-core); }
+.call-message-reply {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  font: 400 11px/16px var(--font-core);
+  color: var(--caf-grey-600);
+}
+.call-message-reply:hover { color: var(--caf-orange); }
+.call-quote {
+  grid-column: 1 / -1;
+  margin: 4px 0 0 !important;
+  padding-left: 8px;
+  border-left: 2px solid var(--caf-orange-200);
+  font: 200 11px/16px var(--font-core) !important;
+  color: var(--caf-grey-600);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.call-mention { color: var(--caf-orange); font-weight: 700; }
+.call-replying {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--caf-orange-75);
+}
+.call-replying button {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: 400 11px/16px var(--font-core);
+  color: var(--caf-grey-600);
+  text-decoration: underline;
+}
+.call-mention-list {
+  max-height: 180px;
+  overflow-y: auto;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px var(--caf-grey-200);
+}
+.call-mention-list li + li { border-top: 1px solid var(--caf-grey-200); }
+.call-mention-list button {
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font: 400 13px/18px var(--font-core);
+  color: var(--caf-espresso);
+}
+.call-mention-open {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  background: var(--caf-grey-100);
+  color: var(--caf-grey-600);
+  font: 700 14px/1 var(--font-core);
+}
+.call-mention-open[aria-expanded="true"] { background: var(--caf-orange); color: var(--caf-white); }
+.call-duration {
+  display: inline-flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 30px;
+  background: var(--caf-white);
+  box-shadow: var(--shadow-card);
+  font: 700 14px/20px var(--font-core);
+  font-variant-numeric: tabular-nums;
+}
+.call-ended {
+  margin: 0;
+  padding: 0 14px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 30px;
+  background: var(--caf-grey-100);
+  font: 400 14px/20px var(--font-core);
+  color: var(--caf-grey-600);
+}
+.call-resource {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 8px !important;
+  padding: 10px;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px var(--caf-grey-250);
+  font: 700 12px/18px var(--font-core) !important;
+}
+.call-resource-mark {
+  width: 34px; height: 34px;
+  border-radius: 8px;
+  background: var(--caf-orange-100);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.call-resource-body { min-width: 0; }
+.call-resource a { color: var(--caf-orange); }
+.call-resource-meta { display: block; font: 200 11px/16px var(--font-core); color: var(--caf-grey-600); }
+
+/* Composer */
+.call-composer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 53px;
+  padding: 0 14px;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px var(--caf-grey-200);
+}
+.call-composer label {
+  font: 400 12px/18px var(--font-core);
+  color: var(--caf-grey-600);
+  white-space: nowrap;
+}
+.call-composer input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font: 300 14px/24px var(--font-core);
+  color: var(--caf-espresso);
+}
+.call-composer-icon {
+  width: 30px; height: 30px;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  background: transparent;
+  color: var(--caf-grey-600);
+  display: flex; align-items: center; justify-content: center;
+}
+.call-composer-icon[aria-expanded="true"] { background: var(--caf-orange); color: var(--caf-white); }
+.call-composer-send {
+  width: 34px; height: 34px;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  background: var(--caf-orange);
+  color: var(--caf-white);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.call-composer button:disabled { opacity: 0.5; cursor: default; }
+.call-message-reply { display: inline-flex; align-items: center; }
+
+/* Notes */
+.call-scopes { display: flex; gap: 6px; }
+.call-scopes button {
+  height: 33px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 30px;
+  cursor: pointer;
+  background: var(--caf-grey-100);
+  color: var(--caf-grey-600);
+  font: 400 13px/18px var(--font-core);
+}
+.call-scopes button[aria-checked="true"] {
+  background: var(--caf-orange);
+  color: var(--caf-white);
+  font-weight: 700;
+}
+.call-scope-hint { margin: 0; font: 200 12px/18px var(--font-core); color: var(--caf-grey-600); }
+.call-notes { display: flex; flex-direction: column; gap: 10px; }
+.call-notes li {
+  position: relative;
+  padding-left: 15px;
+  font: 400 14px/22px var(--font-core);
+}
+.call-notes li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--caf-orange);
+}
+
+/* Actions */
+.call-actions { display: flex; flex-direction: column; gap: 8px; }
+.call-actions li {
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--caf-white);
+  box-shadow: inset 0 0 0 1px var(--caf-grey-200);
+}
+.call-actions label { display: flex; gap: 12px; align-items: flex-start; font: 400 14px/21px var(--font-core); }
+.call-actions input[type="checkbox"] {
+  width: 20px; height: 20px;
+  margin: 1px 0 0;
+  border-radius: 6px;
+  accent-color: var(--caf-orange);
+  flex-shrink: 0;
+}
+.call-action-done { text-decoration: line-through; opacity: 0.55; }
+.call-action-meta { display: block; margin: 7px 0 0 32px; font: 200 11px/16px var(--font-core); color: var(--caf-grey-600); }
+.call-resources li { padding: 6px 0; font: 400 13px/20px var(--font-core); }
+.call-resources a { color: var(--caf-orange); }
+
+/* Agenda */
+.call-agenda { display: flex; flex-direction: column; }
+.call-agenda li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--caf-grey-200);
+}
+.call-agenda-mark {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--caf-grey-100);
+}
+.call-agenda-done .call-agenda-mark { background: var(--caf-orange-200); }
+.call-agenda-title { flex: 1; font: 400 14px/21px var(--font-core); }
+.call-agenda-done .call-agenda-title { color: var(--caf-grey-600); }
+.call-agenda-state { font: 400 11px/16px var(--font-core); color: var(--caf-orange); }
+.call-agenda-prompt {
+  flex-basis: 100%;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--caf-cream);
+  font: 400 13px/20px var(--font-core);
+}
+
+/* ---------- Room dialog ---------- */
+/* The scrim is drawn by the dialog itself rather than by a wrapper element, so the
+   dialog stays a single node and nothing can be focused behind it by accident. */
+.call-modal::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: rgba(31,21,15,0.42);
+  z-index: -1;
+}
+.call-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 452px;
+  max-height: 86vh;
+  overflow-y: auto;
+  padding: 24px;
+  border-radius: 30px;
+  background: var(--caf-white);
+  box-shadow: var(--shadow-drop);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  z-index: 10;
+}
+.call-modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.call-modal h2 { margin: 0; font: 700 20px/26px var(--font-core); }
+.call-modal-close {
+  width: 34px; height: 34px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--caf-grey-100) !important;
+  color: var(--caf-espresso) !important;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.call-modal h3 {
+  margin: 4px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--caf-grey-200);
+  font: 700 11px/16px var(--font-core);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--caf-grey-600);
+}
+.call-modal > p { margin: 0; font: 200 14px/21px var(--font-core); color: var(--caf-grey-600); }
+.call-modal ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.call-waiting li, .call-manage li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px var(--caf-grey-200);
+}
+.call-waiting-name, .call-manage li > span:first-child { font: 700 14px/20px var(--font-core); }
+.call-waiting-detail { flex: 1; font: 200 12px/18px var(--font-core); color: var(--caf-grey-600); }
+.call-manage li > span:first-child { flex: 1; }
+.call-modal button {
+  height: 37px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 30px;
+  cursor: pointer;
+  background: var(--caf-orange);
+  color: var(--caf-white);
+  font: 700 13px/18px var(--font-core);
+}
+.call-modal button.secondary {
+  background: var(--caf-white);
+  box-shadow: inset 0 0 0 1px var(--caf-grey-250);
+  color: var(--caf-grey-600);
+  font-weight: 400;
+}
+.call-modal button.danger { background: var(--caf-white); box-shadow: inset 0 0 0 1px var(--caf-grey-250); color: var(--caf-red); }
+.call-switch { display: flex; align-items: center; gap: 12px; }
+.call-switch > span:first-child { font: 400 14px/20px var(--font-core); }
+.call-switch-hint { flex: 1; font: 200 12px/18px var(--font-core); color: var(--caf-grey-600); }
+.call-switch button[role="switch"] {
+  width: auto;
+  height: auto;
+  padding: 0;
+  background: transparent !important;
+  display: flex;
+  align-items: center;
+}
+
+.call [role="alert"] { margin: 0; font: 400 13px/20px var(--font-core); color: var(--caf-red); }
+.call [role="status"] { margin: 0; font: 400 12px/18px var(--font-core); color: var(--caf-grey-600); }
+
+/* ---------- Profile peek ---------- */
+/* The peek replaces the roster inside the panel rather than covering the call, so the
+   person you are reading about stays on screen while you read. */
+.call-peek { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.call-peek-back {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+  color: var(--caf-grey-600);
+  font: 600 13px/18px var(--font-core);
+}
+.call-peek-back:hover { color: var(--caf-espresso); }
+.call-peek-head { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.call-peek-photo {
+  flex: none;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--caf-grey-100);
+}
+.call-peek-photo-empty {
+  display: grid;
+  place-items: center;
+  background: var(--caf-orange-100);
+  color: var(--caf-orange);
+  font: 700 24px/1 var(--font-core);
+}
+/* The peek's own name, out from under the panel's section-heading treatment for h3 —
+   this is the person, not a section label. */
+.call-tabpanel .call-peek-name {
+  margin: 0;
+  padding-top: 0;
+  border-top: 0;
+  font: 700 19px/24px var(--font-core);
+  letter-spacing: -.02em;
+  text-transform: none;
+  color: var(--caf-espresso);
+  overflow-wrap: anywhere;
+}
+.call-peek-role {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 1px 8px;
+  border-radius: 9px;
+  background: var(--caf-orange-100);
+  color: var(--caf-orange);
+  font: 700 11px/18px var(--font-core);
+}
+.call-peek-headline { margin: 4px 0 0; color: var(--caf-grey-600); font: 400 13px/18px var(--font-core); overflow-wrap: anywhere; }
+.call-peek-facts { list-style: none; margin: 0; padding: 14px 0; display: grid; gap: 9px; border-block: 1px solid var(--caf-grey-200); }
+.call-peek-facts li { display: flex; align-items: center; gap: 9px; font: 400 13px/18px var(--font-core); overflow-wrap: anywhere; }
+.call-peek-label { margin: 0; color: var(--caf-grey-600); font: 700 11px/16px var(--font-core); letter-spacing: .12em; text-transform: uppercase; }
+.call-peek-tags { list-style: none; margin: -6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 7px; }
+/* The design system's TagPill, at its call size. */
+.call-peek-tags li {
+  padding: 5px 12px;
+  border-radius: 30px;
+  background: var(--caf-orange-75);
+  color: var(--caf-espresso);
+  font: 600 12px/16px var(--font-core);
+}
+.call-peek-history { margin: -6px 0 0; font: 400 13px/18px var(--font-core); }

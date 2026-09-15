@@ -2,8 +2,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ApiError } from '@/lib/api';
-import type { AppCall, AppConnection, AppProfile, AppRank, AppSuggestion } from '@/lib/app-projection';
-import Table, { Modal, type Column } from './Table';
+import { remember, recall } from '@/lib/remember';
+import type { AppCall, AppConnection, AppRank, AppSuggestion } from '@/lib/app-projection';
+import type { EventSummary } from '@/lib/events';
+import { eventsApi, problemMessage } from '@/components/events/client';
+import { mergeUpcoming } from '@/lib/upcoming';
+import Table, { type Column } from './Table';
+import PersonProfile from './PersonProfile';
+import Face, { type FacePerson } from './Face';
+import UpcomingMeetings from './UpcomingMeetings';
 
 /** Same-origin consumer fetch. The session cookie travels with it; no token is held here. */
 async function app<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -18,42 +25,82 @@ async function app<T>(path: string, options: RequestInit = {}): Promise<T> {
   return result;
 }
 
+/**
+ * A consumer screen's data, shown from the last visit while it is refetched.
+ *
+ * Each screen is its own route, so navigating here mounts it blank. Starting from what
+ * this path last returned means going back to a screen you just left is immediate; the
+ * fetch still runs and replaces it, so what you read is never stale for long.
+ */
 function useApp<T>(path: string) {
-  const [data, setData] = useState<T>();
+  const key = `app:${path}`;
+  const [data, setData] = useState<T | undefined>(() => recall<T>(key));
   const [error, setError] = useState<string>();
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let live = true;
-    setData(undefined); setError(undefined);
-    app<T>(path).then(value => { if (live) setData(value); })
+    setData(recall<T>(key)); setError(undefined);
+    app<T>(path).then(value => { if (live) { remember(key, value); setData(value); } })
       .catch(problem => { if (live) setError(problem instanceof ApiError ? problem.message : 'This could not be loaded.'); });
     return () => { live = false; };
-  }, [path, attempt]);
+  }, [path, key, attempt]);
   return {data, error, reload: useCallback(() => setAttempt(v => v + 1), [])};
 }
 
-type FacePerson = { name: string; image: string | null };
-const initials = (name: string) => name.split(' ').filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase();
-function Face({person}:{person:FacePerson}) {
-  return person.image
-    // eslint-disable-next-line @next/next/no-img-element -- provider-hosted avatars are not a configured Next image domain
-    ? <img className="avatar" src={person.image} alt="" width={32} height={32} />
-    : <span className="avatar initials" aria-hidden="true">{initials(person.name)}</span>;
-}
 const nameColumn = <T extends FacePerson>(header: string): Column<T> => ({
   key:'name', header, sort: row => row.name,
   cell: row => <span className="person"><Face person={row} />{row.name}</span>,
 });
-const when = (value: string | null) => value ? new Date(value).toLocaleString() : '—';
 
-function PersonCard({person, onClose, children}:{person:FacePerson; onClose:()=>void; children:React.ReactNode}) {
-  return <Modal title={person.name} onClose={onClose}>
-    <div className="profile-card">
-      <Face person={person} />
-      <h2>{person.name}</h2>
-      {children}
-    </div>
-  </Modal>;
+/**
+ * The Home categories. Events used to be a sidebar destination; it is a category
+ * here instead, so the four ways of looking at Home sit side by side as bubbles
+ * — the same pills the top navbar uses, and the same row the native app shows.
+ */
+const homeCategories = [
+  {key:'all', label:'All'},
+  {key:'mentee', label:'Mentees'},
+  {key:'mentor', label:'Mentors'},
+  {key:'events', label:'Events'},
+] as const;
+type HomeCategory = typeof homeCategories[number]['key'];
+
+const eventMoney = (cents:number, currency:string) =>
+  cents === 0 ? 'Free' : new Intl.NumberFormat('en-CA', {style:'currency', currency}).format(cents / 100);
+const eventWhen = (value:string|null) =>
+  value ? new Intl.DateTimeFormat('en-CA', {dateStyle:'long', timeStyle:'short'}).format(new Date(value)) : 'Time to be announced';
+
+/** The Events category: the same upcoming rooms /events lists, in the Home card. */
+function HomeEvents() {
+  const [events, setEvents] = useState<EventSummary[]>();
+  const [error, setError] = useState('');
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    let live = true;
+    setEvents(undefined); setError('');
+    eventsApi<EventSummary[]>('list')
+      .then(rows => { if (live) setEvents(rows); })
+      .catch(problem => { if (live) setError(problemMessage(problem)); });
+    return () => { live = false; };
+  }, [attempt]);
+
+  if (error) return <><p role="alert">{error}</p><button className="secondary" onClick={() => setAttempt(v => v + 1)}>Try again</button></>;
+  if (!events) return <p className="small">Loading events…</p>;
+  if (events.length === 0) return <>
+    <p>Nothing is scheduled yet. Be the first to bring a room together.</p>
+    <Link className="secondary button-link" href="/events/new">Host an event</Link>
+  </>;
+  return <>
+    <ul className="home-events">
+      {events.map(event => <li key={event.id}>
+        <p className="home-event-meta"><span>{eventWhen(event.startsAt)}</span><span>{eventMoney(event.priceCents, event.currency)}</span></p>
+        <h3><Link href={`/events/${event.id}`}>{event.title}</Link></h3>
+        <p>{event.description || 'A Caffriend gathering for conversations that go somewhere.'}</p>
+        <p className="home-event-meta"><span>{event.capacity} seats</span><span>{event.status === 'ENDED' ? 'Ended' : 'Registration open'}</span></p>
+      </li>)}
+    </ul>
+    <Link className="secondary button-link" href="/events/new">Host an event</Link>
+  </>;
 }
 
 /**
@@ -61,7 +108,8 @@ function PersonCard({person, onClose, children}:{person:FacePerson; onClose:()=>
  * Paging follows the native rule: keep requesting while page < totalPages.
  */
 export function Home() {
-  const [role, setRole] = useState('');
+  const [category, setCategory] = useState<HomeCategory>('all');
+  const role = category === 'mentee' || category === 'mentor' ? category : '';
   const [rows, setRows] = useState<AppSuggestion[]>();
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState<number | null>(null);
@@ -74,6 +122,7 @@ export function Home() {
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
+    if (category === 'events') return;
     let live = true;
     setRows(undefined); setError(undefined); setPage(1);
     app<{items:AppSuggestion[]; page:number; totalPages:number|null}>('suggestions',
@@ -81,7 +130,7 @@ export function Home() {
       .then(result => { if (live) { setRows(result.items); setTotalPages(result.totalPages); } })
       .catch(problem => { if (live) setError(problem instanceof ApiError ? problem.message : 'Suggestions could not be loaded.'); });
     return () => { live = false; };
-  }, [role, attempt]);
+  }, [category, role, attempt]);
 
   async function loadMore() {
     setMore(true);
@@ -106,40 +155,47 @@ export function Home() {
     finally { setBusy(undefined); }
   }
 
+  /** Declining is local: the backend has no reject call, so the row simply leaves the queue. */
+  function decline(person: AppSuggestion) {
+    setActionError(undefined);
+    setRows(current => (current ?? []).filter(row => row.userId !== person.userId));
+    setNotice(`You passed on ${person.name}.`);
+  }
+
+  // The same columns Connections shows, so a person reads the same way on both screens.
   const columns: Column<AppSuggestion>[] = [
     nameColumn('Person'),
-    {key:'role', header:'Role', sort: row => row.role, cell: row => row.role || '—'},
-    {key:'rating', header:'Rating', sort: row => row.avgRating, cell: row => row.avgRating === null ? '—' : row.avgRating.toFixed(1)},
+    {key:'jobTitle', header:'Job title', sort: row => row.jobTitle ?? null, cell: row => row.jobTitle || '—'},
+    {key:'company', header:'Company', sort: row => row.company ?? null, cell: row => row.company || '—'},
+    {key:'industry', header:'Industry', sort: row => row.industry ?? null, cell: row => row.industry || '—'},
+    {key:'location', header:'Location', sort: row => row.location ?? null, cell: row => row.location || '—'},
     {key:'matches', header:'Matches', sort: row => row.matches, cell: row => row.matches ?? '—'},
   ];
 
   return <>
     <h1>Home</h1>
-    <p className="intro">People you might want to meet.</p>
+    <p className="intro">{category === 'events' ? 'Rooms worth walking into.' : 'People you might want to meet.'}</p>
     <section className="card">
-      <form className="filters" onSubmit={event => event.preventDefault()}>
-        <label>Role
-          <select value={role} onChange={event => setRole(event.target.value)}>
-            <option value="">Everyone</option><option value="mentor">Mentors</option><option value="mentee">Mentees</option>
-          </select>
-        </label>
-      </form>
+      <div className="category-bubbles" role="group" aria-label="Home category">
+        {homeCategories.map(item => <button key={item.key} type="button"
+          aria-pressed={category === item.key}
+          onClick={() => setCategory(item.key)}>{item.label}</button>)}
+      </div>
+      {category === 'events' ? <HomeEvents /> : <>
       {notice && <p role="status" className="notice">{notice}</p>}
       {actionError && <p role="alert">{actionError}</p>}
       <Table caption="Suggested people" columns={columns} rows={rows?.map(row => ({...row, id: row.userId}))}
         error={error} onRetry={() => setAttempt(v => v + 1)}
         onOpen={row => setOpen(row)} empty="No suggestions right now. Check back a little later."
-        action={row => <button disabled={busy === row.userId} onClick={() => accept(row)}>{busy === row.userId ? 'Accepting…' : 'Accept'}</button>} />
+        action={row => <span className="row-buttons">
+          <button disabled={busy === row.userId} onClick={() => accept(row)}>{busy === row.userId ? 'Accepting…' : 'Accept'}</button>
+          <button className="secondary" disabled={busy === row.userId} onClick={() => decline(row)}>Decline</button>
+        </span>} />
       {totalPages !== null && page < totalPages &&
         <button className="secondary" disabled={more} onClick={loadMore}>{more ? 'Loading…' : 'Load more'}</button>}
+      </>}
     </section>
-    {open && <PersonCard person={open} onClose={() => setOpen(undefined)}>
-      <dl>
-        <dt>Role</dt><dd>{open.role || 'Not given'}</dd>
-        <dt>Rating</dt><dd>{open.avgRating === null ? 'No ratings yet' : open.avgRating.toFixed(1)}</dd>
-        <dt>Matches</dt><dd>{open.matches ?? '—'}</dd>
-      </dl>
-    </PersonCard>}
+    {open && <PersonProfile userId={open.userId} name={open.name} onClose={() => setOpen(undefined)} />}
   </>;
 }
 
@@ -165,63 +221,41 @@ export function Connections() {
         error={error} onRetry={reload} onOpen={row => setOpen(row)}
         empty="No connections yet. Accept someone on Home to start one." />
     </section>
-    {open && <PersonCard person={open} onClose={() => setOpen(undefined)}>
-      <dl>
-        <dt>Job title</dt><dd>{open.jobTitle || 'Not given'}</dd>
-        <dt>Company</dt><dd>{open.company || 'Not given'}</dd>
-        <dt>Industry</dt><dd>{open.industry || 'Not given'}</dd>
-        <dt>University</dt><dd>{open.university || 'Not given'}</dd>
-        <dt>Location</dt><dd>{open.location || 'Not given'}</dd>
-        <dt>Pronouns</dt><dd>{open.pronouns || 'Not given'}</dd>
-        <dt>Role</dt><dd>{open.role || 'Not given'}</dd>
-        <dt>Rating</dt><dd>{open.avgRating === null || open.avgRating === undefined ? 'No ratings yet' : open.avgRating.toFixed(1)}</dd>
-        <dt>Coffee chats</dt><dd>{open.matches ?? '—'}</dd>
-        <dt>Status</dt><dd>{open.isMatched ? 'Matched' : 'Connected'}</dd>
-        <dt>Last activity</dt><dd>{when(open.updatedAt)}</dd>
-      </dl>
-      {(open.linkedInUrl || open.websiteUrl) && <p>
-        {open.linkedInUrl && <a href={open.linkedInUrl} target="_blank" rel="noreferrer noopener">LinkedIn</a>}
-        {open.linkedInUrl && open.websiteUrl && ' · '}
-        {open.websiteUrl && <a href={open.websiteUrl} target="_blank" rel="noreferrer noopener">Website</a>}
-      </p>}
-    </PersonCard>}
+    {open && <PersonProfile userId={open.userId} name={open.name} onClose={() => setOpen(undefined)} />}
   </>;
 }
 
 export function Calls() {
   const {data, error, reload} = useApp<AppCall[]>('calls?type=1');
-  const columns: Column<AppCall>[] = [
-    {key:'time', header:'When', sort: row => row.startDate,
-      cell: row => row.startDate
-        ? `${new Date(row.startDate).toLocaleString()}${row.endDate ? ` – ${new Date(row.endDate).toLocaleTimeString()}` : ''}`
-        : 'Not scheduled'},
-    {key:'who', header:'With', sort: row => row.counterpart, cell: row => row.counterpart || '—'},
-    {key:'format', header:'Format', sort: row => row.format, cell: row => row.format || 'Not specified'},
-    {key:'notes', header:'Notes', cell: row => row.notes || '—'},
-  ];
+  // The consumer screen has no workspace, so there are no CRM meeting records to merge
+  // in here — the accepted calendar events are the whole list. It is still projected
+  // through `mergeUpcoming` so this screen and the Meetings page order, filter and
+  // render a booking identically.
+  const upcoming = data ? mergeUpcoming(data, [], Date.now()) : undefined;
   return <>
     <h1>Upcoming calls</h1>
     <p className="intro">Coffee chats you have agreed to.</p>
-    <section className="card">
-      <Table caption="Upcoming calls" columns={columns} rows={data} error={error} onRetry={reload}
-        empty="Nothing scheduled. Arrange a coffee chat from Connections."
-        action={row => row.needsPayment
-          ? <span className="small">Payment required</span>
-          : <span className="small">Join from the Caffriend app</span>} />
-      {/* Joining runs on LiveKit inside the native app; this surface does not host the call. */}
-      <p className="small">Calls are joined in the Caffriend mobile app.</p>
-      {/*
-        These are Caffriend app bookings. A meeting scheduled from a CRM workspace is a
-        separate backend record on a separate calendar and is not merged in here; saying
-        so is more honest than showing a combined list the server does not have.
-      */}
-      <p className="small">Meetings you schedule inside a CRM workspace are listed on that workspace&apos;s Meetings screen, not here.</p>
+    <section className="card app-call-card">
+      {error ? <><p role="alert">{error}</p><button className="secondary" onClick={reload}>Try again</button></>
+        : !upcoming ? <ul className="up-list" aria-label="Upcoming calls" aria-busy="true">
+            {[0,1,2].map(item => <li className="up-card up-loading" key={item}>
+              <span className="avatar initials" aria-hidden="true" />
+              <div><span /><span /><span /></div>
+            </li>)}
+          </ul>
+        : upcoming.length === 0 ? <div className="empty">
+            <span className="empty-symbol" aria-hidden="true">◎</span>
+            <h2>No calls scheduled</h2>
+            <p>Arrange a coffee chat from Connections, then it will appear here.</p>
+          </div>
+        : <UpcomingMeetings meetings={upcoming} label="Upcoming calls" />}
     </section>
   </>;
 }
 
 export function Leaderboard({meId}:{meId?: string}) {
   const {data, error, reload} = useApp<{items:AppRank[]; totalCount:number|null}>('leaderboard?limit=50');
+  const [open, setOpen] = useState<AppRank>();
   const columns: Column<AppRank & {id:string}>[] = [
     {key:'rank', header:'Rank', sort: row => row.rank, cell: row => row.rank ?? '—'},
     nameColumn('Person'),
@@ -238,30 +272,11 @@ export function Leaderboard({meId}:{meId?: string}) {
     <p className="intro">How the community is doing.</p>
     <section className="card leaderboard">
       <Table caption="Leaderboard" columns={columns} rows={rows} error={error} onRetry={reload}
-        empty="The leaderboard is empty right now." />
+        onOpen={row => setOpen(row)} empty="The leaderboard is empty right now." />
     </section>
+    {open && <PersonProfile userId={open.userId} name={open.name} onClose={() => setOpen(undefined)} />}
   </>;
 }
 
-export function Profile() {
-  const {data, error, reload} = useApp<AppProfile>('me');
-  if (error) return <><h1>Profile</h1><p role="alert">{error} <button className="secondary" onClick={reload}>Try again</button></p></>;
-  if (!data) return <><h1>Profile</h1><p role="status">Loading your profile…</p></>;
-  return <>
-    <h1>Profile</h1>
-    <p className="intro">How you appear to other people on Caffriend.</p>
-    <section className="card">
-      <div className="profile-card">
-        <Face person={data} />
-        <h2>{data.name}</h2>
-        <dl>
-          <dt>Email</dt><dd>{data.email || 'Not given'}</dd>
-          <dt>Role</dt><dd>{data.role || 'Not given'}</dd>
-        </dl>
-        {data.bio && <><h3>About</h3><p>{data.bio}</p></>}
-      </div>
-      {/* Editing lives in the native app, which owns the full profile form. */}
-      <p className="small">Edit your profile in the Caffriend mobile app. <Link className="text-link" href="/app">Go to your CRM →</Link></p>
-    </section>
-  </>;
-}
+/** The Profile screen is a full editor; it lives in its own file. */
+export { default as Profile } from './ProfileScreen';

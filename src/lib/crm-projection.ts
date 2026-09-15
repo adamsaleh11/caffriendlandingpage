@@ -12,7 +12,7 @@ const common = ['id', 'workspaceId', 'createdAt', 'updatedAt'];
 const archivable = [...common, 'archivedAt'];
 
 const fields: Record<CrmResource, string[]> = {
-  people: [...archivable, 'displayName', 'title', 'location', 'email', 'phone', 'sourceCategory', 'organizationId'],
+  people: [...archivable, 'displayName', 'title', 'location', 'email', 'phone', 'sourceCategory', 'organizationId', 'sourceUrl', 'discoveryReason'],
   organizations: [...archivable, 'name', 'domain'],
   engagements: [...archivable, 'personId', 'organizationId', 'pipelineId', 'stageId', 'ownerId', 'status', 'objective', 'nextAction'],
   notes: [...archivable, 'body', 'personId', 'engagementId', 'sourceConversationId'],
@@ -25,7 +25,7 @@ const fields: Record<CrmResource, string[]> = {
   'source-claims': [...common, 'artifactId', 'conversationId', 'personId', 'engagementId', 'targetField', 'extractedValue', 'locator', 'confidence', 'rightsState', 'permittedUses'],
   conversations: [...common, 'provider', 'providerConversationId', 'title', 'durableUrl'],
   agents: [...common, 'name', 'status'],
-  meetings: [...common, 'purpose', 'startsAt', 'endsAt', 'timezone', 'status', 'provider', 'joinUrl', 'physicalLocation', 'agenda', 'engagementId', 'organizerId', 'connectionId', 'errorCode'],
+  meetings: [...common, 'purpose', 'startsAt', 'endsAt', 'timezone', 'status', 'provider', 'joinUrl', 'physicalLocation', 'agenda', 'engagementId', 'organizerId', 'connectionId', 'errorCode', 'groupCallId'],
 };
 
 export const isResource = (value: string): value is CrmResource => (crmResources as readonly string[]).includes(value);
