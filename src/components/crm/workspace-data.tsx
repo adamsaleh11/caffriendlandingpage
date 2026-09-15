@@ -5,7 +5,7 @@ import { useList, useRows, type Loaded } from './common';
 import { useLiveRows } from './record-actions';
 import type { Page } from '@/lib/contracts';
 import type { TimelineEntry } from '@/lib/timeline-entry';
-import type { TimelineItem } from '@/lib/engagement-timeline';
+import { mergeTimeline, type TimelineItem } from '@/lib/engagement-timeline';
 import {
   actorLabels, auditActions,
   type Agent, type Approval, type AuditEvent, type Conversation, type Engagement, type Meeting,
@@ -199,6 +199,9 @@ export function timelineFor(
   personId: string,
   engagementIds: Set<string>,
   data: WorkspaceData,
+  /** The server's own timeline rows, from `useEngagementTimelines`. */
+  items: TimelineItem[] = [],
+  person?: { displayName: string } | null,
 ): TimelineEntry[] {
   const relevant = (row: { personId?: string | null; engagementId?: string | null }) =>
     row.personId === personId || (!!row.engagementId && engagementIds.has(row.engagementId));
@@ -241,7 +244,10 @@ export function timelineFor(
       actor: 'Meeting', byAgent: false, kind: 'meeting',
     });
   }
-  return entries.sort((a, b) => a.at.localeCompare(b.at));
+  // The server's timeline rows are merged in, not replaced by, the records the
+  // page already holds: a send and its answer are two moments. Scoping, actor
+  // naming and ordering all belong to the lib module, which the unit runner holds.
+  return mergeTimeline({entries, items, person, agents: data.agents.rows ?? [], engagementIds});
 }
 
 /** The most recent recorded activity, or null when nothing has happened yet. */
