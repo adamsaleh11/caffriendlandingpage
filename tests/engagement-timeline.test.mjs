@@ -79,3 +79,65 @@ test('an earlier acceptance sorts before a later existing entry', () => {
   const merged = mergeTimeline({entries: [later], items: [acceptance()], person});
   assert.deepEqual(merged.map(entry => entry.id), ['timeline:a1', 'note:n2']);
 });
+
+/**
+ * A person's page loads the timeline for every engagement it knows about, but a
+ * row may name an engagement that is no longer theirs. Scoping is the module's
+ * job, not the page's, so the unit runner can hold it.
+ */
+test('a row belonging to another engagement is left off the person timeline', () => {
+  const merged = mergeTimeline({
+    entries: [],
+    items: [acceptance(), acceptance({id: 'a2', engagementId: 'e9'})],
+    engagementIds: new Set(['e1']),
+    person,
+  });
+  assert.deepEqual(merged.map(entry => entry.id), ['timeline:a1']);
+});
+
+test('a row naming no engagement is kept, having nothing to scope it out by', () => {
+  const merged = mergeTimeline({
+    entries: [],
+    items: [acceptance({id: 'a3', engagementId: null})],
+    engagementIds: new Set(['e1']),
+    person,
+  });
+  assert.deepEqual(merged.map(entry => entry.id), ['timeline:a3']);
+});
+
+test('every row is kept when the caller scopes to nothing', () => {
+  const merged = mergeTimeline({entries: [], items: [acceptance(), acceptance({id: 'a2', engagementId: 'e9'})], person});
+  assert.equal(merged.length, 2);
+});
+
+/**
+ * Sending an invitation writes `INVITATION_SENT` and then a `STAGE_CHANGED`.
+ * Kinds the client has never heard of keep arriving, so a row is carried by the
+ * server's own summary rather than by a kind this module recognises.
+ */
+test('an invitation-sent row renders on the server\'s wording, not a client label', () => {
+  const [entry] = mergeTimeline({
+    entries: [],
+    items: [acceptance({id: 's1', kind: 'INVITATION_SENT', summary: 'Invitation sent'})],
+    person,
+  });
+  assert.equal(entry.title, 'Invitation sent');
+  assert.equal(entry.actor, 'Person');
+});
+
+test('a stage change to Scheduling survives the merge alongside the send', () => {
+  const merged = mergeTimeline({
+    entries: [],
+    items: [
+      acceptance({id: 's1', kind: 'INVITATION_SENT', summary: 'Invitation sent', occurredAt: '2026-02-01T10:00:00.000Z'}),
+      acceptance({id: 's2', kind: 'STAGE_CHANGED', summary: 'Moved to Scheduling', occurredAt: '2026-02-01T10:00:01.000Z'}),
+    ],
+    person,
+  });
+  assert.deepEqual(merged.map(entry => entry.title), ['Invitation sent', 'Moved to Scheduling']);
+});
+
+test('a kind no client release has seen is still rendered, never dropped', () => {
+  const merged = mergeTimeline({entries: [], items: [acceptance({id: 'x1', kind: 'SOMETHING_NEW', summary: 'Something happened'})], person});
+  assert.deepEqual(merged.map(entry => entry.title), ['Something happened']);
+});

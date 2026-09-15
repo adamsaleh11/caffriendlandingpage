@@ -22,6 +22,11 @@ export type MergeInput = {
   person?: { displayName: string } | null;
   /** Workspace agents, so agent work is never presented as a person's. */
   agents?: { id: string; name?: string | null }[];
+  /**
+   * The engagements this timeline is for. A row naming any other engagement is
+   * left off. Omit it to keep every row, when the caller has already scoped them.
+   */
+  engagementIds?: Set<string>;
 };
 
 /**
@@ -46,8 +51,10 @@ const actorFor = (item: TimelineItem, person: MergeInput['person']): string => {
   return item.actorType === 'GUEST' ? `${person.displayName} (guest)` : person.displayName;
 };
 
-export function mergeTimeline({entries, items, person, agents}: MergeInput): TimelineEntry[] {
-  const fromItems = items.map((item): TimelineEntry => {
+export function mergeTimeline({entries, items, person, agents, engagementIds}: MergeInput): TimelineEntry[] {
+  const mine = (item: TimelineItem) =>
+    !engagementIds || !item.engagementId || engagementIds.has(item.engagementId);
+  const fromItems = items.filter(mine).map((item): TimelineEntry => {
     const agentName = agentFor(item, agents);
     return {
       id: `timeline:${item.id}`,
