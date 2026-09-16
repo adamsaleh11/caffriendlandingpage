@@ -26,7 +26,10 @@ export function useCallEvents(groupCallId: string, me: string, onEvent: (patch: 
         {headers:{'X-Caffriend-Request':'1', ...(callSessionToken ? {'X-Caffriend-Call-Session':callSessionToken} : {})}})
         .then(response => response.ok ? response.json() as Promise<Realtime> : {} as Realtime)
         .catch((): Realtime => ({}));
-      if (!live || !origin || (!token && !sessionToken)) return;
+      // A subscription needs a seat. Opening the socket before `join` has answered
+      // subscribes to a room this caller is not yet in, and the events that follow
+      // describe a call they have not joined.
+      if (!live || !participantId || !origin || (!token && !sessionToken)) return;
       socket = io(`${origin}/calls`, {auth:{token, callSessionToken:sessionToken}, transports:['websocket'], withCredentials:true});
       socket.on('connect', () => socket?.emit('subscribeCallRoom', {groupCallId, participantId}));
       for (const event of callEvents) {

@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { calendarFailed, joinable, statusLabels, type AuditEvent, type Meeting } from '@/lib/contracts';
 import StateCard from './StateCard';
+import JoinAction from '@/components/app/JoinAction';
+import { fromMeeting } from '@/lib/upcoming';
 import {DateTimePicker} from '@/components/ui/date-time-picker';
 
 const when = (value: string, timezone: string) => {
@@ -158,16 +160,14 @@ export default function MeetingPage({workspaceId, meetingId}:{workspaceId:string
       {problem && <p role="alert">{problem}</p>}
 
       <div className="meeting-actions">
-        {/* Unified meeting flow: use venue field for join determination */}
-        {joinable(meeting.status) && meeting.venue === 'CAFFRIEND_LIVEKIT' && meeting.groupCallId
-          ? <a className="text-link" href={`/calls/${meeting.groupCallId}`}>Join on web</a>
-          : joinable(meeting.status) && meeting.venue === 'PROVIDER_CONFERENCE' && meeting.joinUrl
-            ? <a className="text-link" href={meeting.joinUrl} target="_blank" rel="noreferrer noopener">Join on web</a>
-            : joinable(meeting.status) && meeting.venue === 'IN_PERSON'
-              ? <span className="text-link" style={{color: '#666', cursor: 'default'}}>In person</span>
-              : joinable(meeting.status) && meeting.groupCallId
-                ? <a className="text-link" href={`/calls/${meeting.groupCallId}`}>Join on web</a>
-                : joinable(meeting.status) && meeting.joinUrl && <a className="text-link" href={meeting.joinUrl} target="_blank" rel="noreferrer noopener">Join on web</a>}
+        {/* One control decides this, the same one the cards and the month calendar use:
+            where Join goes, whether the door is open yet, and what to say when the
+            booking has no room. This page used to answer all three by itself and let
+            someone in days early while the other two refused. */}
+        {joinable(meeting.status) && meeting.venue === 'IN_PERSON'
+          ? <span className="text-link" style={{color: '#666', cursor: 'default'}}>In person</span>
+          : joinable(meeting.status) &&
+            <JoinAction meeting={fromMeeting(meeting)} label="Join on web" className="text-link" />}
         <button onClick={copyLink} disabled={cancelled}>Copy invite link</button>
         <button ref={dialog === 'reschedule' ? opener : undefined} disabled={cancelled}
           onClick={event => {opener.current = event.currentTarget; setStart(''); setEnd(''); setProblem(''); setDialog('reschedule');}}>Reschedule</button>

@@ -4,9 +4,10 @@ import Link from 'next/link';
 import { api } from '@/lib/api';
 import { useRows, Section, Empty } from './common';
 import Modal from './Modal';
+import JoinAction from '@/components/app/JoinAction';
 import Face from '@/components/app/Face';
 import type { AppCall } from '@/lib/app-projection';
-import { canJoinAt, coffees, joinOpensText, stillAhead, type UpcomingMeeting } from '@/lib/upcoming';
+import { coffees, stillAhead, type UpcomingMeeting } from '@/lib/upcoming';
 import UpcomingMeetings, { MeetingCard, type MeetingLine } from '@/components/app/UpcomingMeetings';
 import { callCounterpart, callFinished, type CallState, type MyCall } from '@/lib/call';
 
@@ -55,9 +56,6 @@ function CallDetail({call, workspaceId, past, now, onClose}:{
   call: UpcomingMeeting; workspaceId: string; past: boolean; now: number; onClose: () => void;
 }) {
   const minutes = minutesBetween(call.startsAt, call.endsAt);
-  // The same five-minute window the list and the phone use. A square opened days early
-  // used to walk straight into a room that had not been provisioned.
-  const early = !past && !canJoinAt(call.startsAt, now);
   return <Modal title={call.title} description={call.counterpart ?? undefined} onClose={onClose}>
     {/* The same face and heading the card in the list carries, so opening one from the
         month grid lands somewhere recognisable. */}
@@ -83,17 +81,12 @@ function CallDetail({call, workspaceId, past, now, onClose}:{
     <div className="call-detail-actions">
       {/* Whichever the call needs is the primary: joining one that is ahead, reading
           what a finished one produced. Notes is a page, never the live call surface. */}
-      {!past && call.href && (early
-        ? <p className="small">{joinOpensText(call.startsAt, now)}</p>
-        : call.external
-          ? <a className="button" href={call.href} target="_blank" rel="noreferrer noopener">Join</a>
-          : <Link className="button" href={call.href}>Join</Link>)}
+      {!past && <JoinAction meeting={call} now={now} label="Join" className="button" inDialog />}
       {call.groupCallId && <Link className={past ? 'button' : 'text-link'}
         href={`/app/${workspaceId}/calls/${call.groupCallId}`}>Call notes</Link>}
       {call.meetingId &&
         <Link className="text-link" href={`/app/${workspaceId}/meetings/${call.meetingId}`}>Meeting details</Link>}
-      {!call.groupCallId && !call.meetingId && !call.href &&
-        <p className="small">This call has no room or join link yet.</p>}
+
     </div>
   </Modal>;
 }
@@ -329,6 +322,8 @@ export default function Schedule({workspaceId}:{workspaceId:string}) {
         href: null, external: false, needsPayment: false,
         groupCallId: row.id, meetingId: row.meetingId,
         source: row.meetingId ? 'CRM' : null, // Orphan meetings with meetingId are likely CRM-originated
+        // Its room is the only thing it carries, which is what a Caffriend call is.
+        venue: 'CAFFRIEND_LIVEKIT' as const,
       } satisfies UpcomingMeeting));
     /**
      * Nobody is named from the CRM here any more. The feed hydrates both sides of every

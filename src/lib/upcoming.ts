@@ -22,7 +22,12 @@ export type UpcomingMeeting = {
   /** A short status word, already in display case. Absent when there is nothing to say. */
   status: string | null;
   notes: string | null;
-  /** Where Join goes. Null while the room or the link is still pending. */
+  /**
+   * Where Join goes. Null means there is nowhere to go and never will be: a room is
+   * written with the booking, so a Caffriend call without one is a broken booking, not
+   * a pending one. An in-person meeting is null for the ordinary reason that it has no
+   * room at all.
+   */
   href: string | null;
   /** A provider conference opens in its own tab; a Caffriend room does not. */
   external: boolean;
@@ -33,14 +38,35 @@ export type UpcomingMeeting = {
   meetingId: string | null;
   /** Unified meeting flow: indicates meeting origin - 'CRM' for desktop, 'CAFFRIEND' for mobile */
   source: 'CRM' | 'CAFFRIEND' | null;
+  /** Where the meeting is held. A place to be has no room, and needs none. */
+  venue: 'CAFFRIEND_LIVEKIT' | 'PROVIDER_CONFERENCE' | 'IN_PERSON' | null;
 };
 
 /**
- * The native join window, in minutes before the start.
+ * What the card offers where Join goes.
+ *
+ * `open` and `early` are both real bookings with a room behind them; `unavailable` is
+ * a booking whose room is missing, which is a breakage rather than a wait. A
+ * `groupCallId` is written in the same transaction as the booking and is never filled
+ * in later, so nothing about it clears with time.
+ */
+export type JoinState = 'payment' | 'none' | 'unavailable' | 'early' | 'open';
+
+export function joinState(meeting: UpcomingMeeting, now: number): JoinState {
+  if (meeting.needsPayment) return 'payment';
+  // A place to be, with nothing to press and nothing wrong.
+  if (meeting.venue === 'IN_PERSON') return 'none';
+  if (!meeting.href) return 'unavailable';
+  return canJoinAt(meeting.startsAt, now) ? 'open' : 'early';
+}
+
+/**
+ * The join window, in minutes before the start.
  *
  * `canJoinMeeting` in the iOS app: a meeting opens five minutes before it starts and
- * not before. The web used to offer Join at any time, which let someone walk into an
- * empty room days early.
+ * not before. This is a product rule the two clients share, not a server one — a member
+ * may join at any hour and the room is minted on first arrival — and the web keeps it so
+ * that the phone and the desktop do not disagree about when a call can be entered.
  */
 export const JOIN_WINDOW_MINUTES = 5;
 
@@ -144,6 +170,7 @@ export function fromCall(call: AppCall): UpcomingMeeting {
     groupCallId: call.groupCallId,
     meetingId: call.meetingId,
     source: call.source,
+    venue: call.venue ?? null,
   };
 }
 
@@ -185,6 +212,7 @@ export function fromMeeting(meeting: Meeting): UpcomingMeeting {
     groupCallId: meeting.groupCallId ?? null,
     meetingId: meeting.id,
     source: meeting.source || 'CRM', // Default to 'CRM' for desktop meetings
+    venue: meeting.venue ?? null,
   };
 }
 

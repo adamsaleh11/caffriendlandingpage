@@ -85,7 +85,12 @@ export function projectParticipant(row: Record<string, unknown>): CallParticipan
   const role = roles.find(value => value === row.role) ?? 'participant';
   const waitingStatus = statuses.find(value => value === row.waitingStatus) ?? 'admitted';
   return {
-    id: String(row.id ?? ''),
+    // `participantId` is what call-state names a seat; `id` is only ever seen on
+    // older rows. An email-invited or externally-imported participant arrives with
+    // neither, and their userId is the identity the roster already dedupes on, so it
+    // stands in rather than an empty string that would collide with every other
+    // id-less person in the same list.
+    id: text(row.participantId) ?? text(row.id) ?? text(row.userId) ?? '',
     userId: String(row.userId ?? ''),
     displayName: text(row.displayName) ?? text(row.name) ?? 'Caffriend member',
     jobTitle: text(row.jobTitle),
@@ -239,6 +244,43 @@ export function projectMyCall(row: Record<string, unknown>): MyCall {
 /** A call is finished when the host ended the structured portion. */
 export const callFinished = (call: MyCall) => call.status === 'ENDED' || Boolean(call.endedAt);
 
+/**
+ * What a join answers with: media credentials, and who the caller now is in the room.
+ *
+ * `participantId` is the seat, and every later call takes it — call-state, the socket
+ * subscription, heartbeat, leave. Re-joining after a refresh returns the same seat
+ * rather than minting a second one, so a tab's in-call session keys off it.
+ * `userId` is the account behind the seat, and null for a guest, who has none.
+ */
+export type CallJoin = {
+  token: string;
+  url: string;
+  participantId: string | null;
+  userId: string | null;
+};
+
+export function projectJoin(body: unknown): CallJoin {
+  const value = (body ?? {}) as Record<string, unknown>;
+  return {
+    token: text(value.token) ?? '',
+    url: text(value.url) ?? '',
+    participantId: text(value.participantId),
+    userId: text(value.userId),
+  };
+}
+
+/**
+ * The viewer's own seat, by the `participantId` their join returned.
+ *
+ * This is the only way to answer "which of these is me". Matching on userId cannot
+ * work for a guest, who has no account, and the seat's own identifier is the one
+ * thing every join path — signed in, guest, email link, Join button — comes back
+ * with. Null when the roster does not hold the seat, so a caller shows no controls
+ * rather than someone else's.
+ */
+export const callSelf = (participants: CallParticipant[], participantId: string | null | undefined) =>
+  participantId ? participants.find(person => person.id === participantId) ?? null : null;
+
 /** Someone is only ever named for themselves as "You". */
 export const participantName = (participant: CallParticipant, me: string) =>
   participant.userId === me ? 'You' : participant.displayName;
@@ -303,9 +345,12 @@ export function applyCallEvent(state: CallState, event: string, payload: Record<
         ? state : {...state, chat:{...state.chat, messages:[...state.chat.messages, message]}};
     }
     case 'call.note.created': {
-      const note = projectNote(row('note'));
-      // A private note is broadcast with its body redacted; only its author gets the
-      // text, and they already have it from their own response.
+      const broadcast = projectNote(row('note'));
+      // A private note is redacted for the room, so its author's own copy rides
+      // alongside it. Whoever it belongs to reads that one; everybody else never
+      // learns the note was written at all.
+      const authored = payload.authorNote ? projectNote(row('authorNote')) : null;
+      const note = authored && authored.authorUserId === me ? authored : broadcast;
       if (note.scope === 'private' && note.authorUserId !== me) return state;
       return state.notes.some(value => value.id === note.id) ? state : {...state, notes:[...state.notes, note]};
     }

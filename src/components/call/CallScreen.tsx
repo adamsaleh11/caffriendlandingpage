@@ -10,6 +10,9 @@ import {
   type CallRoom,
   type CallState,
   type NoteScope,
+  type CallJoin,
+  callSelf,
+  projectJoin,
 } from "@/lib/call";
 import { RelationshipPanel, type PanelActions } from "./RelationshipPanel";
 import { RoomDialog, type RoomActions } from "./RoomDialog";
@@ -20,18 +23,26 @@ import { CallMedia } from "./CallMedia";
 import { Duration } from "./Duration";
 import { Icon } from "./Icon";
 
+/**
+ * A join, plus the guest call-session credential this app's API route still issues.
+ * The credential is not part of the call contract and is on its way out — guests are
+ * media-only — so it is carried here rather than in the projected envelope.
+ */
+type Access = CallJoin & { callSessionToken: string | null };
+
+const readAccess = (body: unknown): Access => ({
+  ...projectJoin(body),
+  callSessionToken:
+    typeof (body as { callSessionToken?: unknown })?.callSessionToken === "string"
+      ? (body as { callSessionToken: string }).callSessionToken
+      : null,
+});
+
 export type GuestCallJoin = {
   invitationToken: string;
   displayName: string;
   acceptedTerms: boolean;
   anonymousInstallId: string;
-};
-
-type JoinAccess = {
-  token: string;
-  url: string;
-  participantId?: string | null;
-  callSessionToken?: string | null;
 };
 
 export function CallScreen({
@@ -50,7 +61,7 @@ export function CallScreen({
   const router = useRouter();
   const [state, setState] = useState<CallState>();
   const [error, setError] = useState("");
-  const [access, setAccess] = useState<JoinAccess>();
+  const [access, setAccess] = useState<Access>();
   const [joinError, setJoinError] = useState("");
   const [roomOpen, setRoomOpen] = useState(false);
   const [layout, setLayout] = useState<Layout>("speaker");
@@ -90,11 +101,11 @@ export function CallScreen({
       setJoinError(message);
     };
     const join = (body: Record<string, unknown>) =>
-      api<JoinAccess>(
+      api(
         `${groupCallId}/join`,
         { method: "POST", body: JSON.stringify(body) },
         "call",
-      );
+      ).then(readAccess);
     const resolve = () => api(`${groupCallId}/resolve`, {}, "call");
 
     if (guestJoin) {
@@ -176,9 +187,17 @@ export function CallScreen({
       setState((current) => current && patch(current)),
     [],
   );
+  /**
+   * The account behind this seat, which the join now names. A guest arrives knowing
+   * only their install id, so without this a private note broadcast back to its own
+   * author would not be recognised as theirs.
+   */
+  const viewer = access?.userId ?? me;
+  // Nothing subscribes before the join returns: the socket refuses a subscription
+  // without a seat, and there is no participantId to subscribe with until then.
   useCallEvents(
     groupCallId,
-    me,
+    viewer,
     applyEvent,
     access?.callSessionToken ?? null,
     access?.participantId ?? null,
@@ -284,12 +303,14 @@ export function CallScreen({
     [post],
   );
 
+  /**
+   * Which seat is mine, by the id my own join came back with. Guessing from userId
+   * cannot answer this for a guest, who has no account, and it is what left the dock
+   * unrendered for anyone who arrived from the emailed link.
+   */
   const mine = useMemo(
-    () =>
-      state?.participants.find(
-        (row) => row.userId === me || row.id === access?.participantId,
-      ),
-    [access?.participantId, state, me],
+    () => callSelf(state?.participants ?? [], access?.participantId) ?? undefined,
+    [access?.participantId, state],
   );
 
   useEffect(() => {
@@ -375,11 +396,11 @@ export function CallScreen({
 
   const addNote = useCallback(
     async (scope: NoteScope, body: string) => {
-      const created = await post<CallNote>("notes", { scope, body });
-      setState(
-        (current) =>
-          current && { ...current, notes: [...current.notes, created] },
-      );
+      // Do not append locally. As with send() and addAction(), the server broadcasts
+      // `call.note.created` back to the author too, and the POST answers with the bare
+      // note while the broadcast wraps it — so a local append could never be recognised
+      // as the same note, and every note the author wrote showed up twice for them.
+      await post<CallNote>("notes", { scope, body });
     },
     [post],
   );

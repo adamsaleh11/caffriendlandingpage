@@ -79,3 +79,36 @@ export function safeDurableUrl(value: unknown): string | null {
     return url.protocol === 'https:' && !url.username && !url.password ? url.toString() : null;
   } catch { return null; }
 }
+
+/**
+ * Resolving an outreach email to a person, at the client boundary.
+ *
+ * The response carries a consumer profile, so it is whitelisted like everything
+ * else here rather than passed through: the account behind an address holds
+ * contact and billing columns an invitation draft has no business reading.
+ */
+const resolveFields = ['email', 'status', 'userId', 'existingPersonId'];
+const resolveProfileFields = ['displayName', 'title', 'company', 'organizationId', 'location', 'sourceUrl', 'image'];
+
+const pick = (source: Record<string, unknown>, fields: string[]) => {
+  const out: Record<string, unknown> = {};
+  for (const field of fields) if (field in source) out[field] = source[field];
+  return out;
+};
+
+export function projectResolvePage(body: unknown) {
+  const page = (body ?? {}) as { items?: unknown };
+  const rows = Array.isArray(page.items) ? page.items : [];
+  return {
+    items: rows.map(row => {
+      const source = (row ?? {}) as Record<string, unknown>;
+      const profile = source.profile;
+      return {
+        ...pick(source, resolveFields),
+        profile: profile && typeof profile === 'object'
+          ? pick(profile as Record<string, unknown>, resolveProfileFields)
+          : null,
+      };
+    }),
+  };
+}

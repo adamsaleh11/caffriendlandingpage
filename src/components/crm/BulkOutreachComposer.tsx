@@ -1,8 +1,9 @@
 'use client';
-import {useEffect,useState} from 'react';
+import {useEffect,useRef,useState} from 'react';
 import {api,ApiError,startCrmOAuth} from '@/lib/api';
 import { isLiveConnection } from '@/lib/contracts';
 import type {CalendarConnection,Engagement,Person,Pipeline,Stage} from '@/lib/contracts';
+import {noticeFor,personPlanFor,type ResolvedEntry} from '@/lib/person-resolution';
 import Modal from './Modal';
 import {DatePicker} from '@/components/ui/date-picker';
 import {TimePicker} from '@/components/ui/time-picker';
@@ -13,16 +14,52 @@ type Mail={connectionId:string;provider:'GOOGLE'|'MICROSOFT';canSend:boolean;sen
 type Preview={target:InviteTarget;engagementId:string;idempotencyKey:string;draft:Record<string,unknown>;subject:string;html:string;from:string;to:string};
 type Slot={date:string;time:string;duration:string};
 const localZone=()=>Intl.DateTimeFormat().resolvedOptions().timeZone;
-const displayName=(email:string)=>email.split('@')[0].replace(/[._-]+/g,' ').replace(/\b\w/g,char=>char.toUpperCase())||email;
 
 export default function BulkOutreachComposer({workspaceId,targets,pipeline,stages,onClose,onSent}:{workspaceId:string;targets:InviteTarget[];pipeline:Pipeline;stages:Stage[];onClose:()=>void;onSent:()=>void}){
  const [connections,setConnections]=useState<CalendarConnection[]>();const [mails,setMails]=useState<Mail[]>([]);const [connectionId,setConnectionId]=useState('');const [problem,setProblem]=useState('');const [working,setWorking]=useState('');
+ const [resolved,setResolved]=useState<Map<string,ResolvedEntry>>(new Map());
  const [purpose,setPurpose]=useState('Coffee chat');const [message,setMessage]=useState('');const [timezone,setTimezone]=useState(localZone());const [venue,setVenue]=useState<'CAFFRIEND_LIVEKIT'|'PROVIDER_CONFERENCE'>('CAFFRIEND_LIVEKIT');const [slots,setSlots]=useState<Slot[]>([{date:'',time:'',duration:'30'}]);const [previews,setPreviews]=useState<Preview[]>();const [previewIndex,setPreviewIndex]=useState(0);const [results,setResults]=useState<{email:string;ok:boolean;error?:string}[]>();
  useEffect(()=>{let live=true;api<CalendarConnection[]>(`workspaces/${workspaceId}/calendar-connections`).then(async rows=>{if(!live)return;setConnections(rows);const statuses=await Promise.all(rows.filter(row=>isLiveConnection(row.status)).map(row=>api<Mail>(`workspaces/${workspaceId}/mail-connections/${row.id}`).catch(()=>({connectionId:row.id,provider:row.provider,canSend:false,mailStatus:'UNAVAILABLE'}))));if(!live)return;setMails(statuses);const usable=statuses.filter(row=>row.canSend);if(usable.length===1)setConnectionId(usable[0].connectionId);}).catch(error=>setProblem(error instanceof ApiError?error.message:'Connections could not be loaded.'));return()=>{live=false};},[workspaceId]);
+ /**
+  * Who these addresses already are, asked once for the whole batch.
+  *
+  * Best-effort enrichment: a failure here leaves `resolved` empty, and every
+  * recipient falls back to exactly today's record. It must never stop a send.
+  */
+ const emailKey=targets.map(target=>target.email).join(',');
+ /**
+  * The in-flight lookup, not the settled state.
+  *
+  * A sender who reaches Preview before this answers would otherwise be tracked
+  * against an empty map — no `existingPersonId`, so a second person minted for an
+  * address the workspace already has. Writing a person awaits this promise, so the
+  * answer always applies however fast the sender was.
+  */
+ const resolving=useRef<Promise<Map<string,ResolvedEntry>>>(Promise.resolve(new Map()));
+ useEffect(()=>{const list=emailKey?emailKey.split(','):[];if(!list.length)return;let live=true;
+  const lookup=api<{items:ResolvedEntry[]}>(`workspaces/${workspaceId}/crm/people/resolve`,{method:'POST',body:JSON.stringify({emails:list})})
+   .then(page=>new Map((page.items??[]).map(item=>[item.email.toLowerCase(),item])))
+   // Best-effort enrichment: a failure resolves to nothing known, and every
+   // recipient falls back to exactly today's record. It must never stop a send.
+   .catch(()=>new Map<string,ResolvedEntry>());
+  resolving.current=lookup;
+  lookup.then(rows=>{if(live)setResolved(rows);});
+  return()=>{live=false};},[workspaceId,emailKey]);
  const selected=connections?.find(row=>row.id===connectionId);const usable=mails.filter(row=>row.canSend);const invalidate=()=>setPreviews(undefined);
  async function connectCalendar(){setWorking('connect');try{window.location.assign(await startCrmOAuth(`/workspaces/${workspaceId}/calendar-connections/GOOGLE/connect`));}catch(error){setProblem(error instanceof ApiError?error.message:'Google Calendar could not be connected.');setWorking('');}}
  async function connectMail(id:string){setWorking('connect');try{window.location.assign(await startCrmOAuth(`/workspaces/${workspaceId}/mail-connections/${id}/connect`));}catch(error){setProblem(error instanceof ApiError?error.message:'Mailbox permission could not be connected.');setWorking('');}}
- async function tracked(target:InviteTarget){let person=target.person;if(!person){person=await api<Person>(`workspaces/${workspaceId}/crm/people`,{method:'POST',body:JSON.stringify({displayName:displayName(target.email),email:target.email,sourceCategory:'MANUAL'}),headers:{'X-Idempotency-Key':crypto.randomUUID()}});}if(target.engagementId)return{person,engagementId:target.engagementId};const stage=stages.find(row=>row.name.toLowerCase()==='prospect')??stages.find(row=>!row.archived);if(!stage)throw new Error('The Prospect pipeline step is unavailable.');const engagement=await api<Engagement>(`workspaces/${workspaceId}/crm/engagements`,{method:'POST',body:JSON.stringify({pipelineId:pipeline.id,stageId:stage.id,status:'OPEN',objective:purpose.trim(),nextAction:'Invitation sent',personId:person.id}),headers:{'X-Idempotency-Key':crypto.randomUUID()}});return{person,engagementId:engagement.id};}
+ /**
+  * The person this invitation is tracked against.
+  *
+  * A person the workspace already has for this address is reused rather than
+  * duplicated — there is no uniqueness constraint behind this, so reuse is the fix.
+  */
+ async function tracked(target:InviteTarget){
+  const plan=personPlanFor(target,(await resolving.current).get(target.email.toLowerCase()));
+  const person=target.person ?? (plan.personId
+   ? await api<Person>(`workspaces/${workspaceId}/crm/people/${plan.personId}`)
+   : await api<Person>(`workspaces/${workspaceId}/crm/people`,{method:'POST',body:JSON.stringify(plan.create),headers:{'X-Idempotency-Key':crypto.randomUUID()}}));
+if(target.engagementId)return{person,engagementId:target.engagementId};const stage=stages.find(row=>row.name.toLowerCase()==='prospect')??stages.find(row=>!row.archived);if(!stage)throw new Error('The Prospect pipeline step is unavailable.');const engagement=await api<Engagement>(`workspaces/${workspaceId}/crm/engagements`,{method:'POST',body:JSON.stringify({pipelineId:pipeline.id,stageId:stage.id,status:'OPEN',objective:purpose.trim(),nextAction:'Invitation sent',personId:person.id}),headers:{'X-Idempotency-Key':crypto.randomUUID()}});return{person,engagementId:engagement.id};}
  function parsedSlots(){return slots.map(slot=>{const start=new Date(`${slot.date}T${slot.time}`);return{startsAt:start.toISOString(),endsAt:new Date(start.getTime()+Number(slot.duration)*60000).toISOString()};});}
  async function preview(){if(!message.trim()||!purpose.trim()||!connectionId||slots.some(slot=>!slot.date||!slot.time)){setProblem('Complete the purpose, message, sender account, and every proposed time.');return;}setWorking('preview');setProblem('');try{const times=parsedSlots();if(times.some(slot=>Date.parse(slot.startsAt)<=Date.now()))throw new Error('Every proposed time must be in the future.');const rendered:Preview[]=[];for(const target of targets){const record=await tracked(target);const draft={engagementId:record.engagementId,connectionId,recipientEmail:target.email,purpose:purpose.trim(),message:message.trim(),timezone,venue,slots:times};const email=await api<Omit<Preview,'target'|'engagementId'|'idempotencyKey'|'draft'>>(`workspaces/${workspaceId}/meeting-outreach/preview`,{method:'POST',body:JSON.stringify(draft)});rendered.push({...email,target:{...target,person:record.person,engagementId:record.engagementId},engagementId:record.engagementId,idempotencyKey:crypto.randomUUID(),draft});}setPreviews(rendered);setPreviewIndex(0);}catch(error){setProblem(error instanceof ApiError||error instanceof Error?error.message:'The previews could not be created. Nothing was sent.');}finally{setWorking('');}}
  async function sendAll(){if(!previews)return;setWorking('send');const sent=[] as {email:string;ok:boolean;error?:string}[];for(const item of previews){try{const result=await api<{sendStatus:string;sendErrorCode?:string}>(`workspaces/${workspaceId}/meeting-outreach`,{method:'POST',body:JSON.stringify(item.draft),headers:{'X-Idempotency-Key':item.idempotencyKey}});if(result.sendStatus!=='SENT')throw new Error(result.sendErrorCode||'Delivery could not be confirmed');await api(`workspaces/${workspaceId}/crm/notes`,{method:'POST',body:JSON.stringify({body:`Coffee chat invitation sent to ${item.to}.`,personId:item.target.person?.id,engagementId:item.engagementId}),headers:{'X-Idempotency-Key':crypto.randomUUID()}});sent.push({email:item.to,ok:true});}catch(error){sent.push({email:item.to,ok:false,error:error instanceof Error?error.message:'Send failed'});}}setResults(sent);setWorking('');onSent();}
@@ -37,7 +74,16 @@ export default function BulkOutreachComposer({workspaceId,targets,pipeline,stage
   <div className="steps compose-steps" aria-hidden="true"><span className="on"/><span className={shown?'on':''}/></div>
   {!connections?<p role="status">Checking calendar and mailbox access…</p>:shown?null:<form className="outreach-form" onSubmit={event=>{event.preventDefault();preview();}}>{problem&&<p role="alert">{problem}</p>}
    {!connections.length?<div className="connection-gate"><strong>Connect Google Calendar</strong><p>Connect once to propose available times and authorize your mailbox.</p><button type="button" onClick={connectCalendar}>Connect Google Calendar</button></div>:!usable.length?<div className="connection-gate"><strong>Connect your mailbox to send</strong><p>Caffriend sends these invitations from your own address.</p>{mailable.map(row=><button type="button" key={row.id} onClick={()=>connectMail(row.id)}>Connect {row.accountIdentifier||row.provider} mailbox</button>)}{!!pendingCalendars.length&&<p className="small">{pendingCalendars.length===1?'Your calendar connection still needs a calendar chosen':'Some calendar connections still need a calendar chosen'} — finish that in <a href={`/app/${workspaceId}/settings`}>Calendars</a>.</p>}{!mailable.length&&<><p className="small">None of your connections can authorize a mailbox. Reconnect Google Calendar and try again.</p><button type="button" onClick={connectCalendar}>Connect Google Calendar</button></>}</div>:<>
-    <div className="recipient-summary"><strong>Recipients</strong><div>{targets.map(target=><span className="recipient-pill" key={target.email}>{target.person?.displayName||target.email}</span>)}</div></div>
+    {/* Each recipient leads with who they already are, so the sender knows before
+        sending whether a Connection exists or the person answers as a guest. */}
+    <div className="recipient-summary"><strong>Recipients</strong><ul className="recipient-notices">{targets.map(target=>{
+     const entry=resolved.get(target.email.toLowerCase());
+     const notice=entry?noticeFor(entry):undefined;
+     const name=entry?.profile?.displayName?.trim()||target.person?.displayName||target.email;
+     return <li key={target.email}>
+      <span className="recipient-pill">{name}</span>
+      {notice&&<span className={`small recipient-notice ${notice.tone}`}>{notice.message}</span>}
+     </li>;})}</ul></div>
     <div className="field"><span className="field-label">From account</span><Select value={connectionId} onValueChange={value=>{setConnectionId(value);invalidate();}}><SelectTrigger aria-label="From account"><SelectValue placeholder="Choose a mailbox"/></SelectTrigger><SelectContent>{usable.map(mail=><SelectItem key={mail.connectionId} value={mail.connectionId}>{mail.senderAddress||mail.provider}</SelectItem>)}</SelectContent></Select></div>
     <label>Purpose<input required maxLength={2000} value={purpose} onChange={event=>{setPurpose(event.target.value);invalidate();}}/></label><label>Message<textarea required rows={5} maxLength={4000} value={message} onChange={event=>{setMessage(event.target.value);invalidate();}}/></label><label>Timezone<input value={timezone} onChange={event=>{setTimezone(event.target.value);invalidate();}}/></label>
     <fieldset><legend>Where will it happen?</legend><label className="choice"><input type="radio" checked={venue==='CAFFRIEND_LIVEKIT'} onChange={()=>{setVenue('CAFFRIEND_LIVEKIT');invalidate();}}/> Caffriend call</label><label className="choice"><input type="radio" checked={venue==='PROVIDER_CONFERENCE'} onChange={()=>{setVenue('PROVIDER_CONFERENCE');invalidate();}}/> Google Meet</label></fieldset>

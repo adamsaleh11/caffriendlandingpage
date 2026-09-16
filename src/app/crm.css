@@ -1530,3 +1530,10 @@
 .crm .call-detail-identity > .avatar { width: 2.75rem; height: 2.75rem; flex: none; }
 .crm .call-detail-identity p { margin: 0; }
 .crm .call-detail-who { font-weight: 700; color: var(--ink); overflow-wrap: anywhere; }
+
+/* Each recipient and what is already known about them, one row each, so a long
+   batch stays readable rather than becoming a wall of pills. */
+.crm .recipient-notices { list-style:none; margin:9px 0 0; padding:0; display:flex; flex-direction:column; gap:7px; }
+.crm .recipient-notices > li { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.crm .recipient-notice.connection { color:var(--brand); }
+.crm .recipient-notice.guest { color:var(--muted); }

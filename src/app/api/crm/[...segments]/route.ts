@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSession, clearSession, sameOrigin, setSealed, readSealed, hashState, pendingCookie, fiveMinutes, webOrigin, type PendingFlows } from '@/lib/session';
 import { backend, BackendError } from '@/lib/backend';
-import { isResource, project, projectPage, projectTimelinePage } from '@/lib/crm-projection';
+import { isResource, project, projectPage, projectResolvePage, projectTimelinePage } from '@/lib/crm-projection';
 import { writableResources, archivableResources, deletableResources, approvalActions } from '@/lib/contracts';
 import { bookingRequest, uuidPattern, providers, meetingStatuses, type AuditEvent, type CalendarConnection, type Meeting, type MeetingStatus, type Provider, type Workspace } from '@/lib/contracts';
 import { acceptedCalls } from '@/lib/app-projection';
@@ -242,6 +242,24 @@ export async function POST(request: Request, {params}:{params:Promise<{segments:
       const name = body.name;
       if (typeof name !== 'string' || !name.trim() || name.length > 200) return json({error:'Enter a workspace name of up to 200 characters.'}, 400);
       return json(await backend('/workspaces', {token:session.token, method:'POST', body:{name:name.trim()}}));
+    }
+    /**
+     * Resolving outreach emails to people.
+     *
+     * Its own branch at its own segment shape, rather than joining the CRM resource
+     * vocabulary — which would also expose it through the generic list and get paths.
+     * Read-shaped despite the POST: the addresses are a request body, not a change, so
+     * no idempotency key is required.
+     */
+    if (workspace && segments[2] === 'crm' && segments.length === 5
+      && segments[3] === 'people' && segments[4] === 'resolve') {
+      const emails = Array.isArray(body.emails)
+        ? body.emails.filter((value): value is string => typeof value === 'string') : [];
+      // The batch cap is the server's; it is repeated here so an oversized request is
+      // refused at the boundary rather than spent on a round trip.
+      if (!emails.length || emails.length > 100) return json({error:'Request not allowed'}, 400);
+      return json(projectResolvePage(
+        await backend(`${workspace}/crm/people/resolve`, {token:session.token, method:'POST', body:{emails}})));
     }
     /**
      * Booking a coffee chat.
