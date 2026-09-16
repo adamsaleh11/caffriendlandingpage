@@ -36,6 +36,16 @@ export default function BulkOutreachComposer({workspaceId,targets,pipeline,stage
   * answer always applies however fast the sender was.
   */
  const resolving=useRef<Promise<Map<string,ResolvedEntry>>>(Promise.resolve(new Map()));
+ /**
+  * What has already been written for each recipient, for the life of this composer.
+  *
+  * `tracked` runs again on every Preview, and a sender reaches Preview more than
+  * once whenever they go back to edit or a send fails and they try again. Without
+  * this, every attempt minted another person and another pipeline card for the
+  * same recipient — the duplicate rows the board showed. Keyed by address, since a
+  * typed-in target carries no id of its own until this has run once.
+  */
+ const written=useRef<Map<string,{person:Person;engagementId:string;minted:boolean;objective:string}>>(new Map());
  useEffect(()=>{const list=emailKey?emailKey.split(','):[];if(!list.length)return;let live=true;
   const lookup=api<{items:ResolvedEntry[]}>(`workspaces/${workspaceId}/crm/people/resolve`,{method:'POST',body:JSON.stringify({emails:list})})
    .then(page=>new Map((page.items??[]).map(item=>[item.email.toLowerCase(),item])))
@@ -55,11 +65,33 @@ export default function BulkOutreachComposer({workspaceId,targets,pipeline,stage
   * duplicated — there is no uniqueness constraint behind this, so reuse is the fix.
   */
  async function tracked(target:InviteTarget){
-  const plan=personPlanFor(target,(await resolving.current).get(target.email.toLowerCase()));
+  const key=target.email.toLowerCase();
+  const already=written.current.get(key);
+  // A card this composer created carries the purpose as its objective, so an
+  // edited purpose is written through rather than leaving the board on the first
+  // wording. An engagement that already existed on the board is the sender's own
+  // record and is never rewritten by sending to them again.
+  if(already){
+   if(already.minted&&purpose.trim()&&purpose.trim()!==already.objective){
+    await api(`workspaces/${workspaceId}/crm/engagements/${already.engagementId}`,{method:'PATCH',body:JSON.stringify({objective:purpose.trim()}),headers:{'X-Idempotency-Key':crypto.randomUUID()}});
+    already.objective=purpose.trim();
+   }
+   return already;
+  }
+  const plan=personPlanFor(target,(await resolving.current).get(key));
   const person=target.person ?? (plan.personId
    ? await api<Person>(`workspaces/${workspaceId}/crm/people/${plan.personId}`)
    : await api<Person>(`workspaces/${workspaceId}/crm/people`,{method:'POST',body:JSON.stringify(plan.create),headers:{'X-Idempotency-Key':crypto.randomUUID()}}));
-if(target.engagementId)return{person,engagementId:target.engagementId};const stage=stages.find(row=>row.name.toLowerCase()==='prospect')??stages.find(row=>!row.archived);if(!stage)throw new Error('The Prospect pipeline step is unavailable.');const engagement=await api<Engagement>(`workspaces/${workspaceId}/crm/engagements`,{method:'POST',body:JSON.stringify({pipelineId:pipeline.id,stageId:stage.id,status:'OPEN',objective:purpose.trim(),nextAction:'Invitation sent',personId:person.id}),headers:{'X-Idempotency-Key':crypto.randomUUID()}});return{person,engagementId:engagement.id};}
+  const record=await (async()=>{
+   if(target.engagementId)return{person,engagementId:target.engagementId,minted:false,objective:purpose.trim()};
+   const stage=stages.find(row=>row.name.toLowerCase()==='prospect')??stages.find(row=>!row.archived);
+   if(!stage)throw new Error('The Prospect pipeline step is unavailable.');
+   const engagement=await api<Engagement>(`workspaces/${workspaceId}/crm/engagements`,{method:'POST',body:JSON.stringify({pipelineId:pipeline.id,stageId:stage.id,status:'OPEN',objective:purpose.trim(),nextAction:'Invitation sent',personId:person.id}),headers:{'X-Idempotency-Key':crypto.randomUUID()}});
+   return{person,engagementId:engagement.id,minted:true,objective:purpose.trim()};
+  })();
+  written.current.set(key,record);
+  return record;
+ }
  function parsedSlots(){return slots.map(slot=>{const start=new Date(`${slot.date}T${slot.time}`);return{startsAt:start.toISOString(),endsAt:new Date(start.getTime()+Number(slot.duration)*60000).toISOString()};});}
  async function preview(){if(!message.trim()||!purpose.trim()||!connectionId||slots.some(slot=>!slot.date||!slot.time)){setProblem('Complete the purpose, message, sender account, and every proposed time.');return;}setWorking('preview');setProblem('');try{const times=parsedSlots();if(times.some(slot=>Date.parse(slot.startsAt)<=Date.now()))throw new Error('Every proposed time must be in the future.');const rendered:Preview[]=[];for(const target of targets){const record=await tracked(target);const draft={engagementId:record.engagementId,connectionId,recipientEmail:target.email,purpose:purpose.trim(),message:message.trim(),timezone,venue,slots:times};const email=await api<Omit<Preview,'target'|'engagementId'|'idempotencyKey'|'draft'>>(`workspaces/${workspaceId}/meeting-outreach/preview`,{method:'POST',body:JSON.stringify(draft)});rendered.push({...email,target:{...target,person:record.person,engagementId:record.engagementId},engagementId:record.engagementId,idempotencyKey:crypto.randomUUID(),draft});}setPreviews(rendered);setPreviewIndex(0);}catch(error){setProblem(error instanceof ApiError||error instanceof Error?error.message:'The previews could not be created. Nothing was sent.');}finally{setWorking('');}}
  async function sendAll(){if(!previews)return;setWorking('send');const sent=[] as {email:string;ok:boolean;error?:string}[];for(const item of previews){try{const result=await api<{sendStatus:string;sendErrorCode?:string}>(`workspaces/${workspaceId}/meeting-outreach`,{method:'POST',body:JSON.stringify(item.draft),headers:{'X-Idempotency-Key':item.idempotencyKey}});if(result.sendStatus!=='SENT')throw new Error(result.sendErrorCode||'Delivery could not be confirmed');await api(`workspaces/${workspaceId}/crm/notes`,{method:'POST',body:JSON.stringify({body:`Coffee chat invitation sent to ${item.to}.`,personId:item.target.person?.id,engagementId:item.engagementId}),headers:{'X-Idempotency-Key':crypto.randomUUID()}});sent.push({email:item.to,ok:true});}catch(error){sent.push({email:item.to,ok:false,error:error instanceof Error?error.message:'Send failed'});}}setResults(sent);setWorking('');onSent();}
