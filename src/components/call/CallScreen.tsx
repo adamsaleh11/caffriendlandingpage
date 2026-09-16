@@ -1,5 +1,6 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { Room } from "livekit-client";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import {
@@ -72,6 +73,11 @@ export function CallScreen({
   // Which seats LiveKit has connected. A roster row is created when someone is invited
   // or admitted, so only the room can say who is actually here.
   const [online, setOnline] = useState<string[]>([]);
+  // The live Room instance, lifted out of CallMedia so `leave` can hard-disconnect
+  // it before navigating away — otherwise the old signal connection can still be
+  // closing when a rejoin opens a new one with the same identity, racing LiveKit's
+  // own "new session wins" eviction.
+  const roomRef = useRef<Room | null>(null);
 
   const callHeaders = useMemo<Record<string, string>>(() => {
     const headers: Record<string, string> = {};
@@ -488,6 +494,11 @@ export function CallScreen({
     onControl: control,
   };
   const leave = async () => {
+    // Disconnect the LiveKit room ourselves, and wait for it, before telling the
+    // server we've left or navigating anywhere. Relying on the React unmount to
+    // eventually tear the room down races the next join — a rejoin can mint a new
+    // token for the same identity before the old socket has actually closed.
+    await roomRef.current?.disconnect().catch(() => undefined);
     if (access?.participantId) {
       await post("leave", { participantId: access.participantId }).catch(
         () => undefined,
@@ -577,6 +588,7 @@ export function CallScreen({
             {joinError && <p role="alert">{joinError}</p>}
             <CallMedia
               credentials={access}
+              roomRef={roomRef}
               micOn={mine?.micOn ?? false}
               cameraOn={mine?.cameraOn ?? false}
               shareOn={mine?.screenShareOn ?? false}

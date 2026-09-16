@@ -117,25 +117,76 @@ function Publish({micOn, cameraOn, shareOn, onShareEnded}:{
 }
 
 /**
+ * Nudges audio playback back to life after a remote track renegotiates.
+ *
+ * `StartAudio` only unlocks playback once, on the browser's autoplay block. A
+ * Bluetooth device switching profiles mid-call (its owner connecting headphones, the
+ * OS renegotiating HFP/A2DP) republishes their audio track without a fresh autoplay
+ * block, so the listener's `<audio>` element can go silent with nothing to prompt a
+ * retry. `room.startAudio()` is safe to call repeatedly — it resumes a suspended
+ * AudioContext and is a no-op once playback is already flowing — so it is retried on
+ * the events that mark a track coming back after such a hiccup.
+ */
+/**
+ * Hands the live `Room` instance up to whoever asked for one.
+ *
+ * Leaving has to hard-disconnect this exact room before the caller is allowed to
+ * navigate away or rejoin — otherwise the old signal connection can still be closing
+ * when the new one opens with the same identity, and LiveKit's own "new session wins"
+ * eviction can lose that race. The context only exists inside `LiveKitRoom`, so the
+ * instance is lifted out through a ref rather than read where it isn't in scope.
+ */
+function RoomHandle({roomRef}:{roomRef: React.MutableRefObject<import('livekit-client').Room | null>}) {
+  const room = useRoomContext();
+  useEffect(() => {
+    roomRef.current = room;
+    return () => { if (roomRef.current === room) roomRef.current = null; };
+  }, [room, roomRef]);
+  return null;
+}
+
+function AudioResilience() {
+  const room = useRoomContext();
+  useEffect(() => {
+    const retry = () => { void room.startAudio().catch(() => {}); };
+    room.on(RoomEvent.TrackSubscribed, retry);
+    room.on(RoomEvent.TrackUnmuted, retry);
+    return () => {
+      room.off(RoomEvent.TrackSubscribed, retry);
+      room.off(RoomEvent.TrackUnmuted, retry);
+    };
+  }, [room]);
+  return null;
+}
+
+/**
  * The media layer is additive: the call renders from its roster whether or not LiveKit
  * connects. A refused join, a room that has not been provisioned, or a browser with no
  * camera permission costs the video, never the call.
  */
-export function CallMedia({credentials, micOn, cameraOn, shareOn, onShareEnded, onPresence, children}:{
+export function CallMedia({credentials, micOn, cameraOn, shareOn, onShareEnded, onPresence, roomRef, children}:{
   credentials?: {token:string; url:string}; micOn: boolean; cameraOn: boolean; shareOn: boolean;
   onShareEnded: () => void;
   onPresence: (seats: string[]) => void;
+  roomRef?: React.MutableRefObject<import('livekit-client').Room | null>;
   children: (video: VideoFor) => React.ReactNode;
 }) {
   const [failed, setFailed] = useState(false);
+
+  // A new token means a fresh join — reset any earlier failure so this attempt gets
+  // its own chance to connect, rather than staying dead for the rest of the mount
+  // because a previous session (e.g. a stale identity not yet evicted) once errored.
+  useEffect(() => setFailed(false), [credentials?.token]);
 
   if (!credentials || failed) return <div className="call-media">{children(() => null)}</div>;
 
   return <div className="call-media">
     <LiveKitRoom className="call-media-room" token={credentials.token} serverUrl={credentials.url}
-      connect onError={() => setFailed(true)}>
+      connect onError={(error) => { console.error('LiveKit connection failed', error); setFailed(true); }}>
       <RoomAudioRenderer />
       <StartAudio label="Enable call audio" />
+      <AudioResilience />
+      {roomRef && <RoomHandle roomRef={roomRef} />}
       <Presence onPresence={onPresence} />
       <Publish micOn={micOn} cameraOn={cameraOn} shareOn={shareOn} onShareEnded={onShareEnded} />
       <Tracks>{children}</Tracks>
