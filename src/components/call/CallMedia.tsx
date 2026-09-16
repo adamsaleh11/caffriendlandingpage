@@ -2,7 +2,7 @@
 import { createContext, useContext, useMemo, useState } from 'react';
 import { LiveKitRoom, RoomAudioRenderer, StartAudio, VideoTrack, useTracks, isTrackReference } from '@livekit/components-react';
 import { Track } from 'livekit-client';
-import type { CallParticipant } from '@/lib/call';
+import { seatOfIdentity, type CallParticipant } from '@/lib/call';
 
 type VideoFor = (person: CallParticipant) => React.ReactNode;
 const MediaContext = createContext<VideoFor>(() => null);
@@ -11,9 +11,11 @@ export const useVideoFor = () => useContext(MediaContext);
 /**
  * Publishes the track for one seat.
  *
- * Tracks are keyed by the LiveKit identity, which is the Caffriend user id — the same
- * id the call roster carries — so a tile and its video find each other without a
- * separate mapping. Screen share wins over camera: someone sharing wants the share seen.
+ * Tracks are keyed by the LiveKit identity, which is composite — the account (or a
+ * `guest-` stand-in) joined to the seat. The seat is the half a roster row carries, so
+ * a tile and its video find each other on that rather than on the whole string, which
+ * equals neither a userId nor a participantId and so matched nobody at all.
+ * Screen share wins over camera: someone sharing wants the share seen.
  */
 function Tracks({children}:{children:(video:VideoFor)=>React.ReactNode}) {
   const tracks = useTracks([
@@ -27,7 +29,7 @@ function Tracks({children}:{children:(video:VideoFor)=>React.ReactNode}) {
     function videoForSeat(person: CallParticipant) {
       // A placeholder is a seat with no published track yet; the tile draws its own
       // fallback for that, so only a real track is handed back.
-      const match = tracks.find(track => track.participant.identity === person.userId && isTrackReference(track));
+      const match = tracks.find(track => seatOfIdentity(track.participant.identity) === person.id && isTrackReference(track));
       return match && isTrackReference(match) ? <VideoTrack trackRef={match} /> : null;
     }
     return videoForSeat;

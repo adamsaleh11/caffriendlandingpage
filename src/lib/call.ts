@@ -165,7 +165,10 @@ export function projectAgendaBlock(row: Record<string, unknown>): CallAgendaBloc
  */
 function dedupeByUserId(rows: CallParticipant[]): CallParticipant[] {
   const byUserId = new Map<string, CallParticipant>();
-  for (const row of rows) byUserId.set(row.userId, row);
+  // A guest has no account, so every guest carries the same empty userId and keying on
+  // it alone folded a whole room of them into one row — including, sometimes, the
+  // viewer's own seat, which then could not be found and left the dock unrendered.
+  for (const row of rows) byUserId.set(row.userId || `seat:${row.id}`, row);
   return [...byUserId.values()];
 }
 
@@ -280,6 +283,17 @@ export function projectJoin(body: unknown): CallJoin {
  */
 export const callSelf = (participants: CallParticipant[], participantId: string | null | undefined) =>
   participantId ? participants.find(person => person.id === participantId) ?? null : null;
+
+/**
+ * The seat behind a LiveKit identity.
+ *
+ * Identity is composite — `${userId ?? "guest-" + participantId}_${participantId}` —
+ * so neither half matches a roster row on its own. Comparing the whole string to a
+ * userId, as this used to, never matched anybody, which is why no tile ever found its
+ * video. The seat is the segment after the last underscore, and a userId may itself
+ * contain one, so the split is from the right.
+ */
+export const seatOfIdentity = (identity: string): string => identity.slice(identity.lastIndexOf('_') + 1);
 
 /** Someone is only ever named for themselves as "You". */
 export const participantName = (participant: CallParticipant, me: string) =>

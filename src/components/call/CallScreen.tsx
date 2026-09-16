@@ -149,7 +149,10 @@ export function CallScreen({
         .catch(fail);
     } else {
       resolve()
-        .then(() => join({}))
+        // `displayName` is required, 1-200 chars: a join without one is refused with
+        // 400 and surfaced as "This call could not be loaded right now.", which is
+        // what every Join press from Meetings and Upcoming Calls used to land on.
+        .then(() => join({ displayName: displayName ?? "Caffriend member" }))
         .then((joined) => {
           if (!live) return;
           setAccess(joined);
@@ -326,7 +329,7 @@ export function CallScreen({
       );
     };
     heartbeat();
-    const timer = window.setInterval(heartbeat, 20_000);
+    const timer = window.setInterval(heartbeat, 5_000);
     const leaveOnClose = () => {
       const headers = {
         "Content-Type": "application/json",
