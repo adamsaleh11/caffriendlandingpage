@@ -1,4 +1,4 @@
-import { crmResources, type CrmResource } from './contracts';
+import { crmResources, type CrmResource, type MeetingParticipant } from './contracts';
 
 /**
  * The fields this boundary is willing to disclose, per resource.
@@ -25,7 +25,7 @@ const fields: Record<CrmResource, string[]> = {
   'source-claims': [...common, 'artifactId', 'conversationId', 'personId', 'engagementId', 'targetField', 'extractedValue', 'locator', 'confidence', 'rightsState', 'permittedUses'],
   conversations: [...common, 'provider', 'providerConversationId', 'title', 'durableUrl'],
   agents: [...common, 'name', 'status'],
-  meetings: [...common, 'purpose', 'startsAt', 'endsAt', 'timezone', 'status', 'provider', 'joinUrl', 'physicalLocation', 'agenda', 'engagementId', 'organizerId', 'connectionId', 'errorCode', 'groupCallId'],
+  meetings: [...common, 'purpose', 'startsAt', 'endsAt', 'timezone', 'status', 'provider', 'joinUrl', 'physicalLocation', 'agenda', 'engagementId', 'organizerId', 'connectionId', 'errorCode', 'groupCallId', 'meetingParticipantMeetingRows'],
 };
 
 /**
@@ -51,12 +51,36 @@ export function projectTimelinePage(body: unknown) {
   };
 }
 
+/**
+ * The invited people on a meeting, narrowed to a name and an address.
+ *
+ * Copied field by field rather than passed through: these rows are nested, so a
+ * blanket copy would disclose whatever the backend adds inside them later — and what
+ * it must never add here is anything saying whether an address has an account.
+ */
+export function meetingParticipants(value: unknown): MeetingParticipant[] {
+  if (!Array.isArray(value)) return [];
+  const name = (raw: unknown) => typeof raw === 'string' && raw ? raw : null;
+  return value.map(entry => {
+    const row = (entry ?? {}) as Record<string, unknown>;
+    const person = (row.person ?? null) as Record<string, unknown> | null;
+    const personName = person ? name(person.displayName) : null;
+    return {
+      displayName: name(row.displayName),
+      email: name(row.email),
+      person: personName ? {displayName: personName} : null,
+    };
+  });
+}
+
 export const isResource = (value: string): value is CrmResource => (crmResources as readonly string[]).includes(value);
 
 export function project(resource: CrmResource, row: unknown): Record<string, unknown> {
   const source = (row ?? {}) as Record<string, unknown>;
   const out: Record<string, unknown> = {};
   for (const field of fields[resource]) if (field in source) out[field] = source[field];
+  if (resource === 'meetings' && 'meetingParticipantMeetingRows' in source)
+    out.meetingParticipantMeetingRows = meetingParticipants(source.meetingParticipantMeetingRows);
   return out;
 }
 

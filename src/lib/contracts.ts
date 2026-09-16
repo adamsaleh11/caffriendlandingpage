@@ -108,7 +108,18 @@ export const immediateScopes = ['notes:write', 'tasks:write'];
 
 export const meetingStatuses = ['LOCAL','BOOKED','CONFERENCE_PENDING','PENDING','CONFIRMED','FAILED','CANCEL_PENDING','CANCEL_FAILED','CANCELLED'] as const;
 export type MeetingStatus = typeof meetingStatuses[number];
-/** Exactly the backend's `meetings` projection. Attendees and the provider event id are not in it. */
+/**
+ * One person invited to a meeting, as the backend reports them.
+ *
+ * Name and address only, by design: nothing here says whether the address belongs to
+ * a Caffriend account, so this payload cannot be used to enumerate who has one.
+ */
+export type MeetingParticipant = {
+  displayName: string | null;
+  email: string | null;
+  person: { displayName: string } | null;
+};
+/** Exactly the backend's `meetings` projection. The provider event id is not in it. */
 export type Meeting = {
   id: string;
   purpose: string;
@@ -129,6 +140,11 @@ export type Meeting = {
   source?: 'CRM' | 'CAFFRIEND' | null;
   /** Unified meeting flow: venue type for join flow determination */
   venue?: 'CAFFRIEND_LIVEKIT' | 'PROVIDER_CONFERENCE' | 'IN_PERSON' | null;
+  /**
+   * Who was invited. The organizer is not among them for a desktop-booked meeting, so
+   * the first entry is the counterpart; an empty array means nobody was invited.
+   */
+  meetingParticipantMeetingRows?: MeetingParticipant[];
 };
 export const statusLabels: Record<MeetingStatus, string> = {
   LOCAL: 'Not yet sent to a calendar',

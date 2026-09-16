@@ -174,6 +174,23 @@ export function fromCall(call: AppCall): UpcomingMeeting {
   };
 }
 
+/**
+ * Who a meeting is with, from the people the backend says were invited.
+ *
+ * The organizer is not in this array for a desktop-booked meeting, so the first entry
+ * is the counterpart. `null` means nobody was invited — never the organizer, who is
+ * the member reading the page and was what this used to fall back to, which is why
+ * every desktop-booked coffee was labelled with the viewer's own name.
+ */
+export function meetingCounterpart(meeting: Meeting): string | null {
+  const first = meeting.meetingParticipantMeetingRows?.[0];
+  if (!first) return null;
+  return first.person?.displayName ?? first.displayName ?? first.email ?? 'Unknown';
+}
+
+/** Shown in a name's place when a meeting was booked with nobody invited. */
+export const NO_ATTENDEES = 'No attendees';
+
 /** A meeting booked from a CRM invitation. */
 export function fromMeeting(meeting: Meeting): UpcomingMeeting {
   const open = joinable(meeting.status);
@@ -199,7 +216,7 @@ export function fromMeeting(meeting: Meeting): UpcomingMeeting {
   return {
     key: meeting.id,
     title: meeting.purpose || 'Meeting',
-    counterpart: null,
+    counterpart: meetingCounterpart(meeting),
     image: null,
     startsAt: meeting.startsAt || null,
     endsAt: meeting.endsAt || null,
@@ -261,6 +278,13 @@ export function mergeMeetings(calls: AppCall[], meetings: Meeting[]): UpcomingMe
      */
     rows.set(row.key, {
       ...existing,
+      /**
+       * The one thing the meeting record wins: the calendar event names whoever the
+       * booking was made against, which for a desktop booking is the organizer — the
+       * member reading the page. The invited people are only on the meeting.
+       */
+      counterpart: row.counterpart ?? existing.counterpart,
+      image: row.counterpart ? null : existing.image,
       status: row.status ?? existing.status,
       where: existing.where ?? row.where,
       notes: existing.notes ?? row.notes,

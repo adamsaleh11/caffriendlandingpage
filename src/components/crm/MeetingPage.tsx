@@ -5,7 +5,7 @@ import { api, ApiError } from '@/lib/api';
 import { calendarFailed, joinable, statusLabels, type AuditEvent, type Meeting } from '@/lib/contracts';
 import StateCard from './StateCard';
 import JoinAction from '@/components/app/JoinAction';
-import { fromMeeting } from '@/lib/upcoming';
+import { fromMeeting, meetingCounterpart, NO_ATTENDEES } from '@/lib/upcoming';
 import {DateTimePicker} from '@/components/ui/date-time-picker';
 
 const when = (value: string, timezone: string) => {
@@ -136,6 +136,9 @@ export default function MeetingPage({workspaceId, meetingId}:{workspaceId:string
       <h1>{meeting.purpose || 'Untitled meeting'}</h1>
       <p><strong>{statusLabels[meeting.status]}</strong></p>
       <dl>
+        {/* The invited people, as the backend reports them. The organizer — whoever is
+            reading this — is not among them, so this never names the viewer. */}
+        <dt>With</dt><dd>{meetingCounterpart(meeting) ?? NO_ATTENDEES}</dd>
         <dt>Starts</dt><dd>{when(meeting.startsAt, meeting.timezone)}</dd>
         <dt>Ends</dt><dd>{when(meeting.endsAt, meeting.timezone)}</dd>
         <dt>Timezone</dt><dd>{meeting.timezone}</dd>
@@ -197,8 +200,8 @@ export default function MeetingPage({workspaceId, meetingId}:{workspaceId:string
             <li key={row.id}><span>{row.action}</span> <span className="small">{when(row.createdAt, meeting.timezone)} · {row.actorType.toLowerCase()}</span></li>)}</ul>
         : <p className="small">No recorded activity is available for this meeting.</p>}
 
-      {/* Attendees and the provider event are not in the backend's meeting projection. */}
-      <p className="small">Attendee details and the calendar event are managed in {meeting.provider === 'MICROSOFT' ? 'Outlook' : 'Google'} Calendar.</p>
+      {/* The invited people are named above; the calendar event itself still is not here. */}
+      <p className="small">The calendar event is managed in {meeting.provider === 'MICROSOFT' ? 'Outlook' : 'Google'} Calendar.</p>
       <Link href={`/app/${workspaceId}/calendar`} className="text-link">Back to Calendar</Link>
     </section>
   </main>;

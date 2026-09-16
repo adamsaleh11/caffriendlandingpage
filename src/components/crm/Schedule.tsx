@@ -7,9 +7,10 @@ import Modal from './Modal';
 import JoinAction from '@/components/app/JoinAction';
 import Face from '@/components/app/Face';
 import type { AppCall } from '@/lib/app-projection';
-import { coffees, stillAhead, type UpcomingMeeting } from '@/lib/upcoming';
+import { coffees, meetingCounterpart, stillAhead, NO_ATTENDEES, type UpcomingMeeting } from '@/lib/upcoming';
 import UpcomingMeetings, { MeetingCard, type MeetingLine } from '@/components/app/UpcomingMeetings';
 import { callCounterpart, callFinished, type CallState, type MyCall } from '@/lib/call';
+import type { Meeting } from '@/lib/contracts';
 
 /**
  * Calls, as a calendar.
@@ -52,11 +53,12 @@ const minutesBetween = (from?: string | null, to?: string | null) => {
  * the chat and the meeting record were unreachable from the calendar — and a square
  * with no join link at all did nothing when clicked. Every square opens this instead.
  */
-function CallDetail({call, workspaceId, past, now, onClose}:{
-  call: UpcomingMeeting; workspaceId: string; past: boolean; now: number; onClose: () => void;
+function CallDetail({call, workspaceId, past, now, alone, onClose}:{
+  call: UpcomingMeeting; workspaceId: string; past: boolean; now: number; alone: boolean;
+  onClose: () => void;
 }) {
   const minutes = minutesBetween(call.startsAt, call.endsAt);
-  const who = call.counterpart || call.title;
+  const who = call.counterpart || (alone ? NO_ATTENDEES : call.title);
   return <Modal title={call.title} onClose={onClose}>
     {/* The same face and heading the card in the list carries, so opening one from the
         month grid lands somewhere recognisable. The name is said once, here: the dialog
@@ -93,7 +95,12 @@ function CallDetail({call, workspaceId, past, now, onClose}:{
   </Modal>;
 }
 
-function CallCalendar({calls, now, workspaceId}:{calls: UpcomingMeeting[]; now: number; workspaceId: string}) {
+function CallCalendar({calls, now, workspaceId, alone}:{
+  calls: UpcomingMeeting[]; now: number; workspaceId: string;
+  /** Meetings the backend reports nobody was invited to. */
+  alone: Set<string>;
+}) {
+  const nobody = (call: UpcomingMeeting) => Boolean(call.meetingId && alone.has(call.meetingId));
   const [open, setOpen] = useState<UpcomingMeeting>();
   const [month, setMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const today = new Date();
@@ -126,13 +133,13 @@ function CallCalendar({calls, now, workspaceId}:{calls: UpcomingMeeting[]; now: 
             data-past={!stillAhead(call, now) ? 'true' : undefined}
             onClick={() => setOpen(call)}>
             <span className="cal-event-time">{timeLabel(call.startsAt)}</span>
-            <span className="cal-event-who">{call.counterpart || call.title}</span>
+            <span className="cal-event-who">{call.counterpart || (nobody(call) ? NO_ATTENDEES : call.title)}</span>
           </button>)}
         </div>;
       })}
     </div>
     {open && <CallDetail call={open} workspaceId={workspaceId} past={!stillAhead(open, now)} now={now}
-      onClose={() => setOpen(undefined)} />}
+      alone={nobody(open)} onClose={() => setOpen(undefined)} />}
   </div>;
 }
 
@@ -231,9 +238,9 @@ export default function Schedule({workspaceId}:{workspaceId:string}) {
    * coffee chats, ahead and behind. It is not workspace-scoped, so a chat booked from
    * someone's phone, or booked into another workspace, is on this calendar too.
    *
-   * The workspace meetings list is deliberately not read here. It is workspace-scoped
-   * and its rows name nobody, so building the calendar on it hid half of someone's
-   * coffees and left the rest anonymous. It still backs the meeting record page.
+   * The workspace meetings list is deliberately not what the calendar is built from. It
+   * is workspace-scoped, so building the month on it hid half of someone's coffees. It
+   * is read below for one thing only: naming who a desktop-booked meeting is with.
    */
   const calls = useRows<AppCall>(`workspaces/${workspaceId}/upcoming-calls`);
   const history = useRows<MyCall>('mine', 'call');
@@ -246,6 +253,21 @@ export default function Schedule({workspaceId}:{workspaceId:string}) {
    * a finished call is told who it was with.
    */
   const pastEvents = useRows<AppCall>(`workspaces/${workspaceId}/past-calls`);
+  /**
+   * Who each desktop-booked meeting is actually with.
+   *
+   * The calendar feed names the account a booking was made against, which for a meeting
+   * booked from this workspace is the organizer — the member reading this page. So every
+   * desktop-booked coffee was labelled with the viewer's own name. The meeting record
+   * carries the people who were invited, and the organizer is not among them, so it is
+   * read alongside the feed purely to name the counterpart. Nothing is added to the
+   * calendar from it: what is on the month still comes from the feeds.
+   */
+  const meetings = useRows<Meeting>(`workspaces/${workspaceId}/meetings`);
+  const named = useMemo(() => new Map((meetings.rows ?? []).map(row =>
+    [row.id, meetingCounterpart(row)] as const)), [meetings.rows]);
+  /** The meetings that name nobody because nobody was invited, told apart from unknown. */
+  const alone = useMemo(() => new Set([...named].filter(([, who]) => !who).map(([id]) => id)), [named]);
   // Recomputed on the minute so a meeting drops off the list once it has ended.
   const [tick, setTick] = useState(() => Date.now());
   useEffect(() => {
@@ -257,8 +279,12 @@ export default function Schedule({workspaceId}:{workspaceId:string}) {
    * Filtering the grid to the future too emptied today's cell the moment a meeting
    * ended — including a stuck one the Inbox was still asking someone to deal with.
    */
-  const rows = useMemo(() => coffees([...(calls.rows ?? []), ...(pastEvents.rows ?? [])]),
-    [calls.rows, pastEvents.rows]);
+  const rows = useMemo(() => coffees([...(calls.rows ?? []), ...(pastEvents.rows ?? [])].map(call => {
+    // Named before projection, so the card title is built from the right person too.
+    if (!call.meetingId || !named.has(call.meetingId)) return call;
+    const who = named.get(call.meetingId) ?? null;
+    return {...call, counterpart: who, counterpartId: null, image: null};
+  })), [calls.rows, pastEvents.rows, named]);
   /**
    * History comes from the call itself, never from the calendar: an accepted event is a
    * booking between two people against one availability slot, so it has no participants
@@ -349,7 +375,7 @@ export default function Schedule({workspaceId}:{workspaceId:string}) {
     <Section title="Meetings" intro="Every call you have booked or held, on a calendar. Open one to join it or read what it produced." state={calls}>
       {calls.error && <p role="alert">Calls could not be loaded. <button className="secondary" onClick={calls.reload}>Try again</button></p>}
       {pastEvents.error && <p role="alert">Calls that have already happened could not be loaded. <button className="secondary" onClick={pastEvents.reload}>Try again</button></p>}
-      {ready && <CallCalendar calls={booked} now={tick} workspaceId={workspaceId} />}
+      {ready && <CallCalendar calls={booked} now={tick} workspaceId={workspaceId} alone={alone} />}
       {!ready && !calls.error && <p role="status">Loading your calendar…</p>}
       {ready && booked.length === 0 && <Empty>Nothing booked yet.</Empty>}
       {upcoming.length > 0 && <UpcomingMeetings meetings={upcoming} label="Upcoming meetings" />}

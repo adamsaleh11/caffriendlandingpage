@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSession, clearSession, sameOrigin, setSealed, readSealed, hashState, pendingCookie, fiveMinutes, webOrigin, type PendingFlows } from '@/lib/session';
 import { backend, BackendError } from '@/lib/backend';
-import { isResource, project, projectPage, projectResolvePage, projectTimelinePage } from '@/lib/crm-projection';
+import { isResource, meetingParticipants, project, projectPage, projectResolvePage, projectTimelinePage } from '@/lib/crm-projection';
 import { writableResources, archivableResources, deletableResources, approvalActions } from '@/lib/contracts';
 import { bookingRequest, uuidPattern, providers, meetingStatuses, type AuditEvent, type CalendarConnection, type Meeting, type MeetingStatus, type Provider, type Workspace } from '@/lib/contracts';
 import { acceptedCalls } from '@/lib/app-projection';
@@ -96,6 +96,7 @@ function meetingProjection(row: Record<string, unknown>): Meeting {
     errorCode: optional(row.errorCode),
     engagementId: optional(row.engagementId),
     groupCallId: optional(row.groupCallId),
+    meetingParticipantMeetingRows: meetingParticipants(row.meetingParticipantMeetingRows),
   };
 }
 
