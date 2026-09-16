@@ -56,26 +56,29 @@ function CallDetail({call, workspaceId, past, now, onClose}:{
   call: UpcomingMeeting; workspaceId: string; past: boolean; now: number; onClose: () => void;
 }) {
   const minutes = minutesBetween(call.startsAt, call.endsAt);
-  return <Modal title={call.title} description={call.counterpart ?? undefined} onClose={onClose}>
+  const who = call.counterpart || call.title;
+  return <Modal title={call.title} onClose={onClose}>
     {/* The same face and heading the card in the list carries, so opening one from the
-        month grid lands somewhere recognisable. */}
+        month grid lands somewhere recognisable. The name is said once, here: the dialog
+        subtitle and a "With" row underneath were the same word three times over. */}
     <div className="call-detail-identity">
-      <Face person={{name: call.counterpart || call.title, image: call.image}} />
-      <div>
-        <p className="call-detail-who">{call.counterpart || call.title}</p>
+      <Face person={{name: who, image: call.image}} />
+      <div className="call-detail-identity-text">
+        <p className="call-detail-who">{who}</p>
         <p className="small">{past ? 'This call has finished' : 'Still to come'}
           {minutes ? ` · ${minutes} min` : ''}</p>
       </div>
+      {/* The same pill the list card uses, rather than a bare lowercase word in a
+          field: a status is a label on the call, not another detail of it. */}
+      {call.status && <span className="up-status">{call.status}</span>}
     </div>
     <dl className="call-detail">
       <div><dt>When</dt><dd>
         {dayLabel(call.startsAt)}
         {call.startsAt && ` · ${timeLabel(call.startsAt)}`}
-        {call.endsAt && ` - ${timeLabel(call.endsAt)}`}
+        {call.endsAt && ` – ${timeLabel(call.endsAt)}`}
       </dd></div>
       <div><dt>Where</dt><dd>{call.where || 'Not specified'}</dd></div>
-      {call.status && <div><dt>Status</dt><dd>{call.status}</dd></div>}
-      {call.counterpart && <div><dt>With</dt><dd>{call.counterpart}</dd></div>}
       {call.notes && <div><dt>Agenda</dt><dd>{call.notes}</dd></div>}
     </dl>
     <div className="call-detail-actions">
@@ -86,7 +89,6 @@ function CallDetail({call, workspaceId, past, now, onClose}:{
         href={`/app/${workspaceId}/calls/${call.groupCallId}`}>Call notes</Link>}
       {call.meetingId &&
         <Link className="text-link" href={`/app/${workspaceId}/meetings/${call.meetingId}`}>Meeting details</Link>}
-
     </div>
   </Modal>;
 }

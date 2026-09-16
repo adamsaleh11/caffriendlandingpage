@@ -1507,9 +1507,12 @@
 
 @media (max-width: 620px) {
   .crm .up-row { flex-direction: column; align-items: stretch; }
-  .crm .up-action-stack { align-items: stretch; }
-  .crm .up-join { width: 100%; }
+  /* The full-width join pill belongs to the list row, not to the dialog's action bar,
+     where the button shares its line with the countdown and the links. */
+  .crm .up-row .up-action-stack { align-items: stretch; }
+  .crm .up-row .up-join { width: 100%; }
   .crm .up-early, .crm .up-pending { text-align: left; }
+  .crm .call-detail-actions .up-action-stack { flex-wrap: wrap; }
 }
 
 /* ---------- One call, opened from the calendar ---------- */
@@ -1522,11 +1525,23 @@
   display: flex; align-items: center; flex-wrap: wrap; gap: 10px 20px;
 }
 .crm .call-detail-actions .text-link { margin-top: 0; }
+/* JoinAction stacks its button over the countdown, which is right for a list row but
+   not here: stacked, it made this row two lines tall and left the links centred against
+   a block instead of against the button. In the dialog the countdown sits beside the
+   button, so button, countdown and links share one line. */
+.crm .call-detail-actions .up-action-stack {
+  flex-direction: row; align-items: center; gap: 12px;
+}
+.crm .call-detail-actions .up-early { text-align: left; }
 
 /* Accept and decline sit side by side, and never wrap mid-word in a narrow cell. */
 .crm table.records .row-buttons { display: inline-flex; gap: .5rem; white-space: nowrap; }
 
 .crm .call-detail-identity { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; }
+.crm .call-detail-identity-text { min-width: 0; }
+/* The status is a label on the call, so it sits out at the edge rather than in the
+   reading order of the name. */
+.crm .call-detail-identity > .up-status { margin-left: auto; flex: none; }
 .crm .call-detail-identity > .avatar { width: 2.75rem; height: 2.75rem; flex: none; }
 .crm .call-detail-identity p { margin: 0; }
 .crm .call-detail-who { font-weight: 700; color: var(--ink); overflow-wrap: anywhere; }
