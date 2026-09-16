@@ -1,7 +1,7 @@
 'use client';
-import { createContext, useContext, useMemo, useState } from 'react';
-import { LiveKitRoom, RoomAudioRenderer, StartAudio, VideoTrack, useTracks, isTrackReference } from '@livekit/components-react';
-import { Track } from 'livekit-client';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { LiveKitRoom, RoomAudioRenderer, StartAudio, VideoTrack, useTracks, useParticipants, useRoomContext, useConnectionState, isTrackReference } from '@livekit/components-react';
+import { Track, RoomEvent, ConnectionState, type LocalTrackPublication } from 'livekit-client';
 import { seatOfIdentity, type CallParticipant } from '@/lib/call';
 
 type VideoFor = (person: CallParticipant) => React.ReactNode;
@@ -29,8 +29,17 @@ function Tracks({children}:{children:(video:VideoFor)=>React.ReactNode}) {
     function videoForSeat(person: CallParticipant) {
       // A placeholder is a seat with no published track yet; the tile draws its own
       // fallback for that, so only a real track is handed back.
-      const match = tracks.find(track => seatOfIdentity(track.participant.identity) === person.id && isTrackReference(track));
-      return match && isTrackReference(match) ? <VideoTrack trackRef={match} /> : null;
+      const mine = tracks.filter(track => isTrackReference(track) && seatOfIdentity(track.participant.identity) === person.id);
+      // `useTracks` groups by participant, not by the order the sources were asked
+      // for, so the share has to be picked out rather than relied on to come first —
+      // otherwise a person sharing their screen still shows as their camera.
+      const match = mine.find(track => track.source === Track.Source.ScreenShare) ?? mine[0];
+      if (!match || !isTrackReference(match)) return null;
+      // Your own camera reads as a mirror or it reads as wrong: everyone expects to
+      // raise their left hand and see it on the left. A screen share is real content,
+      // never flipped, and a remote camera is already the view you'd have of them.
+      const mirrored = match.participant.isLocal && match.source === Track.Source.Camera;
+      return <VideoTrack trackRef={match} className={mirrored ? 'is-mirrored' : undefined} />;
     }
     return videoForSeat;
   }, [tracks]);
@@ -38,12 +47,84 @@ function Tracks({children}:{children:(video:VideoFor)=>React.ReactNode}) {
 }
 
 /**
+ * Reports which seats LiveKit actually has connected.
+ *
+ * A roster row exists from the moment someone is invited or admitted, so it says who
+ * belongs in the call, never who is in it. Presence is the room's to answer, and the
+ * panel sits outside the provider, so it is lifted out through a callback rather than
+ * read from a context that does not reach there.
+ */
+function Presence({onPresence}:{onPresence:(seats:string[])=>void}) {
+  const people = useParticipants();
+  const seats = people.map(person => seatOfIdentity(person.identity)).filter(Boolean).sort();
+  // Keyed on the joined string: the hook hands back a new array on every room event,
+  // including ones that change nobody's presence.
+  const key = seats.join('|');
+  const report = useRef(onPresence);
+  report.current = onPresence;
+  useEffect(() => { report.current(key ? key.split('|') : []); }, [key]);
+  return null;
+}
+
+/**
+ * Keeps what is published in step with the roster row.
+ *
+ * `LiveKitRoom`'s own `audio`/`video`/`screen` props are join-time defaults: it applies
+ * them once, on `SignalConnected`, and never again. Every toggle after that — which is
+ * all of them, since you are already in the room when you press a dock button — reached
+ * nothing, so sharing your screen never opened a picker at all. Publishing has to be
+ * driven from the state instead.
+ */
+function Publish({micOn, cameraOn, shareOn, onShareEnded}:{
+  micOn: boolean; cameraOn: boolean; shareOn: boolean; onShareEnded: () => void;
+}) {
+  const room = useRoomContext();
+  // Publishing before the signal connection is up is dropped, so every effect below
+  // waits for it and re-runs once it lands.
+  const live = useConnectionState(room) === ConnectionState.Connected;
+
+  useEffect(() => { if (live) void room.localParticipant.setMicrophoneEnabled(micOn).catch(() => {}); }, [room, live, micOn]);
+  useEffect(() => { if (live) void room.localParticipant.setCameraEnabled(cameraOn).catch(() => {}); }, [room, live, cameraOn]);
+
+  // The ref keeps the effect keyed on `shareOn` alone: a fresh callback each render
+  // would otherwise re-run it and reopen the picker.
+  const ended = useRef(onShareEnded);
+  ended.current = onShareEnded;
+
+  useEffect(() => {
+    if (!live) return;
+    let cancelled = false;
+    void room.localParticipant.setScreenShareEnabled(shareOn).catch(() => {
+      // Dismissing the browser's picker rejects here. That is a choice, not a
+      // failure — the roster row goes back to not sharing and the call is untouched.
+      if (!cancelled && shareOn) ended.current();
+    });
+    return () => { cancelled = true; };
+  }, [room, live, shareOn]);
+
+  // Chrome's own "Stop sharing" bar ends the track without going through the dock, so
+  // the row has to hear about it or the button stays lit and takes two presses to
+  // start a new share.
+  useEffect(() => {
+    const unpublished = (publication: LocalTrackPublication) => {
+      if (publication.source === Track.Source.ScreenShare) ended.current();
+    };
+    room.on(RoomEvent.LocalTrackUnpublished, unpublished);
+    return () => { room.off(RoomEvent.LocalTrackUnpublished, unpublished); };
+  }, [room]);
+
+  return null;
+}
+
+/**
  * The media layer is additive: the call renders from its roster whether or not LiveKit
  * connects. A refused join, a room that has not been provisioned, or a browser with no
  * camera permission costs the video, never the call.
  */
-export function CallMedia({credentials, micOn, cameraOn, shareOn, children}:{
+export function CallMedia({credentials, micOn, cameraOn, shareOn, onShareEnded, onPresence, children}:{
   credentials?: {token:string; url:string}; micOn: boolean; cameraOn: boolean; shareOn: boolean;
+  onShareEnded: () => void;
+  onPresence: (seats: string[]) => void;
   children: (video: VideoFor) => React.ReactNode;
 }) {
   const [failed, setFailed] = useState(false);
@@ -52,9 +133,11 @@ export function CallMedia({credentials, micOn, cameraOn, shareOn, children}:{
 
   return <div className="call-media">
     <LiveKitRoom className="call-media-room" token={credentials.token} serverUrl={credentials.url}
-      connect audio={micOn} video={cameraOn} screen={shareOn} onError={() => setFailed(true)}>
+      connect onError={() => setFailed(true)}>
       <RoomAudioRenderer />
       <StartAudio label="Enable call audio" />
+      <Presence onPresence={onPresence} />
+      <Publish micOn={micOn} cameraOn={cameraOn} shareOn={shareOn} onShareEnded={onShareEnded} />
       <Tracks>{children}</Tracks>
     </LiveKitRoom>
   </div>;

@@ -12,6 +12,7 @@ import {
   type NoteScope,
   type CallJoin,
   callSelf,
+  callCounterpart,
   projectJoin,
 } from "@/lib/call";
 import { RelationshipPanel, type PanelActions } from "./RelationshipPanel";
@@ -68,6 +69,9 @@ export function CallScreen({
   // Pinning is a per-viewer choice here; the contract stores it on the participant row,
   // which would pin the tile for everyone in the call rather than for the person who asked.
   const [pinnedId, setPinnedId] = useState<string | null>(null);
+  // Which seats LiveKit has connected. A roster row is created when someone is invited
+  // or admitted, so only the room can say who is actually here.
+  const [online, setOnline] = useState<string[]>([]);
 
   const callHeaders = useMemo<Record<string, string>>(() => {
     const headers: Record<string, string> = {};
@@ -457,6 +461,13 @@ export function CallScreen({
   const moderator = state.room.hostId === me || mine?.role === "co_host";
   const group =
     state.participants.length > 2 || state.room.kind !== "COFFEE_CHAT";
+  // A one-to-one is named by who you are talking to, not by what kind of call it is —
+  // "Coffee chat" was the same words on every call anybody ever opened. A group has no
+  // single counterpart, so it keeps the room's own title.
+  const counterpart = callCounterpart(state.participants, me);
+  const counterpartDetail = counterpart
+    ? [counterpart.jobTitle, counterpart.company].filter(Boolean).join(" · ")
+    : "";
   // A call that has ended keeps its panel: the notes, commitments and agenda are the
   // point of the call, and they outlive it. Nothing live is offered any more.
   const ended = state.room.status !== "OPEN" || Boolean(state.room.endedAt);
@@ -493,11 +504,16 @@ export function CallScreen({
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           className="call-wordmark"
-          src="/brand/logo-wordmark-dark.png"
+          src="/brand/logo-wordmark-orange.png"
           alt="Caffriend"
         />
         <span className="call-header-rule" aria-hidden="true" />
-        <h1>{state.room.title ?? "Coffee chat"}</h1>
+        <div className="call-header-title">
+          <h1>{counterpart?.displayName ?? state.room.title ?? "Coffee chat"}</h1>
+          {counterpart && counterpartDetail && (
+            <p className="call-header-detail">{counterpartDetail}</p>
+          )}
+        </div>
         {ended ? (
           <p className="call-ended">This call has ended</p>
         ) : (
@@ -564,6 +580,12 @@ export function CallScreen({
               micOn={mine?.micOn ?? false}
               cameraOn={mine?.cameraOn ?? false}
               shareOn={mine?.screenShareOn ?? false}
+              onPresence={setOnline}
+              onShareEnded={() => {
+                // The share can end outside the dock — a dismissed picker, or Chrome's
+                // own "Stop sharing" bar. The row follows the track, not the button.
+                if (mine?.screenShareOn) void toggleSelf("screenShareOn", false);
+              }}
             >
               {(video) => (
                 <Stage
@@ -583,6 +605,7 @@ export function CallScreen({
         <RelationshipPanel
           state={state}
           me={me}
+          online={online}
           actions={panelActions}
           readOnly={ended}
         />

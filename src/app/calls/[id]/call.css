@@ -67,10 +67,24 @@
   gap: 18px;
   padding: 0 24px;
 }
+/* The title is two lines now — who you are with, and what they do — so the block owns
+   the spare width rather than the h1 itself. */
+.call-header-title { margin-right: auto; min-width: 0; }
 .call-header h1 {
   margin: 0;
   font: 700 16px/22px var(--font-core);
-  margin-right: auto;
+  color: var(--caf-espresso);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.call-header-detail {
+  margin: 1px 0 0;
+  font: 500 12px/16px var(--font-core);
+  color: var(--caf-grey-600);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .call-wordmark { height: 22px; width: auto; display: block; }
 .call-header-rule { width: 1px; height: 26px; background: var(--caf-grey-250); }
@@ -905,3 +919,6 @@
   font: 600 12px/16px var(--font-core);
 }
 .call-peek-history { margin: -6px 0 0; font: 400 13px/18px var(--font-core); }
+
+/* Self-view only: see yourself the way a mirror shows you. */
+.call-media .is-mirrored, .call-media .is-mirrored video { transform: scaleX(-1); }

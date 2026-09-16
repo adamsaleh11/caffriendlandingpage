@@ -64,7 +64,7 @@ export default function Meeting({ inviteToken, viewerName = null }: { inviteToke
     {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- a full load drops the LiveKit styles and call state, leaving the landing page untouched */}
     <a href="/" className="meeting-brand">
       {/* eslint-disable-next-line @next/next/no-img-element -- the lobby shares the call wordmark, which is a static public asset */}
-      <img src="/brand/logo-wordmark-dark.png" alt="Caffriend" />
+      <img src="/brand/logo-wordmark-orange.png" alt="Caffriend" />
     </a>
     <section className="meeting-card">
       <p className="meeting-eyebrow">YOUR COFFEE CHAT</p>

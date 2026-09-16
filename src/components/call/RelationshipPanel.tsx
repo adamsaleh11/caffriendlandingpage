@@ -105,7 +105,7 @@ function Peek({person, me, onClose}:{person:CallParticipant; me:string; onClose:
   </section>;
 }
 
-function People({state, me, inviteUrl}:{state:CallState; me:string; inviteUrl:string}) {
+function People({state, me, online, inviteUrl}:{state:CallState; me:string; online:string[]; inviteUrl:string}) {
   const [peek, setPeek] = useState<CallParticipant>();
   const [copied, setCopied] = useState(false);
 
@@ -139,7 +139,13 @@ function People({state, me, inviteUrl}:{state:CallState; me:string; inviteUrl:st
             {person.handRaised && <><Icon name="hand-index-thumb" size={15} color="var(--caf-orange)" /><Hidden>Hand raised</Hidden></>}
             {!person.micOn && <><Icon name="mic-mute" size={15} /><Hidden>Muted</Hidden></>}
             {!person.cameraOn && <><Icon name="camera-video-off" size={15} /><Hidden>Camera off</Hidden></>}
-            <span className="call-quality-dot" data-weak={person.connectionQuality === 'weak' ? 'true' : undefined} />
+            {/* The dot is presence, not decoration: a roster row exists from the
+                moment someone is invited or admitted, so it is drawn only once the
+                room has them connected. Before that the seat is simply quiet. */}
+            {online.includes(person.id) && <>
+              <span className="call-quality-dot" data-weak={person.connectionQuality === 'weak' ? 'true' : undefined} />
+              <Hidden>{person.connectionQuality === 'weak' ? 'Online, weak connection' : 'Online'}</Hidden>
+            </>}
             <Icon name="chevron-right" size={13} />
           </span>
         </button>
@@ -388,8 +394,8 @@ function Agenda({state}:{state:CallState}) {
   </>;
 }
 
-export function RelationshipPanel({state, me, actions, readOnly = false}:{
-  state:CallState; me:string; actions:PanelActions; readOnly?:boolean;
+export function RelationshipPanel({state, me, online, actions, readOnly = false}:{
+  state:CallState; me:string; online:string[]; actions:PanelActions; readOnly?:boolean;
 }) {
   const [tab, setTab] = useState<PanelTab>('people');
   return <aside className="call-panel">
@@ -399,7 +405,7 @@ export function RelationshipPanel({state, me, actions, readOnly = false}:{
         tabIndex={tab === row.id ? 0 : -1} onClick={() => setTab(row.id)}>{row.label}</button>)}
     </div>
     <div role="tabpanel" id={`call-tabpanel-${tab}`} aria-labelledby={`call-tab-${tab}`} className="call-tabpanel">
-      {tab === 'people' && <People state={state} me={me} inviteUrl={actions.inviteUrl} />}
+      {tab === 'people' && <People state={state} me={me} online={online} inviteUrl={actions.inviteUrl} />}
       {tab === 'chat' && <Chat state={state} me={me} onSend={actions.onSend} readOnly={readOnly} />}
       {tab === 'notes' && <Notes state={state} onAddNote={actions.onAddNote} />}
       {tab === 'actions' && <Actions state={state} onToggleAction={actions.onToggleAction} onAddAction={actions.onAddAction} />}
